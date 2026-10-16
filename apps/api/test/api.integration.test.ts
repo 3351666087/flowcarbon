@@ -163,6 +163,16 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       expect(evil.statusCode).toBe(403);
     });
 
+    it("stores the user's language", async () => {
+      const res = await as(analyst, { method: "PATCH", url: `${API_PREFIX}/me`, payload: { locale: "zh" } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().user.locale).toBe("zh");
+      expect(
+        (await as(analyst, { method: "PATCH", url: `${API_PREFIX}/me`, payload: { locale: "fr" } }))
+          .statusCode,
+      ).toBe(400);
+    });
+
     it("signs out", async () => {
       const res = await app.inject({
         method: "POST",

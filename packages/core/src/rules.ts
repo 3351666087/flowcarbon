@@ -307,7 +307,19 @@ function makeFinding(
         ...new Set(others.filter((w) => w.start < end && w.end > start).map((w) => w.floorId)),
       ];
       facts.requestingFloors = requesting.length;
-      summary = `${floor.label} was cooled for ${round(hours, 1)} h on a non-working day (${span}) with no request of its own and nobody counted, while ${requesting.length} other floor(s) had approved overtime. Avoidable ${round(kwh, 0)} kWh.`;
+      // the floor may have had a request of its own earlier or later that day; say so instead of "no request"
+      const sameDay = (own ?? []).filter((w) => localParts(w.start, tz).dateKey === a.dateKey);
+      const ended = sameDay.filter((w) => w.end <= start).sort((x, y) => y.end - x.end)[0];
+      const later = sameDay.filter((w) => w.start >= end).sort((x, y) => x.start - y.start)[0];
+      let own$ = "with no request of its own";
+      if (ended) {
+        facts.ownRequestEnded = formatClock(localParts(ended.end, tz).minuteOfDay);
+        own$ = `after its own request ended at ${facts.ownRequestEnded}`;
+      } else if (later) {
+        facts.ownRequestStarts = formatClock(localParts(later.start, tz).minuteOfDay);
+        own$ = `before its own request started at ${facts.ownRequestStarts}`;
+      }
+      summary = `${floor.label} was cooled for ${round(hours, 1)} h on a non-working day (${span}) ${own$}, with nobody counted, while ${requesting.length} other floor(s) had approved overtime. Avoidable ${round(kwh, 0)} kWh.`;
       break;
     }
     case "hvac_empty_floor":

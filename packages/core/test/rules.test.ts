@@ -77,6 +77,35 @@ describe("rule: cooled on a non-working day without a request", () => {
     expect(fs[0]!.evidence.facts.requestingFloors).toBe(1);
   });
 
+  it("says when the floor's own request had ended", () => {
+    // Sun 2026-10-18; f1 requested 09:00–10:00, f2 10:00–12:00; the zone kept f1 cooled until 12:00
+    const iv = series(
+      "f1",
+      "2026-10-18",
+      "10:00",
+      Array.from({ length: 8 }, () => ({ occ: 0, hvac: 1 })),
+    );
+    const approvedOvertime = [
+      {
+        floorId: "f1",
+        start: at("2026-10-18", "09:00"),
+        end: at("2026-10-18", "10:00"),
+        mode: "full" as const,
+      },
+      {
+        floorId: "f2",
+        start: at("2026-10-18", "10:00"),
+        end: at("2026-10-18", "12:00"),
+        mode: "full" as const,
+      },
+    ];
+    const [f] = run(iv, { approvedOvertime });
+    expect(f!.ruleId).toBe("hvac_unrequested_non_working");
+    expect(f!.evidence.facts.ownRequestEnded).toBe("10:00");
+    expect(f!.evidence.summary).toContain("after its own request ended at 10:00");
+    expect(f!.evidence.summary).not.toContain("no request of its own");
+  });
+
   it("falls back to the empty-floor rule when no floor requested anything", () => {
     const iv = series(
       "f1",

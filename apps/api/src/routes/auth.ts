@@ -126,6 +126,31 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
     async (req) => loadMe(requireUser(req).userId),
   );
 
+  app.patch(
+    "/me",
+    {
+      schema: {
+        tags: ["auth"],
+        summary:
+          "Update the signed-in user's name or language (AI explanations are written in this language)",
+        body: z.object({
+          name: z.string().trim().min(1).max(120).optional(),
+          locale: z.enum(["en", "zh"]).optional(),
+        }),
+        response: { 200: me, ...errorResponses },
+      },
+    },
+    async (req) => {
+      const u = requireUser(req);
+      if (req.body.name !== undefined || req.body.locale !== undefined)
+        await db
+          .update(schema.users)
+          .set({ ...req.body, updatedAt: new Date() })
+          .where(eq(schema.users.id, u.userId));
+      return loadMe(u.userId);
+    },
+  );
+
   app.post(
     "/me/password",
     {

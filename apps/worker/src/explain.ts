@@ -93,6 +93,7 @@ export async function explanationInput(db: Db, orgId: string, explanationId: str
         building: {
           name: ctx.building.name,
           timezone: ctx.building.timezone,
+          currency: ctx.building.currency,
           afterHoursStart: ctx.building.afterHoursStart,
           workdayStart: ctx.building.workdayStart,
         },
