@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:4000";
@@ -18,6 +19,8 @@ const csp = [
 
 const config: NextConfig = {
   output: "standalone",
+  // trace dependencies from the monorepo root so the standalone server finds hoisted packages
+  outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,
   reactStrictMode: true,
   async rewrites() {

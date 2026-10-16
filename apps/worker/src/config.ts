@@ -24,7 +24,8 @@ const schema = z.object({
 export type WorkerConfig = z.infer<typeof schema>;
 
 export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
-  const parsed = schema.safeParse(env);
+  // an empty variable (e.g. ANTHROPIC_API_KEY= in a compose file) means "not set"
+  const parsed = schema.safeParse(Object.fromEntries(Object.entries(env).filter(([, v]) => v !== "")));
   if (!parsed.success)
     throw new Error(
       `invalid configuration: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,

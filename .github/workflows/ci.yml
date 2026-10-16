@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, typecheck, tests, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      db:
+        image: timescale/timescaledb:2.30.2-pg17
+        env:
+          POSTGRES_USER: flowcarbon
+          POSTGRES_PASSWORD: flowcarbon-dev
+          POSTGRES_DB: flowcarbon
+          TIMESCALEDB_TELEMETRY: "off"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U flowcarbon -d flowcarbon"
+          --health-interval 5s --health-timeout 3s --health-retries 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Create the runtime database role
+        run: >-
+          psql "postgres://flowcarbon:flowcarbon-dev@localhost:5432/flowcarbon"
+          -c "CREATE ROLE flowcarbon_app LOGIN PASSWORD 'flowcarbon-app-dev' NOSUPERUSER NOBYPASSRLS"
+      - name: Unit, database and API tests
+        run: npm test
+        env:
+          TEST_DATABASE_URL: postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres
+      - name: Web client types match the API
+        run: |
+          npm run api-types -w @flowcarbon/web
+          git diff --exit-code -- apps/web/src/lib/api-types.ts
+      - run: node scripts/build-server.mjs
+      - run: npm run build -w @flowcarbon/web
+
+  images:
+    name: Docker images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        target: [server, web]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          push: false
+          tags: flowcarbon-${{ matrix.target }}:ci
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

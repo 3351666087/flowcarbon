@@ -3,7 +3,9 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { createDb } from "./client";
 import { upsertReferenceData } from "./reference-data";
 
-export const MIGRATIONS_DIR = fileURLToPath(new URL("../drizzle", import.meta.url));
+/** Bundled builds ship the SQL next to the bundle and point MIGRATIONS_DIR at it. */
+export const MIGRATIONS_DIR =
+  process.env.MIGRATIONS_DIR ?? fileURLToPath(new URL("../drizzle", import.meta.url));
 
 /** Applies pending migrations and refreshes the shared reference data. Run as the database owner. */
 export async function runMigrations(url: string, opts: { referenceData?: boolean } = {}): Promise<void> {

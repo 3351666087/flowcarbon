@@ -266,7 +266,9 @@ export default function FindingPage() {
                 <section className="rounded-lg bg-accent-soft p-3">
                   <h3 className="text-xs font-semibold text-accent">{t.findings.aiAction}</h3>
                   <p className="font-medium">
-                    {t.domain.strategies[out.recommendedAction.strategyId]?.name ?? strategies.get(out.recommendedAction.strategyId) ?? out.recommendedAction.strategyId}
+                    {t.domain.strategies[out.recommendedAction.strategyId]?.name ??
+                      strategies.get(out.recommendedAction.strategyId) ??
+                      out.recommendedAction.strategyId}
                   </p>
                   <p>{out.recommendedAction.reason}</p>
                 </section>

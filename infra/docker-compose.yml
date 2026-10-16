@@ -1,7 +1,18 @@
 # Local development and single-host deployment.
-#   docker compose -f infra/docker-compose.yml up -d db          # database only (for `npm run dev`)
-#   docker compose -f infra/docker-compose.yml --profile app up -d  # full stack
+#   docker compose -f infra/docker-compose.yml up -d db                    # database only (for `npm run dev:*`)
+#   docker compose -f infra/docker-compose.yml --profile app up -d --build # full stack on :3000 (web) and :4000 (API)
+#   DEMO_PASSWORD=... docker compose -f infra/docker-compose.yml --profile demo run --rm seed   # simulated tower
+# Settings come from the environment or an .env file next to this one; see .env.example at the repository root.
 name: flowcarbon
+
+x-server: &server
+  image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
+  build: { context: .., target: server }
+  restart: unless-stopped
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+
+x-app-db: &app-db postgres://flowcarbon_app:${APP_DB_PASSWORD:-flowcarbon-app-dev}@db:5432/flowcarbon
 
 services:
   db:
@@ -11,6 +22,7 @@ services:
       POSTGRES_USER: flowcarbon
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowcarbon-dev}
       POSTGRES_DB: flowcarbon
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-flowcarbon-app-dev}
       TIMESCALEDB_TELEMETRY: "off"
     ports:
       - "${DB_PORT:-5432}:5432"
@@ -22,6 +34,72 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  migrate:
+    profiles: [app, demo]
+    image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
+    build: { context: .., target: server }
+    command: ["node", "migrate.mjs"]
+    environment:
+      DATABASE_MIGRATION_URL: postgres://flowcarbon:${POSTGRES_PASSWORD:-flowcarbon-dev}@db:5432/flowcarbon
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    <<: *server
+    profiles: [app]
+    command: ["node", "api.mjs"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: *app-db
+      PORT: "4000"
+      CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:3000}
+      APP_URL: ${PUBLIC_URL:-http://localhost:3000}
+      # set to true when the site is served over HTTPS
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: "true"
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    ports:
+      - "${API_PORT:-4000}:4000"
+
+  worker:
+    <<: *server
+    profiles: [app]
+    command: ["node", "worker.mjs"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: *app-db
+      HEALTH_PORT: "4100"
+      HEALTH_URL_PORT: "4100"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_WORKSPACE_ID: ${ANTHROPIC_WORKSPACE_ID:-}
+      AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
+
+  web:
+    profiles: [app]
+    image: ghcr.io/3351666087/flowcarbon-web:${FLOWCARBON_VERSION:-local}
+    build:
+      context: ..
+      target: web
+      args: { API_ORIGIN: "http://api:4000" }
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+  seed:
+    profiles: [demo]
+    image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
+    build: { context: .., target: server }
+    command: ["node", "seed.mjs", "--reset"]
+    environment:
+      DATABASE_URL: *app-db
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}  # empty: a random password is printed once
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
 
 volumes:
   pgdata:

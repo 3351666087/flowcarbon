@@ -8,8 +8,8 @@ counts people per floor, finds the hours a floor was cooled or lit for nobody, f
 headcount, lets tenants book cooling for their own floor instead of the whole tower, and prices the saving
 under an energy performance contract — with every number traceable to the rule and the data behind it.
 
-> Status: early development. The domain engine, database layer and pipeline are implemented and tested; the
-> API, worker and web app are being built in this repository. All bundled data is **simulated**.
+> Status: 0.1 — the engine, data platform, API, worker and web app are implemented and tested end to end. All
+> bundled data is **simulated**; nothing here describes a real building.
 
 ## Principles
 
@@ -36,7 +36,7 @@ under an energy performance contract — with every number traceable to the rule
 | `packages/jobs` | Background job queues (pg-boss): queue definitions, owner-only schema install, runtime client. |
 | `apps/api` | HTTP API (Fastify 5, zod, OpenAPI 3.1 at `/api/v1/docs`): sessions and API keys, role-based access with tenant scoping, CSRF origin checks, rate limits, audit log, Prometheus metrics. |
 | `apps/worker` | Background jobs on pg-boss: recompute after ingestion (coalesced per building, chunked backfills), hourly maintenance that runs each building's nightly work in its own time zone, AI explanations with Claude (structured output, closed citation list, server-side refusal fallback), dead-letter handling, health and metrics. |
-| `apps/web` | Web application (Next.js). |
+| `apps/web` | Web application (Next.js 16, React 19, Tailwind 4): floors, opportunities with evidence and AI explanations, forecast, simulation, overtime requests, report, data health, settings. English and Simplified Chinese. Typed against the API's OpenAPI document. |
 | `docs/` | Architecture, data model, rules, deployment. |
 
 ## The rules
@@ -52,6 +52,17 @@ Each interval's HVAC energy is attributed to at most one rule, so totals never d
 arrival around the start of the working day are exempt. Thresholds and their rationale live in
 [`packages/core/src/rules.ts`](packages/core/src/rules.ts).
 
+## Run it
+
+```bash
+docker compose -f infra/docker-compose.yml --profile app up -d --build
+DEMO_PASSWORD='choose-a-password' docker compose -f infra/docker-compose.yml --profile demo run --rm seed
+open http://localhost:3000        # sign in as manager@flowcarbon-demo.example
+```
+
+API documentation is served at `http://localhost:4000/api/v1/docs`. See [deployment](docs/deployment.md) for
+production settings.
+
 ## Development
 
 Requires Node.js 22 and Docker. Settings are environment variables; see [`.env.example`](.env.example).
@@ -64,6 +75,7 @@ npm run db:migrate               # migrations, shared reference data, job queues
 DEMO_PASSWORD='choose-a-password' npm run seed -- --reset   # simulated Tower A, last 28 days
 DATABASE_URL=postgres://flowcarbon_app:flowcarbon-app-dev@localhost:5432/flowcarbon npm run dev:api
 DATABASE_URL=postgres://flowcarbon_app:flowcarbon-app-dev@localhost:5432/flowcarbon npm run dev:worker   # ANTHROPIC_API_KEY optional
+npm run dev -w @flowcarbon/web   # http://localhost:3000
 npm test                         # unit tests; set TEST_DATABASE_URL to include database and API tests
 npm run lint
 ```
@@ -72,7 +84,8 @@ npm run lint
 `postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres`. Each run creates and drops its own database and
 exercises the pipeline as the non-privileged application role, so row-level security is tested for real.
 
-Design notes: [architecture](docs/architecture.md) and the [decision records](docs/adr/).
+Design notes: [architecture](docs/architecture.md), [deployment](docs/deployment.md) and the
+[decision records](docs/adr/). Security: [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -21,7 +21,7 @@ if (!url) {
 const days = Number(values.days);
 const window = values.start ? { startDate: values.start, days } : recentWindow(days);
 // never fall back to a fixed password: either the operator chooses one or a random one is printed once
-const password = process.env.DEMO_PASSWORD ?? randomToken(12);
+const password = process.env.DEMO_PASSWORD || randomToken(12);
 
 const { db, close } = createDb(url, { max: 2, statementTimeoutMs: 0, applicationName: "flowcarbon-seed" });
 try {

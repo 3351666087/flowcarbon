@@ -53,7 +53,8 @@ export type Config = Omit<
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const parsed = schema.safeParse(env);
+  // an empty variable (e.g. METRICS_TOKEN= in a compose file) means "not set"
+  const parsed = schema.safeParse(Object.fromEntries(Object.entries(env).filter(([, v]) => v !== "")));
   if (!parsed.success) {
     const problems = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
     throw new Error(`invalid configuration: ${problems}`);
