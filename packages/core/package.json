@@ -1,0 +1,14 @@
+{
+  "name": "@flowcarbon/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlowCarbon domain logic: occupancy, rules, forecasting, strategies, carbon accounting. No I/O.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
