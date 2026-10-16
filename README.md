@@ -8,8 +8,8 @@ counts people per floor, finds the hours a floor was cooled or lit for nobody, f
 headcount, lets tenants book cooling for their own floor instead of the whole tower, and prices the saving
 under an energy performance contract — with every number traceable to the rule and the data behind it.
 
-> Status: early development. The domain engine is implemented and tested; the API, worker and web app are
-> being built in this repository. All bundled data is **simulated**.
+> Status: early development. The domain engine, database layer and pipeline are implemented and tested; the
+> API, worker and web app are being built in this repository. All bundled data is **simulated**.
 
 ## Principles
 
@@ -29,7 +29,10 @@ under an energy performance contract — with every number traceable to the rule
 |---|---|
 | `packages/core` | Pure domain engine: time zones and working calendars, door-count occupancy, telemetry → 15-min floor intervals, the rules engine, forecasting, strategies and EPC finance, overtime requests, tariffs (flat and time-of-use), Scope 2 accounting, reports. No I/O. |
 | `packages/sim` | Deterministic simulator of a 12-floor tower (door counts, BMS states, lighting, sub-meters) for development and tests. Never used for real buildings. |
-| `packages/db` | Database schema and migrations (PostgreSQL + TimescaleDB). |
+| `packages/db` | Database schema and migrations (PostgreSQL 17 + TimescaleDB): hypertables, row-level security, runtime role grants, shared emission-factor library. |
+| `packages/pipeline` | Database-backed pipeline shared by the API and the worker: validated idempotent ingestion, interval recompute, daily roll-ups, detection, forecasts, reports, strategies. |
+| `packages/security` | argon2id password hashing, opaque tokens, API keys. |
+| `packages/demo` | Seeds a demonstration organisation from the simulator through the real ingestion path. |
 | `apps/api` | HTTP API (Fastify, OpenAPI). |
 | `apps/worker` | Background pipelines (aggregation, detection, forecasting, AI explanations, reports). |
 | `apps/web` | Web application (Next.js). |
@@ -50,14 +53,23 @@ arrival around the start of the working day are exempt. Thresholds and their rat
 
 ## Development
 
-Requires Node.js 22.
+Requires Node.js 22 and Docker.
 
 ```bash
 npm install
-npm test          # unit and end-to-end engine tests
+npm run db:up                    # PostgreSQL 17 + TimescaleDB on localhost:5432
+export DATABASE_URL=postgres://flowcarbon:flowcarbon-dev@localhost:5432/flowcarbon
+npm run db:migrate               # migrations + shared reference data
+DEMO_PASSWORD='choose-a-password' npm run seed -- --reset   # simulated Tower A, last 28 days
+npm test                         # unit tests; set TEST_DATABASE_URL to include database tests
 npm run lint
-npx tsx scripts/pipeline-check.ts   # run the simulator through the full pipeline
 ```
+
+`TEST_DATABASE_URL` must point at the server as its owner, for example
+`postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres`. Each run creates and drops its own database and
+exercises the pipeline as the non-privileged application role, so row-level security is tested for real.
+
+Design notes: [architecture](docs/architecture.md) and the [decision records](docs/adr/).
 
 ## License
 

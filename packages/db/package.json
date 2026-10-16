@@ -1,0 +1,26 @@
+{
+  "name": "@flowcarbon/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlowCarbon database schema, migrations and data access (PostgreSQL + TimescaleDB).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/cli.ts migrate",
+    "reference-data": "tsx src/cli.ts reference-data"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4",
+    "postgres": "^3.4.9",
+    "zod": "^4.6.7"
+  }
+}

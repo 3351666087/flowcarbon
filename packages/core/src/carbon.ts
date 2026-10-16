@@ -4,7 +4,7 @@ export type FactorStatus = "verified" | "to_verify";
 /** One entry of the emission-factor library. Provenance is mandatory. */
 export interface EmissionFactor {
   id: string;
-  /** e.g. "CN" (national average), "CN-East" (regional grid), "CN-JS" (province) */
+  /** hierarchical code, most general first: "CN" (national), "CN-East" (regional grid), "CN-East-JS" (province) */
   region: string;
   year: number;
   method: FactorMethod;
@@ -28,9 +28,9 @@ export function selectFactor(
   opts: { region: string; year: number; method: FactorMethod },
 ): EmissionFactor | undefined {
   const candidates = factors.filter((f) => f.method === opts.method && f.year <= opts.year);
-  // most specific region first ("CN-JS" > "CN-East" > "CN"), then the most recent year
+  // most specific region first ("CN-East-JS" > "CN-East" > "CN" > "GLOBAL"), then the most recent year
   const specificity = (r: string) =>
-    opts.region === r ? 3 : opts.region.startsWith(`${r}-`) ? 2 : r === "GLOBAL" ? 1 : 0;
+    opts.region === r ? 1_000 : opts.region.startsWith(`${r}-`) ? 1 + r.length : r === "GLOBAL" ? 1 : 0;
   return candidates
     .filter((f) => specificity(f.region) > 0)
     .sort((a, b) => specificity(b.region) - specificity(a.region) || b.year - a.year)[0];

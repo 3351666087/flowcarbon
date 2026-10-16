@@ -1,0 +1,19 @@
+{
+  "name": "@flowcarbon/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Database-backed analytics pipeline shared by the API and the worker.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@flowcarbon/core": "*",
+    "@flowcarbon/db": "*",
+    "zod": "^4.6.7"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

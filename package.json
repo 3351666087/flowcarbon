@@ -21,7 +21,9 @@
     "format": "biome format --write .",
     "db:generate": "npm run generate -w @flowcarbon/db",
     "db:migrate": "npm run migrate -w @flowcarbon/db",
-    "seed": "npm run seed -w @flowcarbon/api"
+    "seed": "npm run seed -w @flowcarbon/demo --",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d db",
+    "db:down": "docker compose -f infra/docker-compose.yml down"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

@@ -41,6 +41,23 @@ export interface EnergyReport {
   disclosures: string[];
 }
 
+/** Standard disclosures printed with every report. */
+export function reportDisclosures(
+  locationFactor: EmissionFactor,
+  residualFactor: EmissionFactor | undefined,
+  measuredShare: number,
+): string[] {
+  return [
+    "Boundary: the office floors of this building under the property manager's operational control. Retail areas, car parks and tenants' own equipment beyond plug loads are outside the boundary.",
+    `Scope 2 location-based: electricity × ${locationFactor.kgPerKwh} kgCO2e/kWh (${locationFactor.source}, ${locationFactor.year}, ${locationFactor.status === "verified" ? "verified" : "to be verified"}).`,
+    residualFactor
+      ? `Scope 2 market-based: contractual instruments first, remainder at the residual-mix factor ${residualFactor.kgPerKwh} kgCO2e/kWh (${residualFactor.source}).`
+      : "Scope 2 market-based: contractual instruments first; no residual-mix factor is published for this grid, so the remainder uses the location-based factor.",
+    "Scope 1 and Scope 3 are not covered. This is an energy and carbon report, not an ESG report: it supplies the electricity and Scope 2 figures for the environmental part of an ESG or sustainability report.",
+    `Avoidable energy is counted only where a documented rule fired (see rule rationale); ${round((1 - measuredShare) * 100, 0)} % of the energy in this period is estimated from rated power and run time rather than metered.`,
+  ];
+}
+
 export interface ReportInput {
   building: BuildingProfile;
   floors: readonly FloorProfile[];
@@ -107,15 +124,7 @@ export function buildReport(input: ReportInput): EnergyReport {
   const dayTypes = { workday: 0, weekend: 0, holiday: 0 } as Record<DayType, number>;
   for (const [t, v] of byType) dayTypes[t] = v.days.size;
 
-  const disclosures = [
-    "Boundary: the office floors of this building under the property manager's operational control. Retail areas, car parks and tenants' own equipment beyond plug loads are outside the boundary.",
-    `Scope 2 location-based: electricity × ${input.locationFactor.kgPerKwh} kgCO2e/kWh (${input.locationFactor.source}, ${input.locationFactor.year}, ${input.locationFactor.status === "verified" ? "verified" : "to be verified"}).`,
-    input.residualFactor
-      ? `Scope 2 market-based: contractual instruments first, remainder at the residual-mix factor ${input.residualFactor.kgPerKwh} kgCO2e/kWh (${input.residualFactor.source}).`
-      : "Scope 2 market-based: contractual instruments first; no residual-mix factor is published for this grid, so the remainder uses the location-based factor.",
-    "Scope 1 and Scope 3 are not covered. This is an energy and carbon report, not an ESG report: it supplies the electricity and Scope 2 figures for the environmental part of an ESG or sustainability report.",
-    `Avoidable energy is counted only where a documented rule fired (see rule rationale); ${round((1 - (kwh ? measured / kwh : 0)) * 100, 0)} % of the energy in this period is estimated from rated power and run time rather than metered.`,
-  ];
+  const disclosures = reportDisclosures(input.locationFactor, input.residualFactor, kwh ? measured / kwh : 0);
 
   return {
     period: {

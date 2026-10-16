@@ -1,0 +1,27 @@
+# Local development and single-host deployment.
+#   docker compose -f infra/docker-compose.yml up -d db          # database only (for `npm run dev`)
+#   docker compose -f infra/docker-compose.yml --profile app up -d  # full stack
+name: flowcarbon
+
+services:
+  db:
+    image: timescale/timescaledb:2.30.2-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flowcarbon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowcarbon-dev}
+      POSTGRES_DB: flowcarbon
+      TIMESCALEDB_TELEMETRY: "off"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowcarbon -d flowcarbon"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
