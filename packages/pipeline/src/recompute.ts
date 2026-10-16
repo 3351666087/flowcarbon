@@ -436,11 +436,32 @@ export async function detectAndStore(
 }
 
 /** Full pipeline for whole local days: intervals → roll-ups → findings. */
-export async function processDays(tx: Tx, ctx: BuildingContext, fromDate: string, toDateExclusive: string) {
-  const { from, to } = dayWindow(ctx.building, fromDate, toDateExclusive);
+export async function processDays(
+  tx: Tx,
+  ctx: BuildingContext,
+  fromDate: string,
+  toDateExclusive: string,
+  now = Date.now(),
+) {
+  const window = dayWindow(ctx.building, fromDate, toDateExclusive);
+  // never build intervals for time that has not happened yet; today is processed up to the last whole bucket
+  const bucket = ctx.bucketMinutes * MINUTE;
+  const to = Math.min(window.to, Math.floor(now / bucket) * bucket);
+  const from = window.from;
+  // intervals beyond "now" can only be left over from a clock or data error; they must not count
+  await tx
+    .delete(schema.floorIntervals)
+    .where(
+      and(
+        eq(schema.floorIntervals.buildingId, ctx.building.id),
+        gte(schema.floorIntervals.startAt, new Date(Math.max(from, to))),
+        lt(schema.floorIntervals.startAt, new Date(window.to)),
+      ),
+    );
+  if (to <= from) return { intervals: 0, upserted: 0, removed: 0, avoidableKwh: 0, days: 0 };
   const intervals = await recomputeIntervals(tx, ctx, from, to);
   const detect = await detectAndStore(tx, ctx, from, to);
-  return { intervals: intervals.length, ...detect, days: Math.round((to - from) / DAY) };
+  return { intervals: intervals.length, ...detect, days: Math.ceil((to - from) / DAY) };
 }
 
 export { addDays };

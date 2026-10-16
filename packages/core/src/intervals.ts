@@ -77,6 +77,9 @@ function stepIntegrals<S>(
   return share;
 }
 
+/** Share of a bucket that readings must cover for the bucket to count as metered. */
+export const METER_COVERAGE = 0.9;
+
 /** Overlap in ms between [a1,b1) and [a2,b2). */
 function overlap(a1: number, b1: number, a2: number, b2: number): number {
   return Math.max(0, Math.min(b1, b2) - Math.max(a1, a2));
@@ -106,7 +109,6 @@ export function buildFloorIntervals(input: IntervalBuildInput): FloorInterval[] 
       .sort((x, y) => x.ts - y.ts)
       .map((e) => ({ ts: e.ts, state: e.level }));
     const fOcc = (occ.get(floor.id) ?? []).slice().sort((x, y) => x.ts - y.ts);
-    const metered = new Set(fReadings.map((r) => r.system));
     const zoneFraction = floor.zoneOnlyFraction ?? 0.3;
     let ri = 0;
     let oi = 0;
@@ -135,13 +137,19 @@ export function buildFloorIntervals(input: IntervalBuildInput): FloorInterval[] 
       }
 
       const measured = { hvac: 0, lighting: 0, plug: 0, total: 0 };
+      const coveredMs = { hvac: 0, lighting: 0, plug: 0, total: 0 };
       while (ri < fReadings.length && fReadings[ri]!.end <= start) ri++;
       for (let k = ri; k < fReadings.length && fReadings[k]!.start < end; k++) {
         const r = fReadings[k]!;
         const span = r.end - r.start;
         if (span <= 0) continue;
-        measured[r.system] += (r.kwh * overlap(start, end, r.start, r.end)) / span;
+        const o = overlap(start, end, r.start, r.end);
+        measured[r.system] += (r.kwh * o) / span;
+        coveredMs[r.system] += o;
       }
+      // a system counts as metered in this bucket only if readings cover (almost) all of it; a gap in the
+      // meter data falls back to the estimate instead of reading as zero
+      const covers = (system: keyof typeof coveredMs) => coveredMs[system] >= bucket * METER_COVERAGE;
 
       const estHvac = floor.ratedHvacKw * hours * ((fullMs + setbackMs * zoneFraction) / bucket);
       const estLight = floor.ratedLightingKw * hours * lightsOn;
@@ -151,12 +159,12 @@ export function buildFloorIntervals(input: IntervalBuildInput): FloorInterval[] 
       let kwhHvac = estHvac;
       let kwhLight = estLight;
       let kwhPlug = estPlug;
-      if (metered.has("hvac")) kwhHvac = measured.hvac;
+      if (covers("hvac")) kwhHvac = measured.hvac;
       else tier = "estimated";
-      if (metered.has("lighting")) kwhLight = measured.lighting;
+      if (covers("lighting")) kwhLight = measured.lighting;
       else tier = "estimated";
-      if (metered.has("plug")) kwhPlug = measured.plug;
-      else if (metered.has("total")) {
+      if (covers("plug")) kwhPlug = measured.plug;
+      else if (covers("total")) {
         // a floor sub-meter without split: plug = total − (hvac + lighting), never negative
         kwhPlug = Math.max(0, measured.total - kwhHvac - kwhLight);
       } else tier = "estimated";

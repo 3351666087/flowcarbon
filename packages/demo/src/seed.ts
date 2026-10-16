@@ -299,6 +299,11 @@ export async function seedDemo(db: Db, opts: SeedOptions): Promise<SeedResult> {
     const processed = await processDays(tx, ctx, opts.startDate, endDate);
     log(`processed ${processed.days} days: ${processed.intervals} intervals, ${processed.upserted} findings`);
     await refreshForecasts(tx, ctx, endDate, opts.forecastDays ?? 7);
+    // the seed processed its own batches synchronously
+    await tx
+      .update(schema.ingestionBatches)
+      .set({ status: "processed", processedAt: new Date() })
+      .where(eq(schema.ingestionBatches.buildingId, building.id));
 
     for (const u of DEMO_USERS)
       await tx.insert(schema.memberships).values({

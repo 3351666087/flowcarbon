@@ -24,7 +24,8 @@
     "seed": "npm run seed -w @flowcarbon/demo --",
     "db:up": "docker compose -f infra/docker-compose.yml up -d db",
     "db:down": "docker compose -f infra/docker-compose.yml down",
-    "dev:api": "npm run dev -w @flowcarbon/api"
+    "dev:api": "npm run dev -w @flowcarbon/api",
+    "dev:worker": "npm run dev -w @flowcarbon/worker"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

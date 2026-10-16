@@ -69,7 +69,48 @@ describe("interval aggregation", () => {
       ],
     });
     expect(iv.map((i) => i.kwh.hvac)).toEqual([10, 10, 10, 10]);
+    // the lighting meter stops after 30 min: the rest is estimated (lights off here), not "measured zero"
     expect(iv.map((i) => i.kwh.lighting)).toEqual([3, 3, 0, 0]);
-    expect(iv.every((i) => i.tier === "measured")).toBe(true);
+    expect(iv.map((i) => i.tier)).toEqual(["measured", "measured", "estimated", "estimated"]);
+  });
+});
+
+describe("meter gaps", () => {
+  it("falls back to the estimate where readings stop, instead of counting zero", () => {
+    const floor = {
+      id: "f1",
+      label: "F1",
+      level: 1,
+      areaM2: 1000,
+      tenantId: null,
+      ratedHvacKw: 40,
+      ratedLightingKw: 8,
+      plugKwPerPerson: 0.1,
+    };
+    const from = Date.UTC(2026, 9, 12, 0, 0);
+    const to = from + 2 * 3_600_000;
+    const q = 15 * 60_000;
+    // meters report only the first hour
+    const readings = ["hvac", "lighting", "plug"].flatMap((system) =>
+      [0, 1, 2, 3].map((i) => ({
+        floorId: "f1",
+        system: system as "hvac" | "lighting" | "plug",
+        start: from + i * q,
+        end: from + (i + 1) * q,
+        kwh: 1,
+      })),
+    );
+    const iv = buildFloorIntervals({
+      floors: [floor],
+      from,
+      to,
+      readings,
+      hvacEvents: [{ floorId: "f1", ts: from, mode: "full" }],
+      lightingEvents: [{ floorId: "f1", ts: from, level: 1 }],
+    });
+    expect(iv.slice(0, 4).every((i) => i.tier === "measured" && i.kwh.hvac === 1)).toBe(true);
+    expect(iv.slice(4).every((i) => i.tier === "estimated")).toBe(true);
+    expect(iv[4]!.kwh.hvac).toBeCloseTo(10, 6); // 40 kW for 15 min
+    expect(iv[4]!.kwh.lighting).toBeCloseTo(2, 6);
   });
 });
