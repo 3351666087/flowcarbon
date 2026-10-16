@@ -1,0 +1,743 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" role="img" aria-labelledby="t d" lang="zh-CN">
+<title id="t">FlowCarbon</title>
+<desc id="d">晚上和周末， 写字楼在给没人的楼层供冷 FlowCarbon 逐层把这些时段找出来。 感知 → 识别 → 解释 → 模拟 → 报告.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#060a13"/><stop offset="1" stop-color="#0b1424"/></linearGradient>
+<radialGradient id="halo"><stop offset="0" stop-color="#0d7068" stop-opacity="0.35"/><stop offset="1" stop-color="#0d7068" stop-opacity="0"/></radialGradient>
+<radialGradient id="halo2"><stop offset="0" stop-color="#1b3a7a" stop-opacity="0.22"/><stop offset="1" stop-color="#1b3a7a" stop-opacity="0"/></radialGradient>
+<linearGradient id="logo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ff0d9"/><stop offset="1" stop-color="#1aa597"/></linearGradient>
+<linearGradient id="cool" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fd0ff" stop-opacity="0.04"/><stop offset="1" stop-color="#5fd0ff" stop-opacity="0.22"/></linearGradient>
+<linearGradient id="beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3cd6c3" stop-opacity="0"/><stop offset="1" stop-color="#3cd6c3" stop-opacity="0.28"/></linearGradient>
+<linearGradient id="aiSheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3cd6c3" stop-opacity="0.10"/><stop offset="0.5" stop-color="#3cd6c3" stop-opacity="0"/></linearGradient>
+<linearGradient id="progress" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0d7068"/><stop offset="1" stop-color="#3cd6c3"/></linearGradient>
+<filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<filter id="glowSoft" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<style>
+svg{font-family:"PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei", -apple-system, "Segoe UI", sans-serif}
+.tw{animation:tw 3s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:.25}50%{opacity:.95}}
+.blink{animation:blink 1.6s steps(1) infinite}
+@keyframes blink{0%{opacity:1}50%{opacity:.15}}
+.air{animation:air 1.4s linear infinite}
+@keyframes air{to{stroke-dashoffset:-36}}
+.bob{animation:bob 2.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translate(0,0)}50%{transform:translate(0,-2px)}}
+.pulse{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.spark{animation:spark 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes spark{0%,100%{transform:rotate(0) scale(1)}50%{transform:rotate(45deg) scale(1.15)}}
+.grow{transform-box:fill-box;transform-origin:left center}
+@keyframes k0{2.5%{opacity:1;}97.5%{opacity:1;}100%{opacity:0;}}.k0{animation:k0 20s ease-in-out infinite}
+@keyframes k1{0%{opacity:0;}6%{opacity:0;}8%{opacity:1;}96%{opacity:1;}98%{opacity:0;}100%{opacity:0;}}.k1{animation:k1 20s ease-in-out infinite}
+@keyframes k2{0%{opacity:0;transform:translate(0,6px)}4.6%{opacity:0;transform:translate(0,6px)}6.35%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k2{animation:k2 20s ease-in-out infinite}
+@keyframes k3{0%{opacity:0;}12.25%{opacity:0;}14.5%{opacity:1;}72.9%{opacity:1;}75.15%{opacity:0;}100%{opacity:0;}}.k3{animation:k3 20s ease-in-out infinite}
+@keyframes k4{0%{opacity:0;}7%{opacity:0;}9.5%{opacity:1;}72%{opacity:1;}74.5%{opacity:0;}100%{opacity:0;}}.k4{animation:k4 20s ease-in-out infinite}
+@keyframes k5{0%{opacity:0;}35.25%{opacity:0;}36.75%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k5{animation:k5 20s ease-in-out infinite}
+@keyframes k6{0%{opacity:0;}27.547%{opacity:0;}28.547%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k6{animation:k6 20s ease-in-out infinite}
+@keyframes k7{0%{opacity:0;transform:translate(0,6px)}4.25%{opacity:0;transform:translate(0,6px)}6%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k7{animation:k7 20s ease-in-out infinite}
+@keyframes k8{0%{opacity:0;}12%{opacity:0;}14.25%{opacity:1;}72.25%{opacity:1;}74.5%{opacity:0;}100%{opacity:0;}}.k8{animation:k8 20s ease-in-out infinite}
+@keyframes k9{0%{opacity:0;}35%{opacity:0;}36.5%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k9{animation:k9 20s ease-in-out infinite}
+@keyframes k10{0%{opacity:0;}26.448%{opacity:0;}27.448%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k10{animation:k10 20s ease-in-out infinite}
+@keyframes k11{0%{opacity:0;transform:translate(0,6px)}3.9%{opacity:0;transform:translate(0,6px)}5.65%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k11{animation:k11 20s ease-in-out infinite}
+@keyframes k12{0%{opacity:0;}11.75%{opacity:0;}14%{opacity:1;}71.6%{opacity:1;}73.85%{opacity:0;}100%{opacity:0;}}.k12{animation:k12 20s ease-in-out infinite}
+@keyframes k13{0%{opacity:0;}34.75%{opacity:0;}36.25%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k13{animation:k13 20s ease-in-out infinite}
+@keyframes k14{0%{opacity:0;}25.348%{opacity:0;}26.348%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k14{animation:k14 20s ease-in-out infinite}
+@keyframes k15{0%{opacity:0;transform:translate(0,6px)}3.55%{opacity:0;transform:translate(0,6px)}5.3%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k15{animation:k15 20s ease-in-out infinite}
+@keyframes k16{0%{opacity:0;}11.5%{opacity:0;}13.75%{opacity:1;}70.95%{opacity:1;}73.2%{opacity:0;}100%{opacity:0;}}.k16{animation:k16 20s ease-in-out infinite}
+@keyframes k17{0%{opacity:0;}34.5%{opacity:0;}36%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k17{animation:k17 20s ease-in-out infinite}
+@keyframes k18{0%{opacity:0;}24.249%{opacity:0;}25.249%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k18{animation:k18 20s ease-in-out infinite}
+@keyframes k19{0%{opacity:0;transform:translate(0,6px)}3.2%{opacity:0;transform:translate(0,6px)}4.95%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k19{animation:k19 20s ease-in-out infinite}
+@keyframes k20{0%{opacity:0;}11.25%{opacity:0;}13.5%{opacity:1;}95.75%{opacity:1;}98%{opacity:0;}100%{opacity:0;}}.k20{animation:k20 20s ease-in-out infinite}
+@keyframes k21{0%{opacity:0;}7%{opacity:0;}9.5%{opacity:1;}95.5%{opacity:1;}98%{opacity:0;}100%{opacity:0;}}.k21{animation:k21 20s ease-in-out infinite}
+@keyframes k22{0%{opacity:0;}13%{opacity:0;}15%{opacity:1;}96%{opacity:1;}98%{opacity:0;}100%{opacity:0;}}.k22{animation:k22 20s ease-in-out infinite}
+@keyframes k23{0%{opacity:0;}23.149%{opacity:0;}24.149%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k23{animation:k23 20s ease-in-out infinite}
+@keyframes k24{0%{opacity:0;transform:translate(0,6px)}2.85%{opacity:0;transform:translate(0,6px)}4.6%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k24{animation:k24 20s ease-in-out infinite}
+@keyframes k25{0%{opacity:0;}11%{opacity:0;}13.25%{opacity:1;}69.65%{opacity:1;}71.9%{opacity:0;}100%{opacity:0;}}.k25{animation:k25 20s ease-in-out infinite}
+@keyframes k26{0%{opacity:0;}34%{opacity:0;}35.5%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k26{animation:k26 20s ease-in-out infinite}
+@keyframes k27{0%{opacity:0;}22.05%{opacity:0;}23.05%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k27{animation:k27 20s ease-in-out infinite}
+@keyframes k28{0%{opacity:0;transform:translate(0,6px)}2.5%{opacity:0;transform:translate(0,6px)}4.25%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k28{animation:k28 20s ease-in-out infinite}
+@keyframes k29{0%{opacity:0;}10.75%{opacity:0;}13%{opacity:1;}69%{opacity:1;}71.25%{opacity:0;}100%{opacity:0;}}.k29{animation:k29 20s ease-in-out infinite}
+@keyframes k30{0%{opacity:0;}33.75%{opacity:0;}35.25%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k30{animation:k30 20s ease-in-out infinite}
+@keyframes k31{0%{opacity:0;}20.95%{opacity:0;}21.95%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k31{animation:k31 20s ease-in-out infinite}
+@keyframes k32{0%{opacity:0;transform:translate(0,6px)}2.15%{opacity:0;transform:translate(0,6px)}3.9%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k32{animation:k32 20s ease-in-out infinite}
+@keyframes k33{0%{opacity:0;}10.5%{opacity:0;}12.75%{opacity:1;}68.35%{opacity:1;}70.6%{opacity:0;}100%{opacity:0;}}.k33{animation:k33 20s ease-in-out infinite}
+@keyframes k34{0%{opacity:0;}33.5%{opacity:0;}35%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k34{animation:k34 20s ease-in-out infinite}
+@keyframes k35{0%{opacity:0;}19.851%{opacity:0;}20.851%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k35{animation:k35 20s ease-in-out infinite}
+@keyframes k36{0%{opacity:0;transform:translate(0,6px)}1.8%{opacity:0;transform:translate(0,6px)}3.55%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k36{animation:k36 20s ease-in-out infinite}
+@keyframes k37{0%{opacity:0;}10.25%{opacity:0;}12.5%{opacity:1;}67.7%{opacity:1;}69.95%{opacity:0;}100%{opacity:0;}}.k37{animation:k37 20s ease-in-out infinite}
+@keyframes k38{0%{opacity:0;}33.25%{opacity:0;}34.75%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k38{animation:k38 20s ease-in-out infinite}
+@keyframes k39{0%{opacity:0;}18.751%{opacity:0;}19.751%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k39{animation:k39 20s ease-in-out infinite}
+@keyframes k40{0%{opacity:0;transform:translate(0,6px)}1.45%{opacity:0;transform:translate(0,6px)}3.2%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k40{animation:k40 20s ease-in-out infinite}
+@keyframes k41{0%{opacity:0;}10%{opacity:0;}12.25%{opacity:1;}67.05%{opacity:1;}69.3%{opacity:0;}100%{opacity:0;}}.k41{animation:k41 20s ease-in-out infinite}
+@keyframes k42{0%{opacity:0;}33%{opacity:0;}34.5%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k42{animation:k42 20s ease-in-out infinite}
+@keyframes k43{0%{opacity:0;}17.652%{opacity:0;}18.652%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k43{animation:k43 20s ease-in-out infinite}
+@keyframes k44{0%{opacity:0;transform:translate(0,6px)}1.1%{opacity:0;transform:translate(0,6px)}2.85%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k44{animation:k44 20s ease-in-out infinite}
+@keyframes k45{0%{opacity:0;}9.75%{opacity:0;}12%{opacity:1;}66.4%{opacity:1;}68.65%{opacity:0;}100%{opacity:0;}}.k45{animation:k45 20s ease-in-out infinite}
+@keyframes k46{0%{opacity:0;}32.75%{opacity:0;}34.25%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k46{animation:k46 20s ease-in-out infinite}
+@keyframes k47{0%{opacity:0;}16.552%{opacity:0;}17.552%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k47{animation:k47 20s ease-in-out infinite}
+@keyframes k48{0%{opacity:0;transform:translate(0,6px)}0.75%{opacity:0;transform:translate(0,6px)}2.5%{opacity:1;transform:translate(0,0)}96.75%{opacity:1;transform:translate(0,0)}98.5%{opacity:0;}100%{opacity:0;}}.k48{animation:k48 20s ease-in-out infinite}
+@keyframes k49{0%{opacity:0;}9.5%{opacity:0;}11.75%{opacity:1;}65.75%{opacity:1;}68%{opacity:0;}100%{opacity:0;}}.k49{animation:k49 20s ease-in-out infinite}
+@keyframes k50{0%{opacity:0;}32.5%{opacity:0;}34%{opacity:1;}66%{opacity:1;}67.5%{opacity:0;}100%{opacity:0;}}.k50{animation:k50 20s ease-in-out infinite}
+@keyframes k51{0%{opacity:0;}15.453%{opacity:0;}16.453%{opacity:1;}66%{opacity:1;}67%{opacity:0;}100%{opacity:0;}}.k51{animation:k51 20s ease-in-out infinite}
+@keyframes k52{0%{opacity:0;transform:translate(0,0)}14%{opacity:0;transform:translate(0,0)}15%{opacity:1;transform:translate(0,0)}28%{opacity:1;transform:translate(0,-402px)}29.5%{opacity:0;transform:translate(0,-402px)}100%{opacity:0;transform:translate(0,-402px)}}.k52{animation:k52 20s ease-in-out infinite}
+@keyframes k53{0%{opacity:0;transform:translate(14px,0)}1%{opacity:0;transform:translate(14px,0)}3%{opacity:1;transform:translate(0,0)}11.5%{opacity:1;transform:translate(0,0)}13.5%{opacity:0;transform:translate(-14px,0)}100%{opacity:0;transform:translate(-14px,0)}}.k53{animation:k53 20s ease-in-out infinite}
+@keyframes k54{0%{opacity:0;transform:translate(14px,0)}13%{opacity:0;transform:translate(14px,0)}15%{opacity:1;transform:translate(0,0)}29%{opacity:1;transform:translate(0,0)}31%{opacity:0;transform:translate(-14px,0)}100%{opacity:0;transform:translate(-14px,0)}}.k54{animation:k54 20s ease-in-out infinite}
+@keyframes k55{0%{opacity:0;transform:translate(10px,0)}15.5%{opacity:0;transform:translate(10px,0)}17.25%{opacity:1;transform:translate(0,0)}29.25%{opacity:1;transform:translate(0,0)}31%{opacity:0;}100%{opacity:0;}}.k55{animation:k55 20s ease-in-out infinite}
+@keyframes k56{0%{opacity:0;transform:translate(10px,0)}17.25%{opacity:0;transform:translate(10px,0)}19%{opacity:1;transform:translate(0,0)}29.25%{opacity:1;transform:translate(0,0)}31%{opacity:0;}100%{opacity:0;}}.k56{animation:k56 20s ease-in-out infinite}
+@keyframes k57{0%{opacity:0;transform:translate(10px,0)}19%{opacity:0;transform:translate(10px,0)}20.75%{opacity:1;transform:translate(0,0)}29.25%{opacity:1;transform:translate(0,0)}31%{opacity:0;}100%{opacity:0;}}.k57{animation:k57 20s ease-in-out infinite}
+@keyframes k58{0%{opacity:0;}22%{opacity:0;}23.75%{opacity:1;}29.25%{opacity:1;}31%{opacity:0;}100%{opacity:0;}}.k58{animation:k58 20s ease-in-out infinite}
+@keyframes k59{0%{opacity:0;transform:translate(14px,0)}30.5%{opacity:0;transform:translate(14px,0)}32.5%{opacity:1;transform:translate(0,0)}46.5%{opacity:1;transform:translate(0,0)}48.5%{opacity:0;transform:translate(-14px,0)}100%{opacity:0;transform:translate(-14px,0)}}.k59{animation:k59 20s ease-in-out infinite}
+@keyframes k60{0%{opacity:0;transform:translate(40px,0)}33%{opacity:0;transform:translate(40px,0)}34.75%{opacity:1;transform:translate(0,0)}46.75%{opacity:1;transform:translate(0,0)}48.5%{opacity:0;}100%{opacity:0;}}.k60{animation:k60 20s ease-in-out infinite}
+@keyframes k61{0%{opacity:0;transform:translate(40px,0)}35.25%{opacity:0;transform:translate(40px,0)}37%{opacity:1;transform:translate(0,0)}46.75%{opacity:1;transform:translate(0,0)}48.5%{opacity:0;}100%{opacity:0;}}.k61{animation:k61 20s ease-in-out infinite}
+@keyframes k62{0%{opacity:0;transform:translate(40px,0)}37.5%{opacity:0;transform:translate(40px,0)}39.25%{opacity:1;transform:translate(0,0)}46.75%{opacity:1;transform:translate(0,0)}48.5%{opacity:0;}100%{opacity:0;}}.k62{animation:k62 20s ease-in-out infinite}
+@keyframes k63{0%{opacity:0;transform:translate(14px,0)}48%{opacity:0;transform:translate(14px,0)}50%{opacity:1;transform:translate(0,0)}64%{opacity:1;transform:translate(0,0)}66%{opacity:0;transform:translate(-14px,0)}100%{opacity:0;transform:translate(-14px,0)}}.k63{animation:k63 20s ease-in-out infinite}
+@keyframes k64{0%{transform:translate(0,0)}50.5%{transform:translate(0,0)}54%{transform:translate(560px,0)}100%{transform:translate(560px,0)}}.k64{animation:k64 20s ease-in-out infinite}
+@keyframes k65{0%{transform:translate(0,0)}53.6%{transform:translate(0,0)}57.1%{transform:translate(560px,0)}100%{transform:translate(560px,0)}}.k65{animation:k65 20s ease-in-out infinite}
+@keyframes k66{0%{transform:translate(0,0)}56.7%{transform:translate(0,0)}60.2%{transform:translate(560px,0)}100%{transform:translate(560px,0)}}.k66{animation:k66 20s ease-in-out infinite}
+@keyframes k67{0%{transform:translate(0,0)}59.8%{transform:translate(0,0)}63.3%{transform:translate(560px,0)}100%{transform:translate(560px,0)}}.k67{animation:k67 20s ease-in-out infinite}
+@keyframes k68{0%{opacity:0;}61%{opacity:0;}62.5%{opacity:1;}64.5%{opacity:1;}66%{opacity:0;}100%{opacity:0;}}.k68{animation:k68 20s ease-in-out infinite}
+@keyframes k69{0%{opacity:0;transform:translate(14px,0)}65.5%{opacity:0;transform:translate(14px,0)}67.5%{opacity:1;transform:translate(0,0)}81.5%{opacity:1;transform:translate(0,0)}83.5%{opacity:0;transform:translate(-14px,0)}100%{opacity:0;transform:translate(-14px,0)}}.k69{animation:k69 20s ease-in-out infinite}
+@keyframes k70{0%{opacity:0;transform:translate(0,10px)}67%{opacity:0;transform:translate(0,10px)}68.5%{opacity:1;transform:translate(0,0)}82%{opacity:1;transform:translate(0,0)}83.5%{opacity:0;}100%{opacity:0;}}.k70{animation:k70 20s ease-in-out infinite}
+@keyframes k71{0%{opacity:0;}68%{opacity:0;}68.3%{opacity:1;}69.8%{opacity:1;}70.1%{opacity:0;}100%{opacity:0;}}.k71{animation:k71 20s ease-in-out infinite}
+@keyframes k72{0%{opacity:0;}70.1%{opacity:0;}70.4%{opacity:1;}71.9%{opacity:1;}72.2%{opacity:0;}100%{opacity:0;}}.k72{animation:k72 20s ease-in-out infinite}
+@keyframes k73{0%{opacity:0;}72.2%{opacity:0;}72.5%{opacity:1;}74%{opacity:1;}74.3%{opacity:0;}100%{opacity:0;}}.k73{animation:k73 20s ease-in-out infinite}
+@keyframes k74{0%{opacity:0;}74.3%{opacity:0;}74.6%{opacity:1;}76.1%{opacity:1;}76.4%{opacity:0;}100%{opacity:0;}}.k74{animation:k74 20s ease-in-out infinite}
+@keyframes k75{0%{opacity:0;}76.4%{opacity:0;}76.7%{opacity:1;}83.2%{opacity:1;}83.5%{opacity:0;}100%{opacity:0;}}.k75{animation:k75 20s ease-in-out infinite}
+@keyframes k76{0%{opacity:0;transform:translate(0,10px)}68.25%{opacity:0;transform:translate(0,10px)}69.75%{opacity:1;transform:translate(0,0)}82%{opacity:1;transform:translate(0,0)}83.5%{opacity:0;}100%{opacity:0;}}.k76{animation:k76 20s ease-in-out infinite}
+@keyframes k77{0%{opacity:0;}68%{opacity:0;}68.3%{opacity:1;}69.8%{opacity:1;}70.1%{opacity:0;}100%{opacity:0;}}.k77{animation:k77 20s ease-in-out infinite}
+@keyframes k78{0%{opacity:0;}70.1%{opacity:0;}70.4%{opacity:1;}71.9%{opacity:1;}72.2%{opacity:0;}100%{opacity:0;}}.k78{animation:k78 20s ease-in-out infinite}
+@keyframes k79{0%{opacity:0;}72.2%{opacity:0;}72.5%{opacity:1;}74%{opacity:1;}74.3%{opacity:0;}100%{opacity:0;}}.k79{animation:k79 20s ease-in-out infinite}
+@keyframes k80{0%{opacity:0;}74.3%{opacity:0;}74.6%{opacity:1;}76.1%{opacity:1;}76.4%{opacity:0;}100%{opacity:0;}}.k80{animation:k80 20s ease-in-out infinite}
+@keyframes k81{0%{opacity:0;}76.4%{opacity:0;}76.7%{opacity:1;}83.2%{opacity:1;}83.5%{opacity:0;}100%{opacity:0;}}.k81{animation:k81 20s ease-in-out infinite}
+@keyframes k82{0%{opacity:0;transform:translate(0,10px)}69.5%{opacity:0;transform:translate(0,10px)}71%{opacity:1;transform:translate(0,0)}82%{opacity:1;transform:translate(0,0)}83.5%{opacity:0;}100%{opacity:0;}}.k82{animation:k82 20s ease-in-out infinite}
+@keyframes k83{0%{opacity:0;}71%{opacity:0;}72.5%{opacity:1;}82%{opacity:1;}83.5%{opacity:0;}100%{opacity:0;}}.k83{animation:k83 20s ease-in-out infinite}
+@keyframes k84{0%{opacity:0;transform:translate(14px,0)}83%{opacity:0;transform:translate(14px,0)}85%{opacity:1;transform:translate(0,0)}96%{opacity:1;transform:translate(0,0)}98%{opacity:0;}100%{opacity:0;}}.k84{animation:k84 20s ease-in-out infinite}
+@keyframes k85{0%{opacity:0;transform:translate(0,10px)}88%{opacity:0;transform:translate(0,10px)}90%{opacity:1;transform:translate(0,0)}96%{opacity:1;transform:translate(0,0)}98%{opacity:0;}100%{opacity:0;}}.k85{animation:k85 20s ease-in-out infinite}
+@keyframes k86{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}.k86{animation:k86 20s linear infinite}
+@keyframes k87{0%{opacity:0;}13%{opacity:0;}14%{opacity:1;}29.5%{opacity:1;}30.5%{opacity:0;}100%{opacity:0;}}.k87{animation:k87 20s ease-in-out infinite}
+@keyframes k88{0%{opacity:0;}13%{opacity:0;}14%{opacity:1;}29.5%{opacity:1;}30.5%{opacity:0;}100%{opacity:0;}}.k88{animation:k88 20s ease-in-out infinite}
+@keyframes k89{0%{opacity:0;}30.5%{opacity:0;}31.5%{opacity:1;}47%{opacity:1;}48%{opacity:0;}100%{opacity:0;}}.k89{animation:k89 20s ease-in-out infinite}
+@keyframes k90{0%{opacity:0;}30.5%{opacity:0;}31.5%{opacity:1;}47%{opacity:1;}48%{opacity:0;}100%{opacity:0;}}.k90{animation:k90 20s ease-in-out infinite}
+@keyframes k91{0%{opacity:0;}48%{opacity:0;}49%{opacity:1;}64.5%{opacity:1;}65.5%{opacity:0;}100%{opacity:0;}}.k91{animation:k91 20s ease-in-out infinite}
+@keyframes k92{0%{opacity:0;}48%{opacity:0;}49%{opacity:1;}64.5%{opacity:1;}65.5%{opacity:0;}100%{opacity:0;}}.k92{animation:k92 20s ease-in-out infinite}
+@keyframes k93{0%{opacity:0;}65.5%{opacity:0;}66.5%{opacity:1;}82%{opacity:1;}83%{opacity:0;}100%{opacity:0;}}.k93{animation:k93 20s ease-in-out infinite}
+@keyframes k94{0%{opacity:0;}65.5%{opacity:0;}66.5%{opacity:1;}82%{opacity:1;}83%{opacity:0;}100%{opacity:0;}}.k94{animation:k94 20s ease-in-out infinite}
+@keyframes k95{0%{opacity:0;}83%{opacity:0;}84%{opacity:1;}97%{opacity:1;}98%{opacity:0;}100%{opacity:0;}}.k95{animation:k95 20s ease-in-out infinite}
+@keyframes k96{0%{opacity:0;}83%{opacity:0;}84%{opacity:1;}97%{opacity:1;}98%{opacity:0;}100%{opacity:0;}}.k96{animation:k96 20s ease-in-out infinite}
+/* without motion: a still frame of the explanation scene */
+@media (prefers-reduced-motion: reduce){.a,.tw,.air,.bob,.pulse,.spark,.blink{animation-play-state:paused!important}.a{animation-delay:-12.4s!important}}
+</style>
+<rect width="1280" height="720" rx="22" fill="url(#bg)"/>
+<ellipse cx="300" cy="420" rx="330" ry="300" fill="url(#halo)"/>
+<ellipse cx="980" cy="360" rx="380" ry="300" fill="url(#halo2)"/>
+<g opacity="0.07" stroke="#8d9aae" stroke-width="1">
+<line x1="40" y1="0" x2="40" y2="720"/>
+<line x1="80" y1="0" x2="80" y2="720"/>
+<line x1="120" y1="0" x2="120" y2="720"/>
+<line x1="160" y1="0" x2="160" y2="720"/>
+<line x1="200" y1="0" x2="200" y2="720"/>
+<line x1="240" y1="0" x2="240" y2="720"/>
+<line x1="280" y1="0" x2="280" y2="720"/>
+<line x1="320" y1="0" x2="320" y2="720"/>
+<line x1="360" y1="0" x2="360" y2="720"/>
+<line x1="400" y1="0" x2="400" y2="720"/>
+<line x1="440" y1="0" x2="440" y2="720"/>
+<line x1="480" y1="0" x2="480" y2="720"/>
+<line x1="520" y1="0" x2="520" y2="720"/>
+<line x1="560" y1="0" x2="560" y2="720"/>
+<line x1="600" y1="0" x2="600" y2="720"/>
+<line x1="640" y1="0" x2="640" y2="720"/>
+<line x1="680" y1="0" x2="680" y2="720"/>
+<line x1="720" y1="0" x2="720" y2="720"/>
+<line x1="760" y1="0" x2="760" y2="720"/>
+<line x1="800" y1="0" x2="800" y2="720"/>
+<line x1="840" y1="0" x2="840" y2="720"/>
+<line x1="880" y1="0" x2="880" y2="720"/>
+<line x1="920" y1="0" x2="920" y2="720"/>
+<line x1="960" y1="0" x2="960" y2="720"/>
+<line x1="1000" y1="0" x2="1000" y2="720"/>
+<line x1="1040" y1="0" x2="1040" y2="720"/>
+<line x1="1080" y1="0" x2="1080" y2="720"/>
+<line x1="1120" y1="0" x2="1120" y2="720"/>
+<line x1="1160" y1="0" x2="1160" y2="720"/>
+<line x1="1200" y1="0" x2="1200" y2="720"/>
+<line x1="1240" y1="0" x2="1240" y2="720"/>
+<line x1="0" y1="40" x2="1280" y2="40"/>
+<line x1="0" y1="80" x2="1280" y2="80"/>
+<line x1="0" y1="120" x2="1280" y2="120"/>
+<line x1="0" y1="160" x2="1280" y2="160"/>
+<line x1="0" y1="200" x2="1280" y2="200"/>
+<line x1="0" y1="240" x2="1280" y2="240"/>
+<line x1="0" y1="280" x2="1280" y2="280"/>
+<line x1="0" y1="320" x2="1280" y2="320"/>
+<line x1="0" y1="360" x2="1280" y2="360"/>
+<line x1="0" y1="400" x2="1280" y2="400"/>
+<line x1="0" y1="440" x2="1280" y2="440"/>
+<line x1="0" y1="480" x2="1280" y2="480"/>
+<line x1="0" y1="520" x2="1280" y2="520"/>
+<line x1="0" y1="560" x2="1280" y2="560"/>
+<line x1="0" y1="600" x2="1280" y2="600"/>
+<line x1="0" y1="640" x2="1280" y2="640"/>
+<line x1="0" y1="680" x2="1280" y2="680"/>
+</g>
+<g fill="#cfe3ff">
+<circle class="tw" cx="15" cy="19" r="1.17" style="animation-delay:-3.91s;animation-duration:4.60s"/>
+<circle class="tw" cx="519" cy="140" r="1.40" style="animation-delay:-0.96s;animation-duration:4.16s"/>
+<circle class="tw" cx="330" cy="47" r="0.82" style="animation-delay:-3.06s;animation-duration:4.06s"/>
+<circle class="tw" cx="471" cy="88" r="1.68" style="animation-delay:-2.14s;animation-duration:3.39s"/>
+<circle class="tw" cx="317" cy="263" r="0.77" style="animation-delay:-0.76s;animation-duration:2.93s"/>
+<circle class="tw" cx="372" cy="164" r="1.60" style="animation-delay:-3.05s;animation-duration:2.72s"/>
+<circle class="tw" cx="709" cy="186" r="1.29" style="animation-delay:-2.72s;animation-duration:5.40s"/>
+<circle class="tw" cx="1179" cy="248" r="0.99" style="animation-delay:-0.16s;animation-duration:3.02s"/>
+<circle class="tw" cx="544" cy="6" r="1.01" style="animation-delay:-0.35s;animation-duration:4.80s"/>
+<circle class="tw" cx="546" cy="141" r="1.36" style="animation-delay:-3.78s;animation-duration:4.61s"/>
+<circle class="tw" cx="423" cy="107" r="1.60" style="animation-delay:-0.56s;animation-duration:2.90s"/>
+<circle class="tw" cx="413" cy="57" r="0.65" style="animation-delay:-2.53s;animation-duration:3.51s"/>
+<circle class="tw" cx="876" cy="276" r="1.32" style="animation-delay:-2.19s;animation-duration:4.98s"/>
+<circle class="tw" cx="1177" cy="35" r="1.58" style="animation-delay:-2.12s;animation-duration:4.45s"/>
+<circle class="tw" cx="1229" cy="251" r="1.66" style="animation-delay:-2.38s;animation-duration:5.39s"/>
+<circle class="tw" cx="702" cy="246" r="0.96" style="animation-delay:-0.02s;animation-duration:4.05s"/>
+<circle class="tw" cx="927" cy="165" r="1.21" style="animation-delay:-3.02s;animation-duration:5.43s"/>
+<circle class="tw" cx="1054" cy="129" r="1.21" style="animation-delay:-2.57s;animation-duration:4.72s"/>
+<circle class="tw" cx="400" cy="71" r="1.64" style="animation-delay:-0.04s;animation-duration:2.57s"/>
+<circle class="tw" cx="1067" cy="189" r="1.25" style="animation-delay:-0.06s;animation-duration:4.36s"/>
+<circle class="tw" cx="918" cy="298" r="1.31" style="animation-delay:-1.11s;animation-duration:5.46s"/>
+<circle class="tw" cx="1030" cy="187" r="1.69" style="animation-delay:-3.32s;animation-duration:2.92s"/>
+<circle class="tw" cx="649" cy="170" r="0.83" style="animation-delay:-0.64s;animation-duration:3.69s"/>
+<circle class="tw" cx="1041" cy="258" r="1.69" style="animation-delay:-2.94s;animation-duration:4.48s"/>
+<circle class="tw" cx="780" cy="221" r="0.85" style="animation-delay:-3.82s;animation-duration:3.97s"/>
+<circle class="tw" cx="748" cy="239" r="1.21" style="animation-delay:-3.42s;animation-duration:3.07s"/>
+<circle class="tw" cx="611" cy="158" r="1.08" style="animation-delay:-0.72s;animation-duration:3.25s"/>
+<circle class="tw" cx="611" cy="51" r="0.63" style="animation-delay:-0.01s;animation-duration:3.02s"/>
+<circle class="tw" cx="137" cy="263" r="0.79" style="animation-delay:-3.93s;animation-duration:2.68s"/>
+<circle class="tw" cx="518" cy="150" r="1.00" style="animation-delay:-2.93s;animation-duration:3.60s"/>
+<circle class="tw" cx="1013" cy="213" r="1.48" style="animation-delay:-3.20s;animation-duration:4.09s"/>
+<circle class="tw" cx="528" cy="169" r="1.45" style="animation-delay:-1.17s;animation-duration:4.08s"/>
+<circle class="tw" cx="102" cy="76" r="1.45" style="animation-delay:-3.31s;animation-duration:4.98s"/>
+<circle class="tw" cx="550" cy="107" r="1.00" style="animation-delay:-3.68s;animation-duration:3.25s"/>
+<circle class="tw" cx="611" cy="249" r="1.21" style="animation-delay:-1.62s;animation-duration:5.42s"/>
+<circle class="tw" cx="558" cy="102" r="1.57" style="animation-delay:-2.15s;animation-duration:3.38s"/>
+<circle class="tw" cx="732" cy="296" r="1.08" style="animation-delay:-3.36s;animation-duration:3.99s"/>
+<circle class="tw" cx="893" cy="279" r="0.78" style="animation-delay:-2.20s;animation-duration:4.47s"/>
+<circle class="tw" cx="887" cy="117" r="1.02" style="animation-delay:-2.44s;animation-duration:5.07s"/>
+<circle class="tw" cx="378" cy="27" r="1.66" style="animation-delay:-2.73s;animation-duration:4.70s"/>
+<circle class="tw" cx="406" cy="78" r="1.62" style="animation-delay:-0.27s;animation-duration:4.66s"/>
+<circle class="tw" cx="1004" cy="249" r="1.68" style="animation-delay:-3.85s;animation-duration:3.18s"/>
+<circle class="tw" cx="362" cy="162" r="1.44" style="animation-delay:-1.56s;animation-duration:4.64s"/>
+<circle class="tw" cx="798" cy="218" r="0.90" style="animation-delay:-2.49s;animation-duration:4.28s"/>
+<circle class="tw" cx="1065" cy="145" r="1.11" style="animation-delay:-0.56s;animation-duration:4.67s"/>
+<circle class="tw" cx="716" cy="165" r="0.77" style="animation-delay:-3.55s;animation-duration:5.36s"/>
+</g>
+<g fill="#0a1322" stroke="#122038">
+<rect x="40" y="360" width="70" height="242" rx="3"/>
+<rect x="96" y="300" width="46" height="302" rx="3"/>
+<rect x="470" y="330" width="64" height="272" rx="3"/>
+<rect x="540" y="400" width="58" height="202" rx="3"/>
+<rect x="600" y="470" width="30" height="132" rx="3"/>
+</g>
+<g fill="#1a2740">
+<rect x="48" y="396" width="6" height="8" rx="1"/>
+<rect x="62" y="396" width="6" height="8" rx="1"/>
+<rect x="90" y="396" width="6" height="8" rx="1"/>
+<rect x="76" y="418" width="6" height="8" rx="1"/>
+<rect x="48" y="440" width="6" height="8" rx="1"/>
+<rect x="76" y="440" width="6" height="8" rx="1"/>
+<rect x="90" y="440" width="6" height="8" rx="1"/>
+<rect x="48" y="462" width="6" height="8" rx="1"/>
+<rect x="90" y="462" width="6" height="8" rx="1"/>
+<rect x="76" y="484" width="6" height="8" rx="1"/>
+<rect x="76" y="506" width="6" height="8" rx="1"/>
+<rect x="76" y="528" width="6" height="8" rx="1"/>
+<rect x="76" y="550" width="6" height="8" rx="1"/>
+<rect x="104" y="336" width="6" height="8" rx="1"/>
+<rect x="104" y="358" width="6" height="8" rx="1"/>
+<rect x="118" y="380" width="6" height="8" rx="1"/>
+<rect x="104" y="402" width="6" height="8" rx="1"/>
+<rect x="132" y="424" width="6" height="8" rx="1"/>
+<rect x="104" y="490" width="6" height="8" rx="1"/>
+<rect x="132" y="490" width="6" height="8" rx="1"/>
+<rect x="104" y="534" width="6" height="8" rx="1"/>
+<rect x="104" y="556" width="6" height="8" rx="1"/>
+<rect x="118" y="556" width="6" height="8" rx="1"/>
+<rect x="520" y="344" width="6" height="8" rx="1"/>
+<rect x="478" y="366" width="6" height="8" rx="1"/>
+<rect x="492" y="388" width="6" height="8" rx="1"/>
+<rect x="506" y="410" width="6" height="8" rx="1"/>
+<rect x="520" y="410" width="6" height="8" rx="1"/>
+<rect x="478" y="432" width="6" height="8" rx="1"/>
+<rect x="492" y="432" width="6" height="8" rx="1"/>
+<rect x="520" y="432" width="6" height="8" rx="1"/>
+<rect x="506" y="520" width="6" height="8" rx="1"/>
+<rect x="506" y="542" width="6" height="8" rx="1"/>
+<rect x="506" y="586" width="6" height="8" rx="1"/>
+<rect x="548" y="436" width="6" height="8" rx="1"/>
+<rect x="576" y="436" width="6" height="8" rx="1"/>
+<rect x="562" y="480" width="6" height="8" rx="1"/>
+<rect x="576" y="480" width="6" height="8" rx="1"/>
+<rect x="562" y="502" width="6" height="8" rx="1"/>
+<rect x="562" y="546" width="6" height="8" rx="1"/>
+<rect x="608" y="528" width="6" height="8" rx="1"/>
+</g>
+<rect x="24" y="602" width="1232" height="2" fill="#1d2b42"/>
+<g class="a k0">
+<rect x="56" y="44" width="40" height="40" rx="11" fill="url(#logo)"/>
+<g transform="translate(76 64)" fill="none" stroke="#04201d" stroke-width="2.2" stroke-linejoin="round"><path d="M0 -10 L11 -4.5 L0 1 L-11 -4.5 Z"/><path d="M-11 0.5 L0 6 L11 0.5"/><path d="M-11 5.5 L0 11 L11 5.5"/></g>
+<text x="110" y="73" font-size="28" font-weight="700" fill="#e8edf4" letter-spacing="-0.5">FlowCarbon</text>
+<text x="110" y="96" font-size="14" fill="#8d9aae">按人数管理下班后的能耗与碳排</text>
+</g>
+<g transform="translate(1140 50)"><rect width="84" height="28" rx="14" fill="#3a2a12" stroke="#5a3d16"/>
+<text x="42" y="19" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="2" fill="#f4a63b">模拟数据</text></g>
+<g class="a k1" transform="translate(56 118)">
+<rect width="228" height="30" rx="15" fill="#0e1829" stroke="#1d2b42"/>
+<circle cx="17" cy="15" r="7" fill="none" stroke="#3cd6c3" stroke-width="1.8"/><path d="M17 11 V15 L20 17" stroke="#3cd6c3" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+<text x="32" y="20" font-size="13.5" fill="#e8edf4">周六 14:00 · F12 申请了加时</text></g>
+<g>
+<rect x="180" y="166" width="240" height="22" rx="4" fill="#0d1729" stroke="#1d2b42"/>
+<line x1="390" y1="166" x2="390" y2="138" stroke="#1d2b42" stroke-width="2"/>
+<circle class="blink" cx="390" cy="136" r="3.2" fill="#ff5a5a" filter="url(#glow)"/>
+<rect x="144" y="186" width="312" height="410" rx="8" fill="#0b1424" stroke="#1d2b42"/>
+<g class="a k2">
+<rect x="150" y="190" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="209" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F16</text>
+<g class="a k3">
+<rect x="151" y="191" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="193" x2="442" y2="193" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="196" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k4" filter="url(#glowSoft)">
+<rect x="162" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+<rect x="198" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+<rect x="234" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+<rect x="270" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+<rect x="306" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+<rect x="342" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+<rect x="378" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+<rect x="414" y="196" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.75"/>
+</g>
+<g class="a k5">
+<rect class="pulse" x="147" y="187" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k6">
+<text x="468" y="209" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k7">
+<rect x="150" y="224" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="243" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F15</text>
+<g class="a k8">
+<rect x="151" y="225" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="227" x2="442" y2="227" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="230" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k9">
+<rect class="pulse" x="147" y="221" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k10">
+<text x="468" y="243" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k11">
+<rect x="150" y="258" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="277" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F14</text>
+<g class="a k12">
+<rect x="151" y="259" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="261" x2="442" y2="261" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="264" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k13">
+<rect class="pulse" x="147" y="255" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k14">
+<text x="468" y="277" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k15">
+<rect x="150" y="292" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="311" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F13</text>
+<g class="a k16">
+<rect x="151" y="293" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="295" x2="442" y2="295" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="298" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k17">
+<rect class="pulse" x="147" y="289" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k18">
+<text x="468" y="311" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k19">
+<rect x="150" y="326" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="345" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F12</text>
+<g class="a k20">
+<rect x="151" y="327" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="329" x2="442" y2="329" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="332" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k21" filter="url(#glowSoft)">
+<rect x="162" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+<rect x="198" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+<rect x="234" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+<rect x="270" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+<rect x="306" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+<rect x="342" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+<rect x="378" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+<rect x="414" y="332" width="24" height="13" rx="2.5" fill="#ffd27a" opacity="0.92"/>
+</g>
+<g class="a k22">
+<circle class="bob" style="animation-delay:-0.00s" cx="174" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+<circle class="bob" style="animation-delay:-0.37s" cx="210" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+<circle class="bob" style="animation-delay:-0.74s" cx="246" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+<circle class="bob" style="animation-delay:-1.11s" cx="282" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+<circle class="bob" style="animation-delay:-1.48s" cx="318" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+<circle class="bob" style="animation-delay:-1.85s" cx="354" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+<circle class="bob" style="animation-delay:-2.22s" cx="390" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+<circle class="bob" style="animation-delay:-2.59s" cx="426" cy="349.5" r="3" fill="#7ff5e4" filter="url(#glow)"/>
+</g>
+<g class="a k23">
+<text x="468" y="345" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#3cd6c3">8</text>
+</g>
+</g>
+<g class="a k24">
+<rect x="150" y="360" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="379" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F11</text>
+<g class="a k25">
+<rect x="151" y="361" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="363" x2="442" y2="363" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="366" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k26">
+<rect class="pulse" x="147" y="357" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k27">
+<text x="468" y="379" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k28">
+<rect x="150" y="394" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="413" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F10</text>
+<g class="a k29">
+<rect x="151" y="395" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="397" x2="442" y2="397" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="400" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k30">
+<rect class="pulse" x="147" y="391" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k31">
+<text x="468" y="413" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k32">
+<rect x="150" y="428" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="447" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F9</text>
+<g class="a k33">
+<rect x="151" y="429" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="431" x2="442" y2="431" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="434" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k34">
+<rect class="pulse" x="147" y="425" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k35">
+<text x="468" y="447" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k36">
+<rect x="150" y="462" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="481" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F8</text>
+<g class="a k37">
+<rect x="151" y="463" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="465" x2="442" y2="465" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="468" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k38">
+<rect class="pulse" x="147" y="459" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k39">
+<text x="468" y="481" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k40">
+<rect x="150" y="496" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="515" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F7</text>
+<g class="a k41">
+<rect x="151" y="497" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="499" x2="442" y2="499" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="502" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k42">
+<rect class="pulse" x="147" y="493" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k43">
+<text x="468" y="515" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k44">
+<rect x="150" y="530" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="549" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F6</text>
+<g class="a k45">
+<rect x="151" y="531" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="533" x2="442" y2="533" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="536" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k46">
+<rect class="pulse" x="147" y="527" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k47">
+<text x="468" y="549" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k48">
+<rect x="150" y="564" width="300" height="28" rx="5" fill="#0f1a2c" stroke="#1c2a43"/>
+<text x="134" y="583" text-anchor="end" font-size="13" font-weight="600" fill="#5b6a80" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F5</text>
+<g class="a k49">
+<rect x="151" y="565" width="298" height="26" rx="4" fill="url(#cool)"/>
+<line class="air" x1="158" y1="567" x2="442" y2="567" stroke="#5fd0ff" stroke-width="1.6" stroke-dasharray="7 11" opacity="0.75"/>
+</g>
+<rect x="162" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="198" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="234" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="270" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="306" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="342" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="378" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<rect x="414" y="570" width="24" height="13" rx="2.5" fill="#121d31" stroke="#1c2a43"/>
+<g class="a k50">
+<rect class="pulse" x="147" y="561" width="306" height="34" rx="7" fill="none" stroke="#f4a63b" stroke-width="1.6" stroke-dasharray="5 4"/>
+</g>
+<g class="a k51">
+<text x="468" y="583" font-size="15" font-weight="700" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace' fill="#5b6a80">0</text>
+</g>
+</g>
+<g class="a k52">
+<rect x="140" y="592" width="320" height="3" rx="1.5" fill="#3cd6c3" filter="url(#glow)"/>
+<rect x="140" y="566" width="320" height="26" fill="url(#beam)"/>
+</g>
+</g>
+<g class="a k53">
+<text x="660" y="268" font-size="36" font-weight="700" fill="#e8edf4" letter-spacing="0">晚上和周末，</text><text x="660" y="314" font-size="36" font-weight="700" fill="#e8edf4" letter-spacing="0">写字楼在给没人的楼层供冷</text>
+<text x="660" y="372" font-size="19" fill="#8d9aae">FlowCarbon 逐层把这些时段找出来。</text>
+</g>
+<g class="a k54">
+<text x="660" y="200" font-size="14" font-weight="700" letter-spacing="1.5" fill="#3cd6c3">01 · 感知</text>
+<text x="660" y="246" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">数清每一层</text><text x="660" y="290" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">到底有多少人</text>
+<g class="a k55">
+<rect x="660" y="328" width="34" height="34" rx="9" fill="#0e1829" stroke="#1d2b42"/>
+<g transform="translate(677 345)"><path d="M-7 6 V-6 H7 V6" fill="none" stroke="#3cd6c3" stroke-width="2"/><circle cx="0" cy="-1" r="2.5" fill="#3cd6c3"/></g>
+<text x="710" y="351" font-size="19" fill="#e8edf4">门禁计数 → 每层人数</text>
+</g>
+<g class="a k56">
+<rect x="660" y="374" width="34" height="34" rx="9" fill="#0e1829" stroke="#1d2b42"/>
+<g transform="translate(677 391)"><rect x="-8" y="-6" width="16" height="12" rx="2" fill="none" stroke="#3cd6c3" stroke-width="2"/><path d="M-4 0 H4" stroke="#3cd6c3" stroke-width="2"/></g>
+<text x="710" y="397" font-size="19" fill="#e8edf4">楼宇自控 → 什么在运行</text>
+</g>
+<g class="a k57">
+<rect x="660" y="420" width="34" height="34" rx="9" fill="#0e1829" stroke="#1d2b42"/>
+<g transform="translate(677 437)"><path d="M2 -8 L-5 1 H1 L-2 8 L6 -2 H0 Z" fill="#3cd6c3"/></g>
+<text x="710" y="443" font-size="19" fill="#e8edf4">分项电表 → 花了多少钱</text>
+</g>
+<g class="a k58">
+<rect x="660" y="506" width="64" height="30" rx="15" fill="#11332f" stroke="#1f5b54"/>
+<text x="692" y="526" text-anchor="middle" font-size="14" font-weight="600" fill="#3cd6c3">实测</text>
+<rect x="734" y="506" width="64" height="30" rx="15" fill="none" stroke="#5b6a80" stroke-dasharray="4 3"/>
+<text x="766" y="526" text-anchor="middle" font-size="14" font-weight="600" fill="#8d9aae">估算</text>
+<text x="814" y="526" font-size="15" fill="#8d9aae">每个数字都标明来源。</text>
+</g>
+</g>
+<g class="a k59">
+<text x="660" y="200" font-size="14" font-weight="700" letter-spacing="1.5" fill="#3cd6c3">02 · 识别</text>
+<text x="660" y="246" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">有依据的规则</text><text x="660" y="290" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">把浪费找出来</text>
+<g class="a k60">
+<rect x="660" y="330" width="540" height="66" rx="14" fill="#0e1829" stroke="#1d2b42"/>
+<rect x="660" y="342" width="4" height="42" rx="2" fill="#f4a63b"/>
+<text x="682" y="371" font-size="21" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F14</text>
+<text x="744" y="371" font-size="18" fill="#e8edf4">本层无申请仍在供冷</text>
+<rect x="1040" y="351" width="44" height="24" rx="12" fill="#3a2a12"/>
+<text x="1062" y="368" text-anchor="middle" font-size="12" font-weight="700" fill="#f4a63b">浪费</text>
+<text x="1184" y="371" text-anchor="end" font-size="19" font-weight="700" fill="#f4a63b" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>50 kWh</text>
+</g>
+<g class="a k61">
+<rect x="660" y="412" width="540" height="66" rx="14" fill="#0e1829" stroke="#1d2b42"/>
+<rect x="660" y="424" width="4" height="42" rx="2" fill="#f4a63b"/>
+<text x="682" y="453" font-size="21" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F10</text>
+<text x="744" y="453" font-size="18" fill="#e8edf4">空楼层仍在供冷</text>
+<rect x="1040" y="433" width="44" height="24" rx="12" fill="#3a2a12"/>
+<text x="1062" y="450" text-anchor="middle" font-size="12" font-weight="700" fill="#f4a63b">浪费</text>
+<text x="1184" y="453" text-anchor="end" font-size="19" font-weight="700" fill="#f4a63b" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>185 kWh</text>
+</g>
+<g class="a k62">
+<rect x="660" y="494" width="540" height="66" rx="14" fill="#0e1829" stroke="#1d2b42"/>
+<rect x="660" y="506" width="4" height="42" rx="2" fill="#f4a63b"/>
+<text x="682" y="535" font-size="21" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>F16</text>
+<text x="744" y="535" font-size="18" fill="#e8edf4">无人仍亮灯</text>
+<rect x="1040" y="515" width="44" height="24" rx="12" fill="#3a2a12"/>
+<text x="1062" y="532" text-anchor="middle" font-size="12" font-weight="700" fill="#f4a63b">浪费</text>
+<text x="1184" y="535" text-anchor="end" font-size="19" font-weight="700" fill="#f4a63b" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>12 kWh</text>
+</g>
+</g>
+<g class="a k63">
+<text x="660" y="200" font-size="14" font-weight="700" letter-spacing="1.5" fill="#3cd6c3">03 · 解释</text>
+<rect x="660" y="226" width="560" height="276" rx="18" fill="#0e1829" stroke="#1f4b47"/>
+<rect x="660" y="226" width="560" height="276" rx="18" fill="url(#aiSheen)" opacity="0.7"/>
+<g transform="translate(690 264)"><g class="spark"><path d="M0 -11 L3 -3 L11 0 L3 3 L0 11 L-3 3 L-11 0 L-3 -3 Z" fill="#3cd6c3" filter="url(#glow)"/></g></g>
+<text x="712" y="270" font-size="17" font-weight="700" fill="#3cd6c3">Claude · AI 解释</text>
+<clipPath id="aiClip"><rect x="662" y="228" width="556" height="272" rx="16"/></clipPath>
+<g clip-path="url(#aiClip)">
+<text x="694" y="322" font-size="17.5" font-weight="400" fill="#e8edf4">F12 申请了加时，整区却给 11 个空楼层供冷。</text>
+<rect class="a k64" x="680" y="300" width="530" height="32" fill="#0e1829"/>
+<text x="694" y="372" font-size="17.5" font-weight="400" fill="#e8edf4">可能原因：周末排程按整个分区开空调。</text>
+<rect class="a k65" x="680" y="350" width="530" height="32" fill="#0e1829"/>
+<rect x="682" y="397" width="516" height="38" rx="10" fill="#11332f" stroke="#1f5b54"/>
+<text x="694" y="422" font-size="19" font-weight="700" fill="#3cd6c3">建议：周末节假日只给申请楼层供冷</text>
+<rect class="a k66" x="686" y="400" width="508" height="30" fill="#11332f"/>
+<text x="694" y="472" font-size="17.5" font-weight="400" fill="#8d9aae">依据：GB 50189-2015 · 规则阈值说明</text>
+<rect class="a k67" x="680" y="450" width="530" height="32" fill="#0e1829"/>
+</g>
+<text class="a k68" x="660" y="546" font-size="17" font-style="italic" fill="#8d9aae">规则判断 · AI 解释 · 人来决定</text>
+</g>
+<g class="a k69">
+<text x="660" y="200" font-size="14" font-weight="700" letter-spacing="1.5" fill="#3cd6c3">04 · 模拟</text>
+<text x="660" y="246" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">选一个策略，</text><text x="660" y="290" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">按合同能源管理算账</text>
+<g class="a k70">
+<rect x="660" y="336" width="172" height="124" rx="16" fill="#0e1829" stroke="#1d2b42"/>
+<text class="a k71" x="680" y="398" font-size="34" font-weight="700" fill="#3cd6c3" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>0</text>
+<text class="a k72" x="680" y="398" font-size="34" font-weight="700" fill="#3cd6c3" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>58</text>
+<text class="a k73" x="680" y="398" font-size="34" font-weight="700" fill="#3cd6c3" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>117</text>
+<text class="a k74" x="680" y="398" font-size="34" font-weight="700" fill="#3cd6c3" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>175</text>
+<text class="a k75" x="680" y="398" font-size="34" font-weight="700" fill="#3cd6c3" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>233</text>
+<text x="680" y="424" font-size="15" font-weight="600" fill="#8d9aae" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>MWh</text>
+<text x="680" y="446" font-size="14" fill="#8d9aae">每年节电</text>
+</g>
+<g class="a k76">
+<rect x="850" y="336" width="172" height="124" rx="16" fill="#0e1829" stroke="#1d2b42"/>
+<text class="a k77" x="870" y="398" font-size="34" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>¥0</text>
+<text class="a k78" x="870" y="398" font-size="34" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>¥5万</text>
+<text class="a k79" x="870" y="398" font-size="34" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>¥9.9万</text>
+<text class="a k80" x="870" y="398" font-size="34" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>¥14.9万</text>
+<text class="a k81" x="870" y="398" font-size="34" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>¥19.9万</text>
+<text x="870" y="446" font-size="14" fill="#8d9aae">每年节省</text>
+</g>
+<g class="a k82">
+<rect x="1040" y="336" width="172" height="124" rx="16" fill="#0e1829" stroke="#1d2b42"/>
+<text x="1060" y="398" font-size="34" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>2.4 年</text>
+<text x="1060" y="446" font-size="14" fill="#8d9aae">ESCO 回本</text>
+</g>
+<text class="a k83" x="660" y="502" font-size="15" fill="#5b6a80">模拟的 12 层写字楼 · 投资为量级估算</text>
+</g>
+<g class="a k84">
+<text x="660" y="200" font-size="14" font-weight="700" letter-spacing="1.5" fill="#3cd6c3">05 · 报告</text>
+<text x="660" y="246" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">经得起追问的</text><text x="660" y="290" font-size="34" font-weight="700" fill="#e8edf4" letter-spacing="0">用电量与范围二</text>
+<rect x="660" y="330" width="560" height="136" rx="16" fill="#0e1829" stroke="#1d2b42"/>
+<text x="684" y="370" font-size="16" fill="#8d9aae">Scope 2 · 基于位置</text>
+<text x="1196" y="370" text-anchor="end" font-size="18" font-weight="700" fill="#e8edf4" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>112.9 tCO₂e</text>
+<text x="684" y="408" font-size="16" fill="#8d9aae">Scope 2 · 基于市场</text>
+<text x="1196" y="408" text-anchor="end" font-size="18" font-weight="700" fill="#e8edf4" >先计入绿证</text>
+<text x="684" y="444" font-size="13.5" fill="#3cd6c3">生态环境部 2023 · 华东 · 0.55 kgCO₂e/kWh · 已核实</text>
+<g class="a k85">
+<text x="660" y="526" font-size="24" font-weight="700" fill="#e8edf4">开源 · Apache-2.0</text>
+<text x="660" y="558" font-size="18" font-weight="600" fill="#3cd6c3" font-family='ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace'>github.com/3351666087/flowcarbon</text>
+<text x="660" y="586" font-size="14" fill="#8d9aae">TypeScript · PostgreSQL + TimescaleDB · Fastify · Next.js · Claude</text>
+</g>
+</g>
+<rect x="56" y="664" width="1168" height="3" rx="1.5" fill="#1d2b42"/>
+<rect class="a k86 grow" x="56" y="664" width="1168" height="3" rx="1.5" fill="url(#progress)"/>
+<circle cx="207.84" cy="665.5" r="5" fill="#0b1424" stroke="#1d2b42" stroke-width="2"/>
+<circle class="a k87" cx="207.84" cy="665.5" r="5" fill="#3cd6c3" filter="url(#glow)"/>
+<text x="207.84" y="694" text-anchor="middle" font-size="13" font-weight="600" fill="#5b6a80">感知</text>
+<text class="a k88" x="207.84" y="694" text-anchor="middle" font-size="13" font-weight="700" fill="#3cd6c3">感知</text>
+<circle cx="412.23999999999995" cy="665.5" r="5" fill="#0b1424" stroke="#1d2b42" stroke-width="2"/>
+<circle class="a k89" cx="412.23999999999995" cy="665.5" r="5" fill="#3cd6c3" filter="url(#glow)"/>
+<text x="412.23999999999995" y="694" text-anchor="middle" font-size="13" font-weight="600" fill="#5b6a80">识别</text>
+<text class="a k90" x="412.23999999999995" y="694" text-anchor="middle" font-size="13" font-weight="700" fill="#3cd6c3">识别</text>
+<circle cx="616.64" cy="665.5" r="5" fill="#0b1424" stroke="#1d2b42" stroke-width="2"/>
+<circle class="a k91" cx="616.64" cy="665.5" r="5" fill="#3cd6c3" filter="url(#glow)"/>
+<text x="616.64" y="694" text-anchor="middle" font-size="13" font-weight="600" fill="#5b6a80">解释</text>
+<text class="a k92" x="616.64" y="694" text-anchor="middle" font-size="13" font-weight="700" fill="#3cd6c3">解释</text>
+<circle cx="821.04" cy="665.5" r="5" fill="#0b1424" stroke="#1d2b42" stroke-width="2"/>
+<circle class="a k93" cx="821.04" cy="665.5" r="5" fill="#3cd6c3" filter="url(#glow)"/>
+<text x="821.04" y="694" text-anchor="middle" font-size="13" font-weight="600" fill="#5b6a80">模拟</text>
+<text class="a k94" x="821.04" y="694" text-anchor="middle" font-size="13" font-weight="700" fill="#3cd6c3">模拟</text>
+<circle cx="1025.44" cy="665.5" r="5" fill="#0b1424" stroke="#1d2b42" stroke-width="2"/>
+<circle class="a k95" cx="1025.44" cy="665.5" r="5" fill="#3cd6c3" filter="url(#glow)"/>
+<text x="1025.44" y="694" text-anchor="middle" font-size="13" font-weight="600" fill="#5b6a80">报告</text>
+<text class="a k96" x="1025.44" y="694" text-anchor="middle" font-size="13" font-weight="700" fill="#3cd6c3">报告</text>
+</svg>

@@ -1,62 +1,84 @@
+<p align="center">
+  <img src="docs/media/flowcarbon-en.svg" alt="FlowCarbon: a simulated office tower is sensed floor by floor, waste is detected by rules, explained by AI, priced as an energy performance contract and reported as Scope 2" width="100%">
+</p>
+
+<p align="center">
+  <b>English</b> · <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/3351666087/flowcarbon/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/3351666087/flowcarbon/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/3351666087/flowcarbon/releases"><img alt="Release" src="https://img.shields.io/github/v/release/3351666087/flowcarbon?color=0d7068&label=release"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-0d7068"></a>
+  <a href="docs/deployment.md"><img alt="Docker images" src="https://img.shields.io/badge/ghcr.io-server%20%7C%20web-0d7068?logo=docker&logoColor=white"></a>
+  <img alt="Node 22" src="https://img.shields.io/badge/node-22-0d7068?logo=node.js&logoColor=white">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-0d7068?logo=typescript&logoColor=white">
+</p>
+
 # FlowCarbon
 
-**Occupancy-driven after-hours energy management for office buildings.**
+**Occupancy-driven after-hours energy and carbon management for office buildings.**
 
 Office towers cool and light whole floors on fixed schedules. After hours and at weekends the building keeps
 paying for floors nobody is on, while the few people who stay late often get no cooling at all. FlowCarbon
-counts people per floor, finds the hours a floor was cooled or lit for nobody, forecasts tomorrow's after-hours
-headcount, lets tenants book cooling for their own floor instead of the whole tower, and prices the saving
-under an energy performance contract — with every number traceable to the rule and the data behind it.
+counts people per floor, finds the hours a floor was cooled or lit for nobody, forecasts after-hours headcount,
+lets tenants book cooling for their own floor instead of the whole tower, and prices the saving under an
+energy performance contract — with every number traceable to the rule and the data behind it.
 
-> Status: 0.1 — the engine, data platform, API, worker and web app are implemented and tested end to end. All
-> bundled data is **simulated**; nothing here describes a real building.
+> **Status: 0.1.** The engine, data platform, API, worker and web app are implemented and tested end to end.
+> All bundled data is **simulated**; nothing here describes a real building.
 
-![Floors: live state per floor and the last 28 days](docs/images/floors.jpg)
+## What it does
 
-![An opportunity with its evidence, the floor-day chart and an AI explanation](docs/images/opportunity.jpg)
+<table>
+  <tr>
+    <td width="33%" valign="top"><b>Sense</b><br>Door counters give people per floor; BMS states and sub-meters give what runs and what it costs. Every kWh is tagged <i>measured</i> or <i>estimated</i>.</td>
+    <td width="33%" valign="top"><b>Detect</b><br>Four rules with a physical meaning and a written rationale for every threshold. Each interval's energy is counted by at most one rule.</td>
+    <td width="33%" valign="top"><b>Explain</b><br>Claude explains a finding, recommends one action from a fixed strategy list and cites only a closed list of sources. Rules decide; AI explains; people choose.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Forecast & simulate</b><br>After-hours headcount for the next seven days per floor; strategies annualised by day type; EPC split, paybacks and NPV.</td>
+    <td valign="top"><b>Report</b><br>Electricity and Scope 2 by the location- and market-based methods, with factor provenance, CSV export and frozen snapshots.</td>
+    <td valign="top"><b>Operate</b><br>Multi-tenant with PostgreSQL row-level security, roles with tenant scoping, scoped API keys for gateways, audit log, metrics.</td>
+  </tr>
+</table>
 
-*Screens from the bundled simulation of “Tower A”; no real building or person is shown.*
+<p align="center">
+  <img src="docs/images/floors.jpg" alt="Floors: live state per floor and the last 28 days" width="49%">
+  <img src="docs/images/opportunity.jpg" alt="An opportunity with its evidence, the floor-day chart and an AI explanation" width="49%">
+</p>
+<p align="center"><sub>Screens from the bundled simulation of “Tower A”; no real building or person is shown.</sub></p>
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  subgraph building["Building (simulated)"]
+    door[Door counters]
+    bms[BMS / HVAC states]
+    meter[Sub-meters]
+  end
+  door & bms & meter -->|API key · idempotent batches| api
+  web["Web app · Next.js<br/>English / 中文"] -->|session cookie| api
+  api["API · Fastify<br/>roles · audit · OpenAPI"] --> db[("PostgreSQL 17 + TimescaleDB<br/>row-level security")]
+  api -->|jobs| queue[["pg-boss"]]
+  queue --> worker["Worker<br/>intervals · rules · forecasts"]
+  worker --> db
+  worker -->|structured output| claude["Claude<br/>explains, never decides"]
+```
 
 ## Principles
 
 1. **Rules decide, AI explains.** Waste is detected by rules with a physical meaning and a documented
-   rationale for every threshold. An AI agent explains findings and recommends one action from a fixed strategy
+   rationale for every threshold. The AI explains findings and recommends one action from a fixed strategy
    list; it never decides and never changes building settings.
 2. **No estimate is shown as a measurement.** Every energy figure carries its data tier (`measured` from a
    sub-meter, or `estimated` from rated power × run time).
 3. **Cost first, carbon alongside.** Owners act on electricity cost. Scope 2 is reported by both the
    location-based and the market-based method with factor provenance. It is an energy and carbon report, not an
    ESG report.
-4. **Multi-tenant from day one.** Organisations, buildings, tenants and roles are isolated in the data model.
-
-## Repository layout
-
-| Path | What it is |
-|---|---|
-| `packages/core` | Pure domain engine: time zones and working calendars, door-count occupancy, telemetry → 15-min floor intervals, the rules engine, forecasting, strategies and EPC finance, overtime requests, tariffs (flat and time-of-use), Scope 2 accounting, reports. No I/O. |
-| `packages/sim` | Deterministic simulator of a 12-floor tower (door counts, BMS states, lighting, sub-meters) for development and tests. Never used for real buildings. |
-| `packages/db` | Database schema and migrations (PostgreSQL 17 + TimescaleDB): hypertables, row-level security, runtime role grants, shared emission-factor library. |
-| `packages/pipeline` | Database-backed pipeline shared by the API and the worker: validated idempotent ingestion, interval recompute, daily roll-ups, detection, forecasts, reports, strategies. |
-| `packages/security` | argon2id password hashing, opaque tokens, API keys. |
-| `packages/demo` | Seeds a demonstration organisation from the simulator through the real ingestion path. |
-| `packages/jobs` | Background job queues (pg-boss): queue definitions, owner-only schema install, runtime client. |
-| `apps/api` | HTTP API (Fastify 5, zod, OpenAPI 3.1 at `/api/v1/docs`): sessions and API keys, role-based access with tenant scoping, CSRF origin checks, rate limits, audit log, Prometheus metrics. |
-| `apps/worker` | Background jobs on pg-boss: recompute after ingestion (coalesced per building, chunked backfills), hourly maintenance that runs each building's nightly work in its own time zone, AI explanations with Claude (structured output, closed citation list, server-side refusal fallback), dead-letter handling, health and metrics. |
-| `apps/web` | Web application (Next.js 16, React 19, Tailwind 4): floors, opportunities with evidence and AI explanations, forecast, simulation, overtime requests, report, data health, settings. English and Simplified Chinese. Typed against the API's OpenAPI document. |
-| `docs/` | Architecture, data model, rules, deployment. |
-
-## The rules
-
-| Rule | Kind | What it checks |
-|---|---|---|
-| `hvac_unrequested_non_working` | waste | On a weekend or holiday a floor is cooled although it filed no request and nobody is there, while another floor did request cooling. |
-| `hvac_empty_floor` | waste | Cooling continues after the floor has been empty for the grace period (default 30 min). |
-| `lights_on_empty_night` | waste | Lighting above the security level stays on at night on an empty floor. |
-| `full_floor_few_people` | opportunity | The whole floor is cooled for fewer people than the threshold; a zone setback would serve them. |
-
-Each interval's HVAC energy is attributed to at most one rule, so totals never double count. Pre-cooling and
-arrival around the start of the working day are exempt. Thresholds and their rationale live in
-[`packages/core/src/rules.ts`](packages/core/src/rules.ts).
+4. **Multi-tenant from day one.** Every organisation's rows are isolated by the database itself, and the
+   runtime role cannot bypass it.
 
 ## Run it
 
@@ -66,8 +88,49 @@ DEMO_PASSWORD='choose-a-password' docker compose -f infra/docker-compose.yml --p
 open http://localhost:3000        # sign in as manager@flowcarbon-demo.example
 ```
 
-API documentation is served at `http://localhost:4000/api/v1/docs`. See [deployment](docs/deployment.md) for
-production settings.
+Prebuilt images: `ghcr.io/3351666087/flowcarbon-server` and `ghcr.io/3351666087/flowcarbon-web`
+(linux/amd64 and linux/arm64). API documentation is served at `http://localhost:4000/api/v1/docs`.
+See [deployment](docs/deployment.md) for production settings.
+
+## The rules
+
+| Rule | Kind | What it checks |
+|---|---|---|
+| `hvac_unrequested_non_working` | waste | On a weekend or holiday a floor is cooled outside its own request with nobody there, while another floor did request cooling. |
+| `hvac_empty_floor` | waste | Cooling continues after the floor has been empty for the grace period (default 30 min). |
+| `lights_on_empty_night` | waste | Lighting above the security level stays on at night on an empty floor. |
+| `full_floor_few_people` | opportunity | The whole floor is cooled for fewer people than the threshold; a zone setback would serve them. |
+
+Pre-cooling and arrival around the start of the working day are exempt. Thresholds and their rationale live in
+[`packages/core/src/rules.ts`](packages/core/src/rules.ts).
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Language | TypeScript (strict), Node.js 22, npm workspaces |
+| Data | PostgreSQL 17, TimescaleDB 2.30 (hypertables, compression), Drizzle ORM, row-level security |
+| API | Fastify 5, zod, OpenAPI 3.1, argon2id, Prometheus metrics |
+| Jobs | pg-boss 12 |
+| AI | Claude via the Anthropic SDK (structured output, refusal fallback) |
+| Web | Next.js 16, React 19, Tailwind CSS 4, TanStack Query, Recharts |
+| Delivery | Docker images, Docker Compose, GitHub Actions CI and release |
+
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| `packages/core` | Pure domain engine: calendars, door-count occupancy, 15-minute floor intervals, rules, forecasts, strategies and EPC finance, overtime, tariffs, Scope 2, reports. No I/O. |
+| `packages/sim` | Deterministic simulator of a 12-floor tower for development, tests and demos. |
+| `packages/db` | Schema and migrations: hypertables, row-level security, runtime role grants, shared emission-factor library. |
+| `packages/pipeline` | Ingestion, interval recompute, daily roll-ups, detection, forecasts, reports and strategies on the database. |
+| `packages/security` | argon2id password hashing, opaque tokens, API keys. |
+| `packages/jobs` | Job queues: definitions, owner-only schema install, runtime client. |
+| `packages/demo` | Seeds a demonstration organisation through the real ingestion path. |
+| `apps/api` | HTTP API. |
+| `apps/worker` | Background jobs and AI explanations. |
+| `apps/web` | Web application. |
+| `docs/` | [Architecture](docs/architecture.md), [deployment](docs/deployment.md), [decision records](docs/adr/). |
 
 ## Development
 
@@ -82,7 +145,7 @@ DEMO_PASSWORD='choose-a-password' npm run seed -- --reset   # simulated Tower A,
 DATABASE_URL=postgres://flowcarbon_app:flowcarbon-app-dev@localhost:5432/flowcarbon npm run dev:api
 DATABASE_URL=postgres://flowcarbon_app:flowcarbon-app-dev@localhost:5432/flowcarbon npm run dev:worker   # ANTHROPIC_API_KEY optional
 npm run dev -w @flowcarbon/web   # http://localhost:3000
-npm test                         # unit tests; set TEST_DATABASE_URL to include database and API tests
+npm test                         # set TEST_DATABASE_URL to include database and API tests
 npm run lint
 ```
 
@@ -90,8 +153,12 @@ npm run lint
 `postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres`. Each run creates and drops its own database and
 exercises the pipeline as the non-privileged application role, so row-level security is tested for real.
 
-Design notes: [architecture](docs/architecture.md), [deployment](docs/deployment.md) and the
-[decision records](docs/adr/). Security: [SECURITY.md](SECURITY.md).
+The README animation is generated: `node scripts/hero/build-hero.mjs` (copy in `scripts/hero/strings.mjs`).
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
