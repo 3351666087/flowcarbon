@@ -150,7 +150,7 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title={t.settings.title} subtitle={me?.orgName} />
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card title={t.settings.members}>
           <Table head={["", t.settings.role]}>
             {members.data.map((m) => (

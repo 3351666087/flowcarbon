@@ -117,7 +117,7 @@ export default function SimulatePage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.6fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.6fr]">
         <Card title={t.simulate.epc}>
           <div className="space-y-4">
             <Field label={t.simulate.strategy}>

@@ -94,7 +94,7 @@ export default function RequestsPage() {
   return (
     <>
       <PageHeader title={t.requests.title} subtitle={t.requests.subtitle} />
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.8fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.8fr]">
         {can.requestOvertime(role) ? (
           <Card title={t.requests.new}>
             <form onSubmit={submit} className="space-y-4">

@@ -153,7 +153,7 @@ export default function ReportPage() {
         <Metric label={t.floors.measuredShare} value={pct(r.totals.measuredShare, locale)} tone="accent" />
       </div>
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title={`Scope 2 · ${t.report.location}`}>
           <div className="num text-2xl font-semibold">{co2(r.scope2.locationBasedKg, locale)}</div>
           <div className="mt-2">{factor(r.scope2.locationFactor)}</div>
@@ -167,7 +167,7 @@ export default function ReportPage() {
         </Card>
       </div>
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title={t.report.byFloor}>
           <Table head={[t.common.floor, t.report.energy, t.report.afterHours, t.report.avoidable]}>
             {r.byFloor.map((f) => (
@@ -208,7 +208,7 @@ export default function ReportPage() {
       </div>
 
       <Card title={t.report.disclosures} className="mb-6">
-        <ol className="list-decimal space-y-2 pl-5 text-sm">
+        <ol className="list-decimal space-y-2 pl-5 text-sm [overflow-wrap:anywhere]">
           {r.disclosures.map((d) => (
             <li key={d}>{d}</li>
           ))}

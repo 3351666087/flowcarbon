@@ -40,7 +40,8 @@ export function Card({
   pad?: boolean;
 }) {
   return (
-    <section className={clsx("rounded-xl border border-border bg-surface", className)}>
+    // min-w-0: as a grid or flex item a card must not grow to fit a wide table; the table scrolls instead
+    <section className={clsx("min-w-0 rounded-xl border border-border bg-surface", className)}>
       {title || actions ? (
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">{title}</h2>

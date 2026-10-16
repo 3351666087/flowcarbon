@@ -198,7 +198,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="truncate font-medium">{building?.name}</span>
             )}
           </div>
-          <span className="ml-auto rounded-full bg-waste-soft px-2 py-0.5 text-xs font-medium text-waste">
+          <span className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-waste-soft px-2 py-0.5 text-xs font-medium text-waste">
             {t.simulated}
           </span>
           <button

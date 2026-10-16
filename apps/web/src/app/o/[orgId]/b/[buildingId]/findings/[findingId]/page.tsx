@@ -128,7 +128,7 @@ export default function FindingPage() {
         <Metric label={t.findings.peak} value={f.peakPeople} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
           <Card title={t.findings.evidence}>
             <p className="text-sm">{t.domain.summary?.(f.ruleId, f.evidence.facts) ?? f.evidence.summary}</p>
