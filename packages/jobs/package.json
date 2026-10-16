@@ -1,0 +1,20 @@
+{
+  "name": "@flowcarbon/jobs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Background job queues (pg-boss) shared by the API and the worker.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "install-schema": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "pg-boss": "12.35.1",
+    "postgres": "3.4.9",
+    "zod": "4.6.7"
+  }
+}

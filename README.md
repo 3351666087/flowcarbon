@@ -33,7 +33,8 @@ under an energy performance contract — with every number traceable to the rule
 | `packages/pipeline` | Database-backed pipeline shared by the API and the worker: validated idempotent ingestion, interval recompute, daily roll-ups, detection, forecasts, reports, strategies. |
 | `packages/security` | argon2id password hashing, opaque tokens, API keys. |
 | `packages/demo` | Seeds a demonstration organisation from the simulator through the real ingestion path. |
-| `apps/api` | HTTP API (Fastify, OpenAPI). |
+| `packages/jobs` | Background job queues (pg-boss): queue definitions, owner-only schema install, runtime client. |
+| `apps/api` | HTTP API (Fastify 5, zod, OpenAPI 3.1 at `/api/v1/docs`): sessions and API keys, role-based access with tenant scoping, CSRF origin checks, rate limits, audit log, Prometheus metrics. |
 | `apps/worker` | Background pipelines (aggregation, detection, forecasting, AI explanations, reports). |
 | `apps/web` | Web application (Next.js). |
 | `docs/` | Architecture, data model, rules, deployment. |
@@ -59,9 +60,10 @@ Requires Node.js 22 and Docker.
 npm install
 npm run db:up                    # PostgreSQL 17 + TimescaleDB on localhost:5432
 export DATABASE_URL=postgres://flowcarbon:flowcarbon-dev@localhost:5432/flowcarbon
-npm run db:migrate               # migrations + shared reference data
+npm run db:migrate               # migrations, shared reference data, job queues
 DEMO_PASSWORD='choose-a-password' npm run seed -- --reset   # simulated Tower A, last 28 days
-npm test                         # unit tests; set TEST_DATABASE_URL to include database tests
+DATABASE_URL=postgres://flowcarbon_app:flowcarbon-app-dev@localhost:5432/flowcarbon npm run dev:api
+npm test                         # unit tests; set TEST_DATABASE_URL to include database and API tests
 npm run lint
 ```
 

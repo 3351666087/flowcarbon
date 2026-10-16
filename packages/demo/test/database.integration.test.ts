@@ -3,7 +3,6 @@
  * Set TEST_DATABASE_URL to a superuser/owner URL (any database on the server); each run creates and drops
  * its own database. The application role `flowcarbon_app` must exist (infra/postgres/init).
  */
-import { randomUUID } from "node:crypto";
 import {
   buildFloorIntervals,
   buildReport,
@@ -11,7 +10,7 @@ import {
   type EmissionFactor,
   occupancyFromDoorCounts,
 } from "@flowcarbon/core";
-import { createDb, type DbHandle, runMigrations, schema, type Tx, withOrg } from "@flowcarbon/db";
+import { createDb, type DbHandle, schema, type Tx, withOrg } from "@flowcarbon/db";
 import {
   buildingReport,
   deleteOrganization,
@@ -24,39 +23,25 @@ import {
 } from "@flowcarbon/pipeline";
 import { approvedWindows, sampleTower, simulate } from "@flowcarbon/sim";
 import { eq, sql } from "drizzle-orm";
-import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deviceIds, type SeedResult, seedDemo } from "../src";
+import { createTestDatabase, type TestDatabase } from "../src/testing";
 
 const adminUrl = process.env.TEST_DATABASE_URL;
 const START = "2026-09-15";
 const DAYS = 28;
 
 describe.skipIf(!adminUrl)("database integration", () => {
-  const dbName = `flowcarbon_it_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  let tdb: TestDatabase;
   let owner: DbHandle;
   let app: DbHandle;
   let seeded: SeedResult;
   let otherOrg: { orgId: string; buildingId: string };
 
-  const urlFor = (user: string, password: string) => {
-    const u = new URL(adminUrl!);
-    u.username = user;
-    u.password = password;
-    u.pathname = `/${dbName}`;
-    return u.toString();
-  };
-
   beforeAll(async () => {
-    const admin = postgres(adminUrl!, { max: 1, onnotice: () => {} });
-    await admin.unsafe(`create database ${dbName}`);
-    await admin.end();
-    const ownerUrl = urlFor(new URL(adminUrl!).username, decodeURIComponent(new URL(adminUrl!).password));
-    await runMigrations(ownerUrl);
-    owner = createDb(ownerUrl, { max: 2 });
-    app = createDb(urlFor("flowcarbon_app", process.env.TEST_APP_PASSWORD ?? "flowcarbon-app-dev"), {
-      max: 4,
-    });
+    tdb = await createTestDatabase(adminUrl!);
+    owner = createDb(tdb.ownerUrl, { max: 2 });
+    app = createDb(tdb.appUrl, { max: 4 });
 
     // everything below runs as the non-privileged runtime role, so row-level security is in force
     seeded = await seedDemo(app.db, { startDate: START, days: DAYS, password: "integration-test-password" });
@@ -90,9 +75,7 @@ describe.skipIf(!adminUrl)("database integration", () => {
   afterAll(async () => {
     await app?.close();
     await owner?.close();
-    const admin = postgres(adminUrl!, { max: 1, onnotice: () => {} });
-    await admin.unsafe(`drop database if exists ${dbName} with (force)`);
-    await admin.end();
+    await tdb?.drop();
   });
 
   const ctxA = <T>(fn: (tx: Tx) => Promise<T>) => withOrg(app.db, seeded.orgId, fn);

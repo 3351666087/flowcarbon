@@ -1,0 +1,40 @@
+{
+  "name": "@flowcarbon/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlowCarbon HTTP API.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/app.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "openapi": "tsx src/openapi.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/cors": "11.3.0",
+    "@fastify/helmet": "13.1.1",
+    "@fastify/rate-limit": "11.2.0",
+    "@fastify/swagger": "9.9.1",
+    "@fastify/swagger-ui": "6.1.1",
+    "@flowcarbon/core": "*",
+    "@flowcarbon/db": "*",
+    "@flowcarbon/jobs": "*",
+    "@flowcarbon/pipeline": "*",
+    "@flowcarbon/security": "*",
+    "fastify": "5.12.5",
+    "fastify-plugin": "6.0.1",
+    "fastify-type-provider-zod": "7.0.0",
+    "openapi-types": "12.1.3",
+    "pg-boss": "12.35.1",
+    "prom-client": "15.1.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@flowcarbon/demo": "*"
+  }
+}

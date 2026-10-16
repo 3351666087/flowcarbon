@@ -6,7 +6,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -17,6 +18,7 @@
     "@flowcarbon/db": "*",
     "@flowcarbon/pipeline": "*",
     "@flowcarbon/security": "*",
-    "@flowcarbon/sim": "*"
+    "@flowcarbon/sim": "*",
+    "postgres": "3.4.9"
   }
 }
