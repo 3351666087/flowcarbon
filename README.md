@@ -11,6 +11,12 @@ under an energy performance contract — with every number traceable to the rule
 > Status: 0.1 — the engine, data platform, API, worker and web app are implemented and tested end to end. All
 > bundled data is **simulated**; nothing here describes a real building.
 
+![Floors: live state per floor and the last 28 days](docs/images/floors.jpg)
+
+![An opportunity with its evidence, the floor-day chart and an AI explanation](docs/images/opportunity.jpg)
+
+*Screens from the bundled simulation of “Tower A”; no real building or person is shown.*
+
 ## Principles
 
 1. **Rules decide, AI explains.** Waste is detected by rules with a physical meaning and a documented

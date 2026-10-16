@@ -17,6 +17,17 @@ const en = {
     data: "Devices & data",
     settings: "Organisation",
   },
+  /** labels for the phone tab bar */
+  navShort: {
+    floors: "Floors",
+    findings: "Findings",
+    forecast: "Forecast",
+    simulate: "Simulate",
+    requests: "Requests",
+    report: "Report",
+    data: "Data",
+    settings: "Org",
+  },
   common: {
     loading: "Loading…",
     retry: "Try again",
@@ -301,6 +312,16 @@ const zh: Dict = {
     report: "能源与碳报告",
     data: "设备与数据",
     settings: "组织设置",
+  },
+  navShort: {
+    floors: "楼层",
+    findings: "机会点",
+    forecast: "预测",
+    simulate: "模拟",
+    requests: "申请",
+    report: "报告",
+    data: "数据",
+    settings: "设置",
   },
   common: {
     loading: "加载中…",

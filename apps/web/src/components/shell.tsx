@@ -235,7 +235,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             >
               <Icon className="size-5" aria-hidden />
-              <span className="truncate">{t.nav[key]}</span>
+              <span className="max-w-full truncate">{t.navShort[key]}</span>
             </Link>
           ))}
         </nav>
