@@ -144,7 +144,7 @@ npm run lint
 `TEST_DATABASE_URL` 需指向数据库服务的所有者账号，例如 `postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres`。
 每次测试都会新建并删除自己的数据库，并以无特权的应用账号运行，行级安全是真实测试过的。
 
-README 顶部的动画由脚本生成：`node scripts/hero/build-hero.mjs`（文案在 `scripts/hero/strings.mjs`）。
+README 顶部的动画由 `node scripts/hero/build-hero.mjs` 生成（文案在 `scripts/hero/strings.mjs`），仓库的社交分享封面由 `node scripts/hero/build-poster.mjs` 生成。
 
 ## 参与贡献与安全
 

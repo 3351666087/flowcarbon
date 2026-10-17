@@ -153,7 +153,8 @@ npm run lint
 `postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres`. Each run creates and drops its own database and
 exercises the pipeline as the non-privileged application role, so row-level security is tested for real.
 
-The README animation is generated: `node scripts/hero/build-hero.mjs` (copy in `scripts/hero/strings.mjs`).
+The README animation is generated with `node scripts/hero/build-hero.mjs` (copy in `scripts/hero/strings.mjs`), the
+repository's social preview with `node scripts/hero/build-poster.mjs`.
 
 ## Contributing and security
 
