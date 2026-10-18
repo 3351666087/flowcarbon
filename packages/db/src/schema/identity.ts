@@ -68,6 +68,8 @@ export const sessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: ts("expires_at").notNull(),
+    /** "keep me signed in": a longer idle window and limit, and a cookie that outlives the browser session */
+    persistent: boolean("persistent").notNull().default(false),
     createdAt: ts("created_at").notNull().defaultNow(),
     lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
     ip: inet("ip"),

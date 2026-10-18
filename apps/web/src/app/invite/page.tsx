@@ -3,7 +3,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
-import { AuthStage, FieldGroup, GroupField, groupInput } from "@/components/auth-stage";
+import {
+  AuthStage,
+  FieldGroup,
+  GroupField,
+  groupInput,
+  RememberRow,
+  useRemember,
+} from "@/components/auth-stage";
 import { Mark } from "@/components/mark";
 import { ErrorBox } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
@@ -20,6 +27,7 @@ export default function InvitePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [refusals, setRefusals] = useState(0);
+  const { inApp, remember, setRemember } = useRemember();
   useEffect(() => setToken(window.location.hash.slice(1) || ""), []);
 
   async function submit(e: FormEvent) {
@@ -29,7 +37,7 @@ export default function InvitePage() {
     setError(null);
     try {
       const me = await unwrap(
-        api.POST("/api/v1/auth/invitations/accept", { body: { token, name, password } }),
+        api.POST("/api/v1/auth/invitations/accept", { body: { token, name, password, remember } }),
       );
       qc.setQueryData(["me"], me);
       history.replaceState(null, "", "/invite");
@@ -70,6 +78,14 @@ export default function InvitePage() {
           />
         </GroupField>
       </FieldGroup>
+      {inApp ? null : (
+        <RememberRow
+          label={t.login.remember}
+          hint={t.login.rememberHint}
+          remember={remember}
+          setRemember={setRemember}
+        />
+      )}
       {error ? (
         <div className="mt-4">
           <ErrorBox error={error} />

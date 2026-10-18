@@ -27,6 +27,11 @@ export interface paths {
                         /** Format: email */
                         email: string;
                         password: string;
+                        /**
+                         * @description Keep me signed in: the session lasts weeks and its cookie outlives the browser session
+                         * @default false
+                         */
+                        remember?: boolean;
                     };
                 };
             };
@@ -669,6 +674,11 @@ export interface paths {
                         token: string;
                         name: string;
                         password: string;
+                        /**
+                         * @description Keep me signed in, as for sign-in
+                         * @default false
+                         */
+                        remember?: boolean;
                     };
                 };
             };

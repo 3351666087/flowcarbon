@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "persistent" boolean DEFAULT false NOT NULL;

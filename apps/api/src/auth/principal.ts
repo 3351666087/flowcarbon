@@ -1,11 +1,11 @@
 import { type Db, schema } from "@flowcarbon/db";
 import { looksLikeApiKey, sha256 } from "@flowcarbon/security";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import type { Config } from "../config";
 import { forbidden, unauthorized } from "../errors";
-import { cookieName, resolveSession, type SessionUser } from "./sessions";
+import { cookieName, resolveSession, type SessionUser, setSessionCookie } from "./sessions";
 
 export type Principal =
   | ({ kind: "user" } & SessionUser)
@@ -59,7 +59,7 @@ export const principalPlugin = fp(async (app: FastifyInstance, opts: { db: Db; c
   const { db, config } = opts;
   const allowed = new Set(config.CORS_ORIGINS);
   app.decorateRequest("principal", null);
-  app.addHook("onRequest", async (req: FastifyRequest) => {
+  app.addHook("onRequest", async (req: FastifyRequest, reply: FastifyReply) => {
     const auth = req.headers.authorization;
     if (auth?.startsWith("Bearer ")) {
       const key = auth.slice(7).trim();
@@ -70,8 +70,9 @@ export const principalPlugin = fp(async (app: FastifyInstance, opts: { db: Db; c
     }
     const token = req.cookies[cookieName(config)];
     if (!token) return;
-    const user = await resolveSession(db, config, token);
-    if (!user) return;
+    const session = await resolveSession(db, config, token);
+    if (!session) return;
+    const { user, renewed } = session;
     if (UNSAFE.has(req.method)) {
       const origin = req.headers.origin;
       const host = req.headers.host;
@@ -79,6 +80,8 @@ export const principalPlugin = fp(async (app: FastifyInstance, opts: { db: Db; c
       if (!origin || !(allowed.has(origin) || sameHost)) throw forbidden("Cross-site request blocked.");
     }
     req.principal = { kind: "user", ...user };
+    // a kept session's cookie moves with its expiry, so an app in daily use is never signed out
+    if (renewed?.persistent) setSessionCookie(reply, config, renewed);
   });
 });
 

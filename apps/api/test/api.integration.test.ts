@@ -1,9 +1,11 @@
 /** HTTP-level tests against a real database as the runtime role. Requires TEST_DATABASE_URL (see packages/demo). */
 import { addDays, localParts, zonedTime } from "@flowcarbon/core";
-import { createDb, type DbHandle } from "@flowcarbon/db";
+import { createDb, type DbHandle, schema } from "@flowcarbon/db";
 import { type SeedResult, seedDemo } from "@flowcarbon/demo";
 import { createTestDatabase, type TestDatabase } from "@flowcarbon/demo/testing";
 import type { ExplainPayload, JobQueue, RecomputePayload } from "@flowcarbon/jobs";
+import { sha256 } from "@flowcarbon/security";
+import { eq } from "drizzle-orm";
 import type { InjectOptions } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { API_PREFIX, buildApp } from "../src/app";
@@ -140,6 +142,44 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       ]);
       const me = await app.inject({ url: `${API_PREFIX}/me`, cookies: { fc_session: c.value } });
       expect(me.json().user.email).toBe(manager);
+    });
+
+    it("keeps a session for weeks only when asked, and renews a kept session's cookie as it is used", async () => {
+      const signIn = (remember?: boolean) =>
+        app.inject({
+          method: "POST",
+          url: `${API_PREFIX}/auth/login`,
+          payload: { email: manager, password: PASSWORD, ...(remember === undefined ? {} : { remember }) },
+        });
+      const cookieOf = (res: Awaited<ReturnType<typeof signIn>>) => res.cookies.find((x) => x.name === "fc_session");
+      const day = 86_400_000;
+
+      // by default the cookie ends with the browser session
+      const plain = cookieOf(await signIn())!;
+      expect(plain.expires).toBeUndefined();
+      expect(cookieOf(await signIn(false))!.expires).toBeUndefined();
+
+      // kept: the cookie lasts the 30-day idle window
+      const kept = cookieOf(await signIn(true))!;
+      expect(kept.expires!.getTime() - Date.now()).toBeGreaterThan(29 * day);
+      expect(kept.expires!.getTime() - Date.now()).toBeLessThan(31 * day);
+
+      // after a while unused, the next request moves the kept cookie forward; a browser-session cookie is left alone
+      const age = (token: string) =>
+        handle.db
+          .update(schema.sessions)
+          .set({ lastSeenAt: new Date(Date.now() - 20 * day), expiresAt: new Date(Date.now() + 10 * day) })
+          .where(eq(schema.sessions.id, sha256(token)));
+      await age(kept.value);
+      await age(plain.value);
+      const keptMe = await app.inject({ url: `${API_PREFIX}/me`, cookies: { fc_session: kept.value } });
+      expect(keptMe.statusCode).toBe(200);
+      const renewed = cookieOf(keptMe)!;
+      expect(renewed.value).toBe(kept.value);
+      expect(renewed.expires!.getTime() - Date.now()).toBeGreaterThan(29 * day);
+      const plainMe = await app.inject({ url: `${API_PREFIX}/me`, cookies: { fc_session: plain.value } });
+      expect(plainMe.statusCode).toBe(200);
+      expect(cookieOf(plainMe)).toBeUndefined();
     });
 
     it("requires a session and blocks cross-site writes", async () => {

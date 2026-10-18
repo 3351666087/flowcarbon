@@ -4,7 +4,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useState } from "react";
-import { AuthStage, FieldGroup, GroupField, groupInput } from "@/components/auth-stage";
+import {
+  AuthStage,
+  FieldGroup,
+  GroupField,
+  groupInput,
+  RememberRow,
+  useRemember,
+} from "@/components/auth-stage";
 import { Mark } from "@/components/mark";
 import { ApiError, api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -20,13 +27,14 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [refusals, setRefusals] = useState(0);
+  const { inApp, remember, setRemember } = useRemember();
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const me = await unwrap(api.POST("/api/v1/auth/login", { body: { email, password } }));
+      const me = await unwrap(api.POST("/api/v1/auth/login", { body: { email, password, remember } }));
       qc.setQueryData(["me"], me);
       const next = params.get("next");
       // only follow same-site relative paths
@@ -89,6 +97,14 @@ function LoginForm() {
           />
         </GroupField>
       </FieldGroup>
+      {inApp ? null : (
+        <RememberRow
+          label={t.login.remember}
+          hint={t.login.rememberHint}
+          remember={remember}
+          setRemember={setRemember}
+        />
+      )}
       {message ? (
         <p role="alert" className="fc-rise mt-3 px-1 text-sm text-danger">
           {message}

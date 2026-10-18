@@ -19,18 +19,39 @@ export interface SessionUser {
   locale: string;
 }
 
+export interface IssuedSession {
+  token: string;
+  expiresAt: Date;
+  persistent: boolean;
+}
+
+/**
+ * How long a session lives without use, and at most. A session the user asked to keep ("keep me signed in", and
+ * always in the Android app) lasts weeks; any other ends with the browser session or after hours of inactivity.
+ */
+function lifetime(config: Config, persistent: boolean) {
+  return persistent
+    ? {
+        idleMs: config.SESSION_REMEMBER_DAYS * 86_400_000,
+        maxMs: config.SESSION_REMEMBER_MAX_DAYS * 86_400_000,
+      }
+    : { idleMs: config.SESSION_IDLE_HOURS * 3_600_000, maxMs: config.SESSION_MAX_DAYS * 86_400_000 };
+}
+
 export async function createSession(
   db: Db,
   config: Config,
   userId: string,
   req: FastifyRequest,
-): Promise<{ token: string; expiresAt: Date }> {
+  persistent = false,
+): Promise<IssuedSession> {
   const token = randomToken(32);
-  const expiresAt = new Date(Date.now() + config.SESSION_IDLE_HOURS * 3_600_000);
+  const expiresAt = new Date(Date.now() + lifetime(config, persistent).idleMs);
   await db.insert(schema.sessions).values({
     id: sha256(token),
     userId,
     expiresAt,
+    persistent,
     ip: req.ip,
     userAgent: req.headers["user-agent"]?.slice(0, 512) ?? null,
   });
@@ -38,16 +59,17 @@ export async function createSession(
   await db
     .delete(schema.sessions)
     .where(and(eq(schema.sessions.userId, userId), lt(schema.sessions.expiresAt, new Date())));
-  return { token, expiresAt };
+  return { token, expiresAt, persistent };
 }
 
-export function setSessionCookie(reply: FastifyReply, config: Config, token: string, expiresAt: Date) {
-  reply.setCookie(cookieName(config), token, {
+/** A kept session's cookie expires with the session; any other is a browser-session cookie. */
+export function setSessionCookie(reply: FastifyReply, config: Config, session: IssuedSession) {
+  reply.setCookie(cookieName(config), session.token, {
     path: "/",
     httpOnly: true,
     secure: config.COOKIE_SECURE,
     sameSite: "lax",
-    expires: expiresAt,
+    expires: session.persistent ? session.expiresAt : undefined,
   });
 }
 
@@ -61,10 +83,15 @@ export function clearSessionCookie(reply: FastifyReply, config: Config) {
 }
 
 /**
- * Resolves a session token. Sessions slide: each use (at most every 5 min) extends the idle expiry, up to
- * SESSION_MAX_DAYS after sign-in.
+ * Resolves a session token. Sessions slide: each use (at most every 5 min) extends the idle expiry, up to the
+ * absolute limit after sign-in. `renewed` carries the new expiry when it moved, so a kept session's cookie can
+ * move with it.
  */
-export async function resolveSession(db: Db, config: Config, token: string): Promise<SessionUser | null> {
+export async function resolveSession(
+  db: Db,
+  config: Config,
+  token: string,
+): Promise<{ user: SessionUser; renewed: IssuedSession | null } | null> {
   const id = sha256(token);
   const now = new Date();
   const [row] = await db
@@ -72,6 +99,7 @@ export async function resolveSession(db: Db, config: Config, token: string): Pro
       sessionId: schema.sessions.id,
       createdAt: schema.sessions.createdAt,
       lastSeenAt: schema.sessions.lastSeenAt,
+      persistent: schema.sessions.persistent,
       userId: schema.users.id,
       email: schema.users.email,
       name: schema.users.name,
@@ -83,21 +111,27 @@ export async function resolveSession(db: Db, config: Config, token: string): Pro
       and(eq(schema.sessions.id, id), gt(schema.sessions.expiresAt, now), isNull(schema.users.disabledAt)),
     );
   if (!row) return null;
-  const maxAt = row.createdAt.getTime() + config.SESSION_MAX_DAYS * 86_400_000;
+  const { idleMs, maxMs } = lifetime(config, row.persistent);
+  const maxAt = row.createdAt.getTime() + maxMs;
   if (now.getTime() > maxAt) {
     await db.delete(schema.sessions).where(eq(schema.sessions.id, id));
     return null;
   }
+  let renewed: IssuedSession | null = null;
   if (now.getTime() - row.lastSeenAt.getTime() > TOUCH_EVERY_MS) {
-    const expiresAt = new Date(Math.min(maxAt, now.getTime() + config.SESSION_IDLE_HOURS * 3_600_000));
+    const expiresAt = new Date(Math.min(maxAt, now.getTime() + idleMs));
     await db.update(schema.sessions).set({ lastSeenAt: now, expiresAt }).where(eq(schema.sessions.id, id));
+    renewed = { token, expiresAt, persistent: row.persistent };
   }
   return {
-    sessionId: row.sessionId,
-    userId: row.userId,
-    email: row.email,
-    name: row.name,
-    locale: row.locale,
+    user: {
+      sessionId: row.sessionId,
+      userId: row.userId,
+      email: row.email,
+      name: row.name,
+      locale: row.locale,
+    },
+    renewed,
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useEffect, useRef } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Backdrop, useLens } from "./glass";
 import { MarkTile } from "./mark";
@@ -127,3 +127,60 @@ export function GroupField({
 // the group draws the focus ring for its fields
 export const groupInput =
   "block w-full min-w-0 bg-transparent py-0.5 text-[16px] outline-none focus-visible:outline-none placeholder:text-muted";
+
+/** An iOS-style switch: the knob stretches while pressed and springs across. */
+export function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`fc-switch relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors duration-300 ${checked ? "bg-accent" : "bg-[var(--glass-hairline)] shadow-[inset_0_0_0_1px_var(--glass-hairline)]"}`}
+    >
+      <span className="fc-switch-knob" data-on={checked || undefined} />
+    </button>
+  );
+}
+
+/**
+ * Whether the session should be kept. Inside the Android app it always is, as apps are, and the choice is not
+ * shown; in a browser it is on unless the user turns it off (a shared computer).
+ */
+export function useRemember() {
+  const [inApp, setInApp] = useState(false);
+  const [remember, setRemember] = useState(true);
+  useEffect(() => setInApp("FlowCarbonShell" in window), []);
+  return { inApp, remember: inApp || remember, setRemember };
+}
+
+export function RememberRow({
+  label,
+  hint,
+  remember,
+  setRemember,
+}: {
+  label: string;
+  hint: string;
+  remember: boolean;
+  setRemember: (v: boolean) => void;
+}) {
+  return (
+    <div className="mt-4 flex items-center gap-3 px-1">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-muted">{hint}</div>
+      </div>
+      <Switch checked={remember} onChange={setRemember} label={label} />
+    </div>
+  );
+}

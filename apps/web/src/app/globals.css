@@ -662,6 +662,33 @@ body {
     opacity: 0;
   }
 
+  /* an iOS switch: the knob is a lit pill that stretches toward where it is going while pressed */
+  .fc-switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow:
+      0 3px 8px rgb(0 0 0 / 0.15),
+      0 1px 1px rgb(0 0 0 / 0.16),
+      inset 0 0 0 0.5px rgb(0 0 0 / 0.04);
+    transition:
+      transform 480ms var(--spring-bouncy),
+      width 260ms var(--spring);
+  }
+  .fc-switch-knob[data-on] {
+    transform: translateX(20px);
+  }
+  .fc-switch:active .fc-switch-knob {
+    width: 33px;
+  }
+  .fc-switch:active .fc-switch-knob[data-on] {
+    transform: translateX(14px);
+  }
+
   /* the app icon's tile: the brand gradient with a little depth, like a layered home-screen icon */
   .fc-tile {
     border-radius: 28%;

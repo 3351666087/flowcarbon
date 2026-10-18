@@ -81,6 +81,8 @@ const en = {
     heroSub: "People, cooling and lighting, floor by floor — and what switching off on time would save.",
     showPassword: "Show password",
     hidePassword: "Hide password",
+    remember: "Keep me signed in",
+    rememberHint: "For 30 days of inactivity. Turn off on a shared computer.",
   },
   invite: {
     title: "Accept invitation",
@@ -382,6 +384,8 @@ const zh: Dict = {
     heroSub: "按楼层对照人数、空调与照明，算出准点关闭能省下多少。",
     showPassword: "显示密码",
     hidePassword: "隐藏密码",
+    remember: "保持登录",
+    rememberHint: "30 天内不用才需重新登录。公用电脑请关闭。",
   },
   invite: {
     title: "接受邀请",

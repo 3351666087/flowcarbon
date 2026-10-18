@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 — 2026-10-18
+
+- **Keep me signed in.** Sign-in and invitations take a `remember` flag, a switch on the form that is on by
+  default and always on in the Android app. A kept session expires after 30 days unused (at most 90 days,
+  `SESSION_REMEMBER_DAYS` / `SESSION_REMEMBER_MAX_DAYS`), and its cookie is renewed as the session slides. Other
+  sessions keep the 12-hour idle window and now use a browser-session cookie.
+- **Fix**: the session cookie kept the expiry of sign-in while the server extended the session, so browsers signed
+  users out after 12 hours however active they were.
+- Migration `0004` adds `sessions.persistent`.
+
 ## 0.1.2 — 2026-10-18
 
 - **Android app** (`apps/android`): a native shell around the web app with no third-party libraries — launch intro

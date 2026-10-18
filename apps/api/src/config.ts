@@ -32,6 +32,9 @@ const schema = z.object({
     .max(24 * 30)
     .default(12),
   SESSION_MAX_DAYS: z.coerce.number().min(1).max(90).default(7),
+  /** "keep me signed in" sessions: idle window and absolute limit, in days */
+  SESSION_REMEMBER_DAYS: z.coerce.number().min(1).max(365).default(30),
+  SESSION_REMEMBER_MAX_DAYS: z.coerce.number().min(1).max(365).default(90),
   TRUST_PROXY: bool,
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).default(600),
   /** sign-in attempts per IP per 15 minutes */

@@ -73,7 +73,16 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
       schema: {
         tags: ["auth"],
         summary: "Sign in with email and password; sets the session cookie",
-        body: z.object({ email: z.email().max(320), password: z.string().min(1).max(256) }),
+        body: z.object({
+          email: z.email().max(320),
+          password: z.string().min(1).max(256),
+          remember: z
+            .boolean()
+            .default(false)
+            .describe(
+              "Keep me signed in: the session lasts weeks and its cookie outlives the browser session",
+            ),
+        }),
         response: { 200: me, ...errorResponses },
       },
     },
@@ -98,8 +107,7 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
           .update(schema.users)
           .set({ passwordHash: await hashPassword(req.body.password) })
           .where(eq(schema.users.id, user.id));
-      const { token, expiresAt } = await createSession(db, config, user.id, req);
-      setSessionCookie(reply, config, token, expiresAt);
+      setSessionCookie(reply, config, await createSession(db, config, user.id, req, req.body.remember));
       return loadMe(user.id);
     },
   );
@@ -192,6 +200,7 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
           token: z.string().min(20).max(200),
           name: z.string().trim().min(1).max(120),
           password: z.string().max(256),
+          remember: z.boolean().default(false).describe("Keep me signed in, as for sign-in"),
         }),
         response: { 200: me, ...errorResponses },
       },
@@ -255,8 +264,7 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
         });
         return user!.id;
       });
-      const { token: session, expiresAt } = await createSession(db, config, userId, req);
-      setSessionCookie(reply, config, session, expiresAt);
+      setSessionCookie(reply, config, await createSession(db, config, userId, req, req.body.remember));
       return loadMe(userId);
     },
   );
