@@ -117,7 +117,9 @@ async function findingsIn(tx: Tx, ctx: BuildingContext, from: number, to: number
         gte(schema.findings.startAt, new Date(from)),
         lt(schema.findings.startAt, new Date(to)),
       ),
-    );
+    )
+    // fixed order, so floating-point sums (and therefore reports) are reproducible
+    .orderBy(schema.findings.startAt, schema.findings.floorId, schema.findings.ruleId);
   return rows.map((r) => ({
     ruleId: r.ruleId as RuleId,
     kind: r.kind,
@@ -175,7 +177,8 @@ export async function buildingReport(
         gte(schema.floorDaily.day, fromDate),
         lt(schema.floorDaily.day, toDateExclusive),
       ),
-    );
+    )
+    .orderBy(schema.floorDaily.day, schema.floorDaily.floorId);
   const year = Number(addDays(toDateExclusive, -1).slice(0, 4));
   const locationFactor = locationFactorFor(ctx, year);
   const residualFactor = selectFactor(
