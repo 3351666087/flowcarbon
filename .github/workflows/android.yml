@@ -8,6 +8,11 @@ on:
   pull_request:
     paths: ["apps/android/**", ".github/workflows/android.yml"]
   workflow_dispatch:
+    inputs:
+      app_url:
+        description: "Build the debuggable FlowCarbon Dev app for this web app URL instead (e.g. http://localhost:3000/ with adb reverse)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -52,7 +57,14 @@ jobs:
             echo "FLOWCARBON_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           fi
 
+      - name: Development build
+        if: inputs.app_url != ''
+        run: |
+          gradle --no-daemon -Pflowcarbon.version=${{ steps.version.outputs.name }} "-Pflowcarbon.appUrl=${{ inputs.app_url }}" :app:assembleDebug
+          mkdir -p dist && cp app/build/outputs/apk/debug/*.apk "dist/FlowCarbon-dev-${{ steps.version.outputs.name }}.apk"
+
       - name: Lint and build
+        if: inputs.app_url == ''
         env:
           FLOWCARBON_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           FLOWCARBON_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -60,6 +72,7 @@ jobs:
         run: gradle --no-daemon -Pflowcarbon.version=${{ steps.version.outputs.name }} :app:lintRelease :app:assembleRelease
 
       - name: Name, verify and checksum
+        if: inputs.app_url == ''
         run: |
           mkdir -p dist
           apk="dist/FlowCarbon-${{ steps.version.outputs.name }}.apk"
@@ -73,7 +86,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: FlowCarbon-android-${{ steps.version.outputs.name }}
+          name: FlowCarbon-android-${{ steps.version.outputs.name }}${{ inputs.app_url != '' && '-dev' || '' }}
           path: apps/android/dist/
           if-no-files-found: error
 
