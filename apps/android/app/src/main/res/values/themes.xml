@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- light parent: the page sees prefers-color-scheme: light -->
+    <style name="Base.Theme.FlowCarbon" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.FlowCarbon" parent="Base.Theme.FlowCarbon">
+        <!-- the window starts on the stage colour, so launch, intro and splash are one continuous surface -->
+        <item name="android:windowBackground">@color/fc_stage</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:colorAccent">@color/fc_teal</item>
+    </style>
+</resources>

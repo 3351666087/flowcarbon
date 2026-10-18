@@ -1,0 +1,87 @@
+name: Android
+
+on:
+  push:
+    branches: [main, "android/**"]
+    paths: ["apps/android/**", ".github/workflows/android.yml"]
+    tags: ["v*.*.*"]
+  pull_request:
+    paths: ["apps/android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build, lint and sign the APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write # attach the APK to the release on version tags
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6.4.0
+        with:
+          gradle-version: "9.8.0"
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(node -p "require('../web/package.json').version")"; fi
+          echo "name=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          # absent on forks: the release APK is then built unsigned
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "FLOWCARBON_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
+
+      - name: Lint and build
+        env:
+          FLOWCARBON_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FLOWCARBON_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          FLOWCARBON_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle --no-daemon -Pflowcarbon.version=${{ steps.version.outputs.name }} :app:lintRelease :app:assembleRelease
+
+      - name: Name, verify and checksum
+        run: |
+          mkdir -p dist
+          apk="dist/FlowCarbon-${{ steps.version.outputs.name }}.apk"
+          cp app/build/outputs/apk/release/*.apk "$apk"
+          if [ -n "$FLOWCARBON_KEYSTORE" ]; then
+            apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+            "$apksigner" verify --verbose --print-certs "$apk" | grep -E "Verified using|Signer #1 certificate SHA-256"
+          fi
+          (cd dist && sha256sum *.apk > SHA256SUMS && cat SHA256SUMS)
+          ls -l dist
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: FlowCarbon-android-${{ steps.version.outputs.name }}
+          path: apps/android/dist/
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --verify-tag --title "FlowCarbon $GITHUB_REF_NAME" --notes "See CHANGELOG.md."
+          gh release upload "$GITHUB_REF_NAME" dist/*.apk dist/SHA256SUMS --clobber

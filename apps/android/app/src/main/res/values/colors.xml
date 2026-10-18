@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- brand: the teal of the logo tile, the deep ink of its glyph -->
+    <color name="fc_teal_light">#FF5FF0D9</color>
+    <color name="fc_teal">#FF2FD4BD</color>
+    <color name="fc_teal_dark">#FF1AA597</color>
+    <color name="fc_ink">#FF04201D</color>
+    <!-- the stage behind the intro and the offline screen -->
+    <color name="fc_stage">#FF06171A</color>
+    <color name="fc_stage_top">#FF0B2A27</color>
+    <color name="fc_stage_text">#FFE9FBF7</color>
+    <color name="fc_stage_muted">#FF8FB3AC</color>
+    <!-- page backgrounds of the web app (globals.css) -->
+    <color name="fc_page_light">#FFF5F6F8</color>
+    <color name="fc_page_dark">#FF0D1117</color>
+</resources>

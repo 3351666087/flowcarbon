@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FlowCarbon</string>
+    <string name="tagline">逐层看清下班后的能耗</string>
+    <string name="offline_title">网络已断开</string>
+    <string name="offline_body">FlowCarbon 需要联网才能显示实时楼层数据。网络恢复后会自动重新连接。</string>
+    <string name="server_title">服务暂时没有响应</string>
+    <string name="server_body">服务器可能正在重启，请稍后再试。</string>
+    <string name="retry">重试</string>
+    <string name="downloading">正在下载 %1$s</string>
+    <string name="download_failed">无法开始下载</string>
+</resources>

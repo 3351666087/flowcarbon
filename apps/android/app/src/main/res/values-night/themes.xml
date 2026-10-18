@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- dark parent: the page sees prefers-color-scheme: dark -->
+    <style name="Base.Theme.FlowCarbon" parent="android:Theme.Material.NoActionBar" />
+</resources>

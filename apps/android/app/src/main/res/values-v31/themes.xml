@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FlowCarbon" parent="Base.Theme.FlowCarbon">
+        <item name="android:windowBackground">@color/fc_stage</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:colorAccent">@color/fc_teal</item>
+        <!-- an empty system splash on the stage colour; the app draws the logo itself -->
+        <item name="android:windowSplashScreenBackground">@color/fc_stage</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
+</resources>

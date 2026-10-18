@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FlowCarbon</string>
+    <string name="tagline">After-hours energy, floor by floor</string>
+    <string name="offline_title">You are offline</string>
+    <string name="offline_body">FlowCarbon needs a connection to show live floor data. It reconnects by itself as soon as the network is back.</string>
+    <string name="server_title">The service is not answering</string>
+    <string name="server_body">The server may be restarting. Try again in a moment.</string>
+    <string name="retry">Try again</string>
+    <string name="downloading">Downloading %1$s</string>
+    <string name="download_failed">The download could not start</string>
+</resources>
