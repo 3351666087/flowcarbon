@@ -151,7 +151,8 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
           url: `${API_PREFIX}/auth/login`,
           payload: { email: manager, password: PASSWORD, ...(remember === undefined ? {} : { remember }) },
         });
-      const cookieOf = (res: Awaited<ReturnType<typeof signIn>>) => res.cookies.find((x) => x.name === "fc_session");
+      const cookieOf = (res: Awaited<ReturnType<typeof signIn>>) =>
+        res.cookies.find((x) => x.name === "fc_session");
       const day = 86_400_000;
 
       // by default the cookie ends with the browser session
