@@ -73,17 +73,20 @@ export const principalPlugin = fp(async (app: FastifyInstance, opts: { db: Db; c
     const session = await resolveSession(db, config, token);
     if (!session) return;
     const { user, renewed } = session;
-    if (UNSAFE.has(req.method)) {
-      const origin = req.headers.origin;
-      const host = req.headers.host;
-      const sameHost = origin && host && (origin === `http://${host}` || origin === `https://${host}`);
-      if (!origin || !(allowed.has(origin) || sameHost)) throw forbidden("Cross-site request blocked.");
-    }
+    if (UNSAFE.has(req.method)) assertSameSite(req, allowed);
     req.principal = { kind: "user", ...user };
     // a kept session's cookie moves with its expiry, so an app in daily use is never signed out
     if (renewed?.persistent) setSessionCookie(reply, config, renewed);
   });
 });
+
+/** Cookie-authenticated writes must come from the app's own origin (CSRF defence beside SameSite=Lax). */
+export function assertSameSite(req: FastifyRequest, allowed: Set<string>) {
+  const origin = req.headers.origin;
+  const host = req.headers.host;
+  const sameHost = origin && host && (origin === `http://${host}` || origin === `https://${host}`);
+  if (!origin || !(allowed.has(origin) || sameHost)) throw forbidden("Cross-site request blocked.");
+}
 
 export function requireUser(req: FastifyRequest): Extract<Principal, { kind: "user" }> {
   if (req.principal?.kind !== "user") throw unauthorized();

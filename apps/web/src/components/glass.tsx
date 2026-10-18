@@ -292,11 +292,30 @@ export function MaterialLight() {
   return null;
 }
 
-/** A light tick under the finger: the native shell's haptics inside the app, vibration in a browser that has it. */
+type Feel = "tick" | "confirm" | "reject" | "press";
+const VIBRATE: Record<Feel, number | number[]> = {
+  tick: 6,
+  press: 10,
+  confirm: [8, 40, 12],
+  reject: [14, 50, 14],
+};
+
+/**
+ * Haptic feedback: the native shell's haptics inside the app (tick, confirm, reject, press), a short vibration in a
+ * browser that has one, nothing elsewhere.
+ */
+export function feel(kind: Feel) {
+  const shell = (
+    window as unknown as { FlowCarbonShell?: { feel?: (k: string) => void; haptic?: () => void } }
+  ).FlowCarbonShell;
+  if (shell?.feel) shell.feel(kind);
+  else if (shell?.haptic) shell.haptic();
+  else navigator.vibrate?.(VIBRATE[kind]);
+}
+
+/** A light tick under the finger, as a selection moves. */
 export function tick() {
-  const shell = (window as unknown as { FlowCarbonShell?: { haptic?: () => void } }).FlowCarbonShell;
-  if (shell?.haptic) shell.haptic();
-  else navigator.vibrate?.(6);
+  feel("tick");
 }
 
 /**

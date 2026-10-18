@@ -43,6 +43,10 @@ const schema = z.object({
   SMTP_URL: z.string().url().optional(),
   /** sender, e.g. "FlowCarbon <noreply@example.com>"; defaults to the SMTP user */
   MAIL_FROM: z.string().min(3).optional(),
+  /** anyone who proves an email address (by code) may create an account; otherwise accounts come by invitation */
+  SIGNUP_OPEN: bool,
+  /** organisation (slug) that new accounts may join read-only to explore, e.g. the simulated demo tower */
+  DEMO_ORG_SLUG: z.string().min(1).max(80).optional(),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).default(600),
   /** sign-in attempts per IP per 15 minutes */
   LOGIN_ATTEMPTS_PER_15_MIN: z.coerce.number().int().min(1).default(10),
@@ -54,8 +58,9 @@ const schema = z.object({
 
 export type Config = Omit<
   z.infer<typeof schema>,
-  "COOKIE_SECURE" | "TRUST_PROXY" | "METRICS_PUBLIC" | "DOCS_ENABLED"
+  "COOKIE_SECURE" | "TRUST_PROXY" | "METRICS_PUBLIC" | "DOCS_ENABLED" | "SIGNUP_OPEN"
 > & {
+  SIGNUP_OPEN: boolean;
   COOKIE_SECURE: boolean;
   TRUST_PROXY: boolean;
   METRICS_PUBLIC: boolean;
@@ -77,5 +82,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     TRUST_PROXY: c.TRUST_PROXY ?? false,
     METRICS_PUBLIC: c.METRICS_PUBLIC ?? !production,
     DOCS_ENABLED: c.DOCS_ENABLED ?? true,
+    SIGNUP_OPEN: c.SIGNUP_OPEN ?? false,
   };
 }

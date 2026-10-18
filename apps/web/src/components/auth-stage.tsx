@@ -1,65 +1,54 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import { Backdrop, useLens } from "./glass";
+import { Backdrop, tick, useLens } from "./glass";
+import { LanguageSwitch } from "./language-switch";
 import { MarkTile } from "./mark";
 import { TowerScene } from "./tower-scene";
 
 /**
- * The stage for signing in and accepting an invitation: the live tower is the content, and the form floats over it as
- * a sheet of glass — inset from the screen edges on a phone so the scene shows around it, beside the tower on a wide
- * screen. `shake` replays a refusal shake each time it changes.
+ * The stage for getting in: sign-in, sign-up, invitations and resets. The live tower is the content and the form
+ * floats over it as a sheet of glass, inset from the screen edges on a phone so the scene shows around it, beside
+ * the tower on a wide screen. Like an app's welcome screen it does not scroll: the scene gives up room to the sheet
+ * (and to the keyboard), and only a sheet taller than the screen scrolls inside itself. `shake` replays a refusal
+ * shake each time it changes.
  */
-export function AuthStage({
-  title,
-  subtitle,
-  onSubmit,
-  shake = 0,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  onSubmit: (e: FormEvent) => void;
-  shake?: number;
-  children: ReactNode;
-}) {
-  const { t, locale, setLocale } = useI18n();
-  const sheet = useLens<HTMLFormElement>({ bezel: 36, depth: 34 });
-  const lang = useLens<HTMLButtonElement>({ bezel: 12, depth: 8 });
-  const form = useRef<HTMLDivElement>(null);
+export function AuthStage({ children, shake = 0 }: { children: ReactNode; shake?: number }) {
+  const { t } = useI18n();
+  const sheet = useLens<HTMLDivElement>({ bezel: 36, depth: 34 });
+  const wobble = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = form.current;
+    const el = wobble.current;
     if (!shake || !el) return;
     el.classList.remove("fc-shake");
     el.getBoundingClientRect();
     el.classList.add("fc-shake");
+    tick();
   }, [shake]);
 
+  // the page itself stays put, as an app screen does
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("fc-locked");
+    return () => root.classList.remove("fc-locked");
+  }, []);
+
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,460px)] lg:gap-12 lg:px-14">
+    <main className="relative flex h-[100dvh] flex-col overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,460px)] lg:gap-12 lg:px-14">
       <Backdrop intense />
       {/* the scene runs on under the sheet, so the glass has something to bend */}
       <TowerScene className="absolute inset-0 size-full [--tower-scale:1.12] [--tower-y:0.4] lg:[--tower-scale:0.8] lg:[--tower-x:0.52] lg:[--tower-y:0.47]" />
-      <div className="fc-rise relative z-10 flex items-center gap-3 px-5 pt-5 lg:absolute lg:inset-x-14 lg:top-10 lg:px-0 lg:pt-0">
+      <div className="fc-rise relative z-10 flex items-center gap-3 px-5 pt-[calc(var(--app-top)+18px)] lg:absolute lg:inset-x-14 lg:top-10 lg:px-0 lg:pt-0">
         <MarkTile className="size-10" motion="settle" />
-        <div className="leading-tight">
+        <div className="min-w-0 leading-tight">
           <div className="text-[17px] font-semibold tracking-tight">{t.appName}</div>
-          <div className="text-xs text-muted">{t.tagline}</div>
+          <div className="truncate text-xs text-muted">{t.tagline}</div>
         </div>
-        <button
-          ref={lang.ref}
-          style={lang.style}
-          type="button"
-          onClick={() => setLocale(locale === "en" ? "zh" : "en")}
-          className="fc-glass fc-press ml-auto h-9 rounded-full px-4 text-[13px] font-medium"
-        >
-          {lang.defs}
-          {t.common.language}
-        </button>
+        <LanguageSwitch className="ml-auto shrink-0" />
       </div>
-      <section className="relative flex min-h-[42dvh] flex-1 flex-col lg:min-h-dvh">
+      <section className="relative flex min-h-0 flex-1 flex-col lg:min-h-dvh">
         <div className="fc-rise relative z-10 mt-auto hidden pb-16 [animation-delay:200ms] lg:block">
           <h2 className="max-w-[24rem] text-[40px] leading-[1.1] font-semibold tracking-tight text-balance">
             {t.login.hero}
@@ -68,29 +57,71 @@ export function AuthStage({
         </div>
       </section>
 
-      <div className="relative z-10 px-3 pb-[max(12px,env(safe-area-inset-bottom))] lg:flex lg:items-center lg:px-0 lg:pb-0">
+      <div className="relative z-10 px-3 pb-[max(12px,calc(var(--app-bottom)+10px))] lg:flex lg:items-center lg:px-0 lg:pb-0">
         <div
-          ref={form}
+          ref={wobble}
           onAnimationEnd={(e) =>
             e.animationName === "fc-shake" && e.currentTarget.classList.remove("fc-shake")
           }
           className="w-full"
         >
           {/* the entrance runs on the glass itself: an animating parent would hide the backdrop from it */}
-          <form
+          <div
             ref={sheet.ref}
             style={sheet.style}
-            onSubmit={onSubmit}
-            className="fc-glass fc-condense w-full rounded-[34px] p-5 [animation-delay:250ms] sm:p-7"
+            className="fc-glass fc-condense max-h-[calc(100dvh-var(--app-top)-var(--app-bottom)-96px)] w-full overflow-y-auto overscroll-contain rounded-[34px] p-5 [animation-delay:250ms] sm:p-7 lg:max-h-[calc(100dvh-80px)]"
           >
             {sheet.defs}
-            <h1 className="text-[26px] leading-tight font-semibold tracking-tight">{title}</h1>
-            {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
-            <div className="mt-5">{children}</div>
-          </form>
+            {children}
+          </div>
         </div>
       </div>
     </main>
+  );
+}
+
+/**
+ * The sheet's content for one step. Its height follows the content with a spring, so moving between steps feels
+ * like one sheet changing shape; each new step slides in from the side it comes from.
+ */
+export function SheetStep({ step, dir, children }: { step: string; dir: 1 | -1; children: ReactNode }) {
+  const inner = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el) return;
+    const measure = () => setHeight(el.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div className="fc-morph -m-2" style={{ height: height === null ? undefined : height + 16 }}>
+      <div ref={inner} className="p-2">
+        <div key={step} className={dir > 0 ? "fc-step-fwd" : "fc-step-back"}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function StepHeader({
+  title,
+  subtitle,
+  back,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  back?: ReactNode;
+}) {
+  return (
+    <div className="mb-5">
+      {back}
+      <h1 className="text-[26px] leading-tight font-semibold tracking-tight text-balance">{title}</h1>
+      {subtitle ? <p className="mt-1.5 text-sm text-muted text-pretty">{subtitle}</p> : null}
+    </div>
   );
 }
 
@@ -144,7 +175,10 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => onChange(!checked)}
+      onClick={() => {
+        tick();
+        onChange(!checked);
+      }}
       className={`fc-switch relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors duration-300 ${checked ? "bg-accent" : "bg-[var(--glass-hairline)] shadow-[inset_0_0_0_1px_var(--glass-hairline)]"}`}
     >
       <span className="fc-switch-knob" data-on={checked || undefined} />

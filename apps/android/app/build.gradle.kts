@@ -6,6 +6,8 @@ plugins {
 val appVersion = (findProperty("flowcarbon.version") as String?) ?: "0.0.0"
 val (major, minor, patch) = appVersion.split(".").map { it.toInt() }
 val keystore: String? = System.getenv("FLOWCARBON_KEYSTORE")
+// the web app the shell opens; a development build points it at a dev server through `adb reverse`
+val appUrl = (findProperty("flowcarbon.appUrl") as String?) ?: "https://flowcarbon.veritybench.org/"
 
 android {
     namespace = "org.veritybench.flowcarbon"
@@ -17,6 +19,7 @@ android {
         targetSdk = 36
         versionCode = major * 10_000 + minor * 100 + patch
         versionName = appVersion
+        resValue("string", "app_url", appUrl)
     }
 
     signingConfigs {
@@ -31,6 +34,11 @@ android {
     }
 
     buildTypes {
+        // "FlowCarbon Dev": installs beside the release app, debuggable, may load http://localhost (src/debug)
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -43,6 +51,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        resValues = true
     }
 
     lint {

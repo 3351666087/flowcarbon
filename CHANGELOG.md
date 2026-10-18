@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.5 — 2026-10-18
+
+- **Sign-up and sign-in, the way large suites do it.** Email first: an address with an account asks for its
+  password; a new address proves itself with a six-digit code, then sets a name, a password and where to start
+  (explore the demo organisation read-only, or found an organisation and own it). Every account has both an email
+  and a password, and signing in takes both; codes only prove a new address or reset a forgotten password.
+  `SIGNUP_OPEN` turns self-service sign-up on, `DEMO_ORG_SLUG` names the organisation to explore.
+- **Several accounts on one device**, Google-style: the active session plus up to four kept sessions in a second
+  HttpOnly cookie. Switch accounts from the account menu or the sign-in chooser, add another account without
+  signing out, and signing out hands over to the next account (or signs everyone out). A session that was not kept
+  is signed out when someone else signs in on the same browser.
+- **Account menu**: profile, organisations (switch, create one, join the demo), accounts on this device,
+  language, appearance (system, light, dark), password, sign out. A bottom sheet on phones, a panel on desktop.
+- **New organisations** get a first-building setup (name, city and its grid region, floors, typical floor area);
+  home remembers the organisation used last.
+- **Interface**: the sign-in stage no longer scrolls; one-time code boxes that accept a pasted or suggested code;
+  the sheet changes shape between steps; language and theme switches dissolve instead of jumping, and the first
+  paint is already in the reader's language (cookie) and theme (early script); pull to refresh; haptics on tabs,
+  switches and segmented controls.
+- **Android**: the page runs edge to edge under the system bars (insets handed to the page); links to the site
+  (invitations, password resets) open in the app through verified App Links (`/.well-known/assetlinks.json`);
+  launcher shortcuts to Opportunities, Floors and Overtime requests; richer haptics; a "FlowCarbon Dev" debug
+  build that loads a dev server through `adb reverse`.
+- **Copy**: interface text and emails rewritten in plainer English and Chinese.
+- Migration `0006`: email codes are keyed by address, so a code can exist before its account does.
+
 ## 0.1.4 — 2026-10-18
 
 - **Email codes.** With an SMTP relay configured (`SMTP_URL`, `MAIL_FROM`), people can sign in with a six-digit code

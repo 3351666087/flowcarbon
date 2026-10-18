@@ -52,6 +52,8 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       NODE_ENV: "test",
       CORS_ORIGINS: ORIGIN,
       LOGIN_ATTEMPTS_PER_15_MIN: "100",
+      SIGNUP_OPEN: "true",
+      DEMO_ORG_SLUG: "tower-a-demo",
     });
     app = await buildApp({ db: handle.db, config, jobs, mailer, logger: false });
     await app.ready();
@@ -231,12 +233,13 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
         payload: { email: analyst, password: PASSWORD },
       });
       const token = res.cookies.find((c) => c.name === "fc_session")!.value;
-      await app.inject({
+      const out = await app.inject({
         method: "POST",
         url: `${API_PREFIX}/auth/logout`,
         cookies: { fc_session: token },
         headers: { origin: ORIGIN },
       });
+      expect(out.json()).toEqual({ next: null });
       expect((await app.inject({ url: `${API_PREFIX}/me`, cookies: { fc_session: token } })).statusCode).toBe(
         401,
       );
@@ -514,46 +517,201 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
     });
   });
 
-  describe("email codes", () => {
+  describe("email: continue, sign up, reset", () => {
     const engineer = "engineer@flowcarbon-demo.example";
-    const requestCode = (email: string, purpose: "sign_in" | "password_reset") =>
-      app.inject({ method: "POST", url: `${API_PREFIX}/auth/code`, payload: { email, purpose } });
-    const signInWith = (email: string, code: string) =>
-      app.inject({ method: "POST", url: `${API_PREFIX}/auth/code/sign-in`, payload: { email, code } });
+    const start = (email: string) =>
+      app.inject({ method: "POST", url: `${API_PREFIX}/auth/email/start`, payload: { email, locale: "zh" } });
+    const verify = (email: string, code: string) =>
+      app.inject({ method: "POST", url: `${API_PREFIX}/auth/email/verify`, payload: { email, code } });
+    const cookie = (res: Awaited<ReturnType<typeof start>>, name: string) =>
+      res.cookies.find((c) => c.name === name)?.value;
 
-    it("says email codes are available", async () => {
+    it("describes what this server offers", async () => {
       expect((await app.inject({ url: `${API_PREFIX}/auth/methods` })).json()).toEqual({
         password: true,
         emailCode: true,
+        signUp: true,
+        demo: { name: expect.any(String), slug: "tower-a-demo" },
       });
     });
 
-    it("signs in with an emailed code, once", async () => {
-      expect((await requestCode(engineer.toUpperCase(), "sign_in")).statusCode).toBe(202);
-      const mail = lastMailTo(engineer);
-      const code = codeIn(mail)!;
-      expect(mail?.subject).toContain(code);
-      const wrong = code === "000000" ? "111111" : "000000";
-      expect((await signInWith(engineer, wrong)).statusCode).toBe(401);
-      const ok = await signInWith(engineer, code);
-      expect(ok.statusCode).toBe(200);
-      expect(ok.json().user.email).toBe(engineer);
-      expect(ok.cookies.find((c) => c.name === "fc_session")).toBeDefined();
-      expect((await signInWith(engineer, code)).statusCode).toBe(401);
-    });
-
-    it("answers the same for unknown addresses and sends nothing", async () => {
+    it("tells the form whether an address has an account, and mails codes only to new addresses", async () => {
+      const identify = (email: string) =>
+        app.inject({ method: "POST", url: `${API_PREFIX}/auth/identify`, payload: { email } });
+      expect((await identify(engineer.toUpperCase())).json()).toEqual({ account: "password", signUp: true });
+      expect((await identify("nobody@example.com")).json()).toEqual({ account: "none", signUp: true });
+      // an existing account signs in with its password; it gets no sign-up code
       const before = outbox.length;
-      expect((await requestCode("nobody@example.com", "sign_in")).statusCode).toBe(202);
+      expect((await start(engineer)).statusCode).toBe(202);
       expect(outbox.length).toBe(before);
     });
 
     it("stops accepting a code after five wrong tries", async () => {
-      await requestCode(analyst, "sign_in");
-      const code = codeIn(lastMailTo(analyst))!;
+      const kim = "kim@example.com";
+      await start(kim);
+      const code = codeIn(lastMailTo(kim))!;
       const wrong = code === "000000" ? "111111" : "000000";
-      for (let i = 0; i < 5; i++) expect((await signInWith(analyst, wrong)).statusCode).toBe(401);
-      expect((await signInWith(analyst, code)).statusCode).toBe(401);
+      for (let i = 0; i < 5; i++) expect((await verify(kim, wrong)).statusCode).toBe(401);
+      expect((await verify(kim, code)).statusCode).toBe(401);
+    });
+
+    it("signs up a verified address with a password: explore the demo, or found an organisation", async () => {
+      const ada = "ada@example.com";
+      await start(ada);
+      const mail = lastMailTo(ada);
+      expect(mail?.subject).toContain("验证码"); // the language the form was in
+      const v = await verify(ada, codeIn(mail)!);
+      expect(v.statusCode).toBe(200);
+      const ticket = v.json().ticket as string;
+      const signup = (body: Record<string, unknown>) =>
+        app.inject({ method: "POST", url: `${API_PREFIX}/auth/signup`, payload: { ticket, ...body } });
+      // a weak password is refused before the ticket is spent
+      expect((await signup({ name: "Ada", password: "short", start: "demo" })).statusCode).toBe(422);
+      const demo = await signup({
+        name: "Ada",
+        password: "a long enough passphrase",
+        start: "demo",
+        locale: "zh",
+        remember: true,
+      });
+      expect(demo.statusCode).toBe(200);
+      expect(demo.json().user).toMatchObject({ email: ada, locale: "zh", hasPassword: true });
+      expect(demo.json().memberships).toEqual([
+        expect.objectContaining({ orgId: seeded.orgId, role: "viewer" }),
+      ]);
+      expect(
+        (await signup({ name: "Ada", password: "a long enough passphrase", start: "demo" })).statusCode,
+      ).toBe(410);
+      // from now on the address signs in with its password
+      const back = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/login`,
+        payload: { email: ada, password: "a long enough passphrase" },
+      });
+      expect(back.statusCode).toBe(200);
+
+      const lin = "lin@example.com";
+      await start(lin);
+      const t2 = (await verify(lin, codeIn(lastMailTo(lin))!)).json().ticket as string;
+      const founded = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/signup`,
+        payload: {
+          ticket: t2,
+          name: "Lin",
+          password: "another long passphrase",
+          start: "organisation",
+          organisation: "Harbour Point 物业",
+          remember: true,
+        },
+      });
+      expect(founded.statusCode).toBe(200);
+      const own = founded.json().memberships[0];
+      expect(own).toMatchObject({ orgName: "Harbour Point 物业", role: "owner" });
+      expect(own.orgSlug).toMatch(/^harbour-point-[a-z0-9]+$/);
+    });
+
+    it("keeps several accounts signed in on one device and switches between them", async () => {
+      const first = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/login`,
+        payload: { email: manager, password: PASSWORD, remember: true },
+      });
+      const second = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/login`,
+        payload: { email: ownerEmail, password: PASSWORD, remember: true },
+        cookies: { fc_session: cookie(first, "fc_session")! },
+        headers: { origin: ORIGIN },
+      });
+      const jar = { fc_session: cookie(second, "fc_session")!, fc_accounts: cookie(second, "fc_accounts")! };
+      expect(jar.fc_accounts).toBe(cookie(first, "fc_session"));
+      const listed = (await app.inject({ url: `${API_PREFIX}/auth/accounts`, cookies: jar })).json().accounts;
+      expect(listed.map((a: { email: string; active: boolean }) => [a.email, a.active])).toEqual([
+        [ownerEmail, true],
+        [manager, false],
+      ]);
+      const managerId = listed[1].userId;
+      const switched = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/accounts/switch`,
+        payload: { userId: managerId },
+        cookies: jar,
+        headers: { origin: ORIGIN },
+      });
+      expect(switched.statusCode).toBe(200);
+      expect(switched.json().user.email).toBe(manager);
+      const after = {
+        fc_session: cookie(switched, "fc_session")!,
+        fc_accounts: cookie(switched, "fc_accounts")!,
+      };
+      expect(after.fc_session).toBe(cookie(first, "fc_session"));
+      expect(after.fc_accounts).toBe(jar.fc_session);
+      // a switch needs the app's own origin
+      expect(
+        (
+          await app.inject({
+            method: "POST",
+            url: `${API_PREFIX}/auth/accounts/switch`,
+            payload: { userId: managerId },
+            cookies: jar,
+            headers: { origin: "https://evil.example" },
+          })
+        ).statusCode,
+      ).toBe(403);
+      // signing out hands over to the next account on the device
+      const out = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/logout`,
+        cookies: after,
+        headers: { origin: ORIGIN },
+      });
+      expect(out.json().next.email).toBe(ownerEmail);
+      const everyone = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/logout`,
+        payload: { everyone: true },
+        cookies: { fc_session: cookie(out, "fc_session")! },
+        headers: { origin: ORIGIN },
+      });
+      expect(everyone.json().next).toBeNull();
+      expect(
+        (await app.inject({ url: `${API_PREFIX}/me`, cookies: { fc_session: jar.fc_session } })).statusCode,
+      ).toBe(401);
+    });
+
+    it("signs out a session that was not kept when someone else signs in", async () => {
+      const shared = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/login`,
+        payload: { email: manager, password: PASSWORD },
+      });
+      const other = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/login`,
+        payload: { email: ownerEmail, password: PASSWORD },
+        cookies: { fc_session: cookie(shared, "fc_session")! },
+        headers: { origin: ORIGIN },
+      });
+      expect(cookie(other, "fc_accounts") ?? "").toBe("");
+      const old = await app.inject({
+        url: `${API_PREFIX}/me`,
+        cookies: { fc_session: cookie(shared, "fc_session")! },
+      });
+      expect(old.statusCode).toBe(401);
+    });
+
+    it("lets a signed-in person found another organisation", async () => {
+      const res = await as(analyst, {
+        method: "POST",
+        url: `${API_PREFIX}/orgs`,
+        payload: { name: "Side project" },
+      });
+      expect(res.statusCode).toBe(201);
+      const me = (await as(analyst, { url: `${API_PREFIX}/me` })).json();
+      expect(
+        me.memberships.map((m: { orgName: string; role: string }) => [m.orgName, m.role]),
+      ).toContainEqual(["Side project", "owner"]);
     });
 
     it("resets a password with a code and signs out every other session", async () => {
@@ -564,7 +722,11 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
         payload: { email: viewer, password: "a sufficiently long passphrase" },
       });
       const oldCookie = old.cookies.find((c) => c.name === "fc_session")!.value;
-      await requestCode(viewer, "password_reset");
+      await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/password/forgot`,
+        payload: { email: viewer },
+      });
       const code = codeIn(lastMailTo(viewer))!;
       const reset = (password: string) =>
         app.inject({
@@ -586,6 +748,20 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
         payload: { email: viewer, password: "another sufficiently long passphrase" },
       });
       expect(relogin.statusCode).toBe(200);
+    });
+
+    it("answers the same for unknown addresses when sign-up is closed elsewhere", async () => {
+      const before = outbox.length;
+      expect(
+        (
+          await app.inject({
+            method: "POST",
+            url: `${API_PREFIX}/auth/password/forgot`,
+            payload: { email: "nobody@example.com" },
+          })
+        ).statusCode,
+      ).toBe(202);
+      expect(outbox.length).toBe(before);
     });
   });
 });

@@ -84,10 +84,12 @@ public final class MainActivity extends Activity {
     private WebView web;
     private StageView stage;
     private ProgressLine bar;
-    private View statusScrim;
-    private View navScrim;
+    /** system bar insets in CSS pixels, handed to the page as --app-top / --app-bottom */
+    private float insetTop;
+    private float insetBottom;
     private String appUrl;
     private String appHost;
+    private String appScheme;
     private int pageColor;
     private boolean revealed;
     private boolean mainFrameFailed;
@@ -104,6 +106,7 @@ public final class MainActivity extends Activity {
         super.onCreate(saved);
         appUrl = getString(R.string.app_url);
         appHost = Uri.parse(appUrl).getHost();
+        appScheme = Uri.parse(appUrl).getScheme();
         pageColor = getColor(isNight() ? R.color.fc_page_dark : R.color.fc_page_light);
         edgeToEdge();
 
@@ -111,17 +114,11 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(getColor(R.color.fc_stage));
         web = new WebView(this);
         configure(web);
-        statusScrim = new View(this);
-        navScrim = new View(this);
-        statusScrim.setBackgroundColor(pageColor);
-        navScrim.setBackgroundColor(pageColor);
         bar = new ProgressLine(this);
         stage = new StageView(this, versionName());
 
         int match = ViewGroup.LayoutParams.MATCH_PARENT;
         root.addView(web, new FrameLayout.LayoutParams(match, match));
-        root.addView(statusScrim, new FrameLayout.LayoutParams(match, 0, Gravity.TOP));
-        root.addView(navScrim, new FrameLayout.LayoutParams(match, 0, Gravity.BOTTOM));
         root.addView(bar, new FrameLayout.LayoutParams(match, dp(2.5f), Gravity.TOP));
         root.addView(stage, new FrameLayout.LayoutParams(match, match));
         setContentView(root);
@@ -146,7 +143,8 @@ public final class MainActivity extends Activity {
             stage.playIntro();
             darkIcons(false);
             if (online()) {
-                web.loadUrl(appUrl);
+                String link = linkFrom(getIntent());
+                web.loadUrl(link != null ? link : appUrl);
             } else {
                 mainFrameFailed = true;
                 showOffline(false);
@@ -175,40 +173,51 @@ public final class MainActivity extends Activity {
         }
     }
 
-    /** The page sits between the system bars (and above the keyboard); the scrims paint the bars in its colour. */
+    /**
+     * The page runs edge to edge, under the status and navigation bars, as native screens do; it learns where the
+     * bars are through --app-top and --app-bottom and pads its own header and tab bar. Only the keyboard (and side
+     * insets in landscape) take space away from the page.
+     */
     private WindowInsets applyInsets(View v, WindowInsets insets) {
         int top;
-        int bottom;
         int left;
         int right;
         int navBottom;
+        int ime;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-            Insets ime = insets.getInsets(WindowInsets.Type.ime());
             top = bars.top;
             left = bars.left;
             right = bars.right;
             navBottom = bars.bottom;
-            bottom = Math.max(bars.bottom, ime.bottom);
+            ime = insets.getInsets(WindowInsets.Type.ime()).bottom;
         } else {
             top = insets.getSystemWindowInsetTop();
             left = insets.getSystemWindowInsetLeft();
             right = insets.getSystemWindowInsetRight();
-            bottom = insets.getSystemWindowInsetBottom();
             navBottom = insets.getStableInsetBottom();
+            int all = insets.getSystemWindowInsetBottom();
+            ime = all > navBottom ? all : 0;
         }
         FrameLayout.LayoutParams page = (FrameLayout.LayoutParams) web.getLayoutParams();
-        page.setMargins(left, top, right, bottom);
+        page.setMargins(left, 0, right, ime);
         web.setLayoutParams(page);
-        statusScrim.getLayoutParams().height = top;
-        statusScrim.requestLayout();
-        navScrim.getLayoutParams().height = bottom;
-        navScrim.requestLayout();
+        float density = getResources().getDisplayMetrics().density;
+        insetTop = top / density;
+        insetBottom = ime > 0 ? 0 : navBottom / density;
+        pushInsets();
         FrameLayout.LayoutParams progress = (FrameLayout.LayoutParams) bar.getLayoutParams();
         progress.topMargin = top;
         bar.setLayoutParams(progress);
         stage.setInsets(top, navBottom);
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? WindowInsets.CONSUMED : insets.consumeSystemWindowInsets();
+    }
+
+    private void pushInsets() {
+        if (web == null) return;
+        web.evaluateJavascript(String.format(java.util.Locale.ROOT,
+                "(function(s){s.setProperty('--app-top','%.1fpx');s.setProperty('--app-bottom','%.1fpx');})"
+                        + "(document.documentElement.style)", insetTop, insetBottom), null);
     }
 
     /** Dark status and navigation icons for light pages, light icons for dark pages and the stage. */
@@ -227,20 +236,15 @@ public final class MainActivity extends Activity {
         }
     }
 
-    /** The page reported its background: the bars follow it with a short cross-fade. */
+    /** The page reported its background: the web view's own background (seen while it repaints) follows it. */
     private void setPageColor(int color) {
         if (color == pageColor) return;
         int from = pageColor;
         pageColor = color;
-        web.setBackgroundColor(color);
         ValueAnimator a = ValueAnimator.ofArgb(from, color);
         a.setDuration(Motion.MEDIUM);
         a.setInterpolator(Motion.STANDARD);
-        a.addUpdateListener(v -> {
-            int c = (int) v.getAnimatedValue();
-            statusScrim.setBackgroundColor(c);
-            navScrim.setBackgroundColor(c);
-        });
+        a.addUpdateListener(v -> web.setBackgroundColor((int) v.getAnimatedValue()));
         a.start();
         if (revealed && !stage.isUp()) darkIcons(Color.luminance(color) > 0.5f);
     }
@@ -259,7 +263,8 @@ public final class MainActivity extends Activity {
         s.setUserAgentString(s.getUserAgentString() + " FlowCarbonAndroid/" + versionName());
         CookieManager.getInstance().setAcceptCookie(true);
         w.setBackgroundColor(pageColor);
-        w.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        // the page draws its own pull-to-refresh and edges; a browser-style stretch on top of that would fight it
+        w.setOverScrollMode(View.OVER_SCROLL_NEVER);
         w.setWebViewClient(new Client());
         w.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -276,7 +281,7 @@ public final class MainActivity extends Activity {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri u = request.getUrl();
-            if ("https".equals(u.getScheme()) && appHost.equalsIgnoreCase(u.getHost())) return false;
+            if (appScheme.equals(u.getScheme()) && appHost.equalsIgnoreCase(u.getHost())) return false;
             openElsewhere(u);
             return true;
         }
@@ -287,7 +292,13 @@ public final class MainActivity extends Activity {
         }
 
         @Override
+        public void onPageCommitVisible(WebView view, String url) {
+            pushInsets();
+        }
+
+        @Override
         public void onPageFinished(WebView view, String url) {
+            pushInsets();
             bar.finish();
             view.evaluateJavascript(THEME_PROBE, null);
             updateBack();
@@ -347,8 +358,30 @@ public final class MainActivity extends Activity {
         /** a light tick, e.g. as a finger slides across the tab bar */
         @JavascriptInterface
         public void haptic() {
+            feel("tick");
+        }
+
+        /** tick (selection moves), confirm (something succeeded), reject (a refusal), press (a firm tap) */
+        @JavascriptInterface
+        public void feel(String kind) {
+            int effect;
+            switch (kind == null ? "" : kind) {
+                case "confirm":
+                    effect = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                            ? HapticFeedbackConstants.CONFIRM : HapticFeedbackConstants.VIRTUAL_KEY;
+                    break;
+                case "reject":
+                    effect = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                            ? HapticFeedbackConstants.REJECT : HapticFeedbackConstants.LONG_PRESS;
+                    break;
+                case "press":
+                    effect = HapticFeedbackConstants.VIRTUAL_KEY;
+                    break;
+                default:
+                    effect = HapticFeedbackConstants.CLOCK_TICK;
+            }
             runOnUiThread(() -> {
-                if (web != null) web.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                if (web != null) web.performHapticFeedback(effect);
             });
         }
     }
@@ -364,6 +397,21 @@ public final class MainActivity extends Activity {
         String alpha = m.group(4);
         if (alpha != null && Float.parseFloat(alpha) < 0.5f) return 0; // transparent body: keep the current colour
         return Color.rgb(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
+    }
+
+    /** A link to this app's own site (an App Link from an email, a launcher shortcut), or null. */
+    private String linkFrom(Intent intent) {
+        Uri data = intent == null ? null : intent.getData();
+        if (data == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return null;
+        return appScheme.equals(data.getScheme()) && appHost.equalsIgnoreCase(data.getHost()) ? data.toString() : null;
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String link = linkFrom(intent);
+        if (link != null && web != null && !stage.isOffline()) web.loadUrl(link);
     }
 
     private void openElsewhere(Uri uri) {

@@ -123,17 +123,19 @@ export const invitations = pgTable(
 );
 
 /**
- * One-time codes sent by email, to sign in without a password or to reset it. Only a hash is stored; a code lives
+ * One-time codes sent by email: to continue (sign in, or sign up when the address has no account yet), to reset a
+ * password, and the short-lived sign-up ticket a verified new address receives. Only a hash is stored; a code lives
  * minutes, allows a few attempts, and is consumed on use. Issuing a new code retires the previous one.
  */
 export const emailCodes = pgTable(
   "email_codes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    /** sign_in | password_reset */
+    /** null while the address has no account (sign-up) */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    /** lower-cased address the code was sent to */
+    email: text("email").notNull(),
+    /** continue | sign_in | password_reset | signup_ticket */
     purpose: text("purpose").notNull(),
     codeHash: text("code_hash").notNull(),
     attempts: integer("attempts").notNull().default(0),
@@ -141,7 +143,10 @@ export const emailCodes = pgTable(
     consumedAt: ts("consumed_at"),
     createdAt: ts("created_at").notNull().defaultNow(),
   },
-  (t) => [index("email_codes_user_idx").on(t.userId, t.purpose)],
+  (t) => [
+    index("email_codes_user_idx").on(t.userId, t.purpose),
+    index("email_codes_email_idx").on(t.email, t.purpose),
+  ],
 );
 
 /** Append-only record of every mutation. */

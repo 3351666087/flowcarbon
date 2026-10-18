@@ -2,9 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ApiError, api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { tick } from "./glass";
 import { useLiquid } from "./liquid";
 
 /** Whether this server can email codes (it needs an SMTP relay configured). */
@@ -14,39 +15,6 @@ export function useAuthMethods() {
     queryFn: () => unwrap(api.GET("/api/v1/auth/methods")),
     staleTime: 5 * 60_000,
   });
-}
-
-/**
- * Sends one-time codes by email and paces the resend button: the server sends at most one code per 45 seconds and
- * answers the same whether or not the address has an account, so the form cannot tell either.
- */
-export function useCodeSender(purpose: "sign_in" | "password_reset") {
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [until, setUntil] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (until <= now) return;
-    const id = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(id);
-  }, [until, now]);
-
-  async function send(email: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await unwrap(api.POST("/api/v1/auth/code", { body: { email, purpose } }));
-      setSentTo(email);
-      setUntil(Date.now() + 45_000);
-      setNow(Date.now());
-    } catch (err) {
-      setError(err);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return { send, sentTo, busy, error, wait: Math.max(0, Math.ceil((until - now) / 1000)) };
 }
 
 /** A message for errors from the code endpoints, in the reader's language where the cause is known. */
@@ -92,7 +60,10 @@ export function Segmented<K extends string>({
           role="tab"
           aria-selected={value === o.key}
           data-liquid-key={o.key}
-          onClick={() => onChange(o.key)}
+          onClick={() => {
+            if (value !== o.key) tick();
+            onChange(o.key);
+          }}
           className={clsx(
             "fc-press relative z-10 flex-1 rounded-full py-1.5 text-[13px] font-medium",
             value === o.key ? "text-text" : "text-muted",

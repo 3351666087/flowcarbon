@@ -1,3 +1,6 @@
+/** cookie holding the reader's language, read by the server for the first paint */
+export const LOCALE_COOKIE = "fc_locale";
+
 export type Locale = "en" | "zh";
 
 const intl = (locale: Locale) => (locale === "zh" ? "zh-CN" : "en-GB");

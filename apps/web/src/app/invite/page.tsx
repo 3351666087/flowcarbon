@@ -9,6 +9,7 @@ import {
   GroupField,
   groupInput,
   RememberRow,
+  StepHeader,
   useRemember,
 } from "@/components/auth-stage";
 import { Mark } from "@/components/mark";
@@ -50,55 +51,58 @@ export default function InvitePage() {
   }
 
   return (
-    <AuthStage title={t.invite.title} onSubmit={submit} shake={refusals}>
-      {token === "" ? (
-        <div className="mb-4">
-          <ErrorBox error={new Error(t.invite.missing)} />
-        </div>
-      ) : null}
-      <FieldGroup>
-        <GroupField label={t.invite.name}>
-          <input
-            required
-            autoComplete="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className={groupInput}
+    <AuthStage shake={refusals}>
+      <form onSubmit={submit}>
+        <StepHeader title={t.invite.title} />
+        {token === "" ? (
+          <div className="mb-4">
+            <ErrorBox error={new Error(t.invite.missing)} />
+          </div>
+        ) : null}
+        <FieldGroup>
+          <GroupField label={t.invite.name}>
+            <input
+              required
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={groupInput}
+            />
+          </GroupField>
+          <GroupField label={t.invite.password}>
+            <input
+              type="password"
+              required
+              minLength={12}
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={groupInput}
+            />
+          </GroupField>
+        </FieldGroup>
+        {inApp ? null : (
+          <RememberRow
+            label={t.login.remember}
+            hint={t.login.rememberHint}
+            remember={remember}
+            setRemember={setRemember}
           />
-        </GroupField>
-        <GroupField label={t.invite.password}>
-          <input
-            type="password"
-            required
-            minLength={12}
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={groupInput}
-          />
-        </GroupField>
-      </FieldGroup>
-      {inApp ? null : (
-        <RememberRow
-          label={t.login.remember}
-          hint={t.login.rememberHint}
-          remember={remember}
-          setRemember={setRemember}
-        />
-      )}
-      {error ? (
-        <div className="mt-4">
-          <ErrorBox error={error} />
-        </div>
-      ) : null}
-      <button
-        type="submit"
-        disabled={busy || !token}
-        className="fc-prominent fc-press mt-5 flex h-[52px] w-full items-center justify-center gap-2 rounded-full text-[15px] font-semibold disabled:opacity-60"
-      >
-        {busy ? <Mark motion="breathe" className="size-5" /> : null}
-        {t.invite.submit}
-      </button>
+        )}
+        {error ? (
+          <div className="mt-4">
+            <ErrorBox error={error} />
+          </div>
+        ) : null}
+        <button
+          type="submit"
+          disabled={busy || !token}
+          className="fc-prominent fc-press mt-5 flex h-[52px] w-full items-center justify-center gap-2 rounded-full text-[15px] font-semibold disabled:opacity-60"
+        >
+          {busy ? <Mark motion="breathe" className="size-5" /> : null}
+          {t.invite.submit}
+        </button>
+      </form>
     </AuthStage>
   );
 }

@@ -13,4 +13,5 @@
     <!-- page backgrounds of the web app (globals.css) -->
     <color name="fc_page_light">#FFF5F6F8</color>
     <color name="fc_page_dark">#FF0D1117</color>
+    <color name="fc_shortcut_bg">#E2F3F1</color>
 </resources>

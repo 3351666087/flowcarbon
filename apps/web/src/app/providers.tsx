@@ -4,9 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { MaterialLight } from "@/components/glass";
 import { ApiError } from "@/lib/api";
+import type { Locale } from "@/lib/format";
 import { I18nProvider } from "@/lib/i18n";
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ locale, children }: { locale: Locale; children: ReactNode }) {
   const [client] = useState(
     () =>
       new QueryClient({
@@ -22,7 +23,7 @@ export function Providers({ children }: { children: ReactNode }) {
   );
   return (
     <QueryClientProvider client={client}>
-      <I18nProvider>
+      <I18nProvider initial={locale}>
         <MaterialLight />
         {children}
       </I18nProvider>

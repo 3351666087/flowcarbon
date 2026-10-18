@@ -43,6 +43,13 @@
       "when": 1792336221804,
       "tag": "0005_email_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792338404157,
+      "tag": "0006_email_codes_by_address",
+      "breakpoints": true
     }
   ]
 }

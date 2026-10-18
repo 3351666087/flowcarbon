@@ -168,6 +168,7 @@ export function TabBar({
         aria-current={on ? "page" : undefined}
         className={cls}
         draggable={false}
+        onClick={() => !on && tick()}
       >
         {body}
       </Link>
@@ -199,7 +200,7 @@ export function TabBar({
           />
           <div
             role="menu"
-            className="fc-glass fc-glass-strong fc-bloom fixed right-3 bottom-[calc(max(12px,env(safe-area-inset-bottom))+76px)] z-40 w-60 origin-bottom-right rounded-[28px] p-1.5 lg:hidden"
+            className="fc-glass fc-glass-strong fc-bloom fixed right-3 bottom-[calc(max(12px,calc(var(--app-bottom)+8px))+76px)] z-40 w-60 origin-bottom-right rounded-[28px] p-1.5 lg:hidden"
           >
             {rest.map(({ key, href, label, icon: Icon }) => (
               <Link
@@ -220,7 +221,7 @@ export function TabBar({
           </div>
         </>
       ) : null}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,env(safe-area-inset-bottom))] lg:hidden">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-3 pb-[max(12px,calc(var(--app-bottom)+8px))] lg:hidden">
         <nav
           ref={bar.ref}
           style={bar.style}

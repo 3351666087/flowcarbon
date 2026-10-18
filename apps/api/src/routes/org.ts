@@ -7,6 +7,7 @@ import type { RouteDeps } from "../app";
 import { audit } from "../audit";
 import { orgAccess, requireOrg } from "../auth/access";
 import { canGrant } from "../auth/permissions";
+import { requireUser } from "../auth/principal";
 import { conflict, forbidden, notFound, unprocessable } from "../errors";
 import { invitationMessage } from "../mail";
 import {
@@ -19,6 +20,7 @@ import {
   timestamp,
   uuid,
 } from "../schemas";
+import { slugFor } from "./auth";
 
 const member = z.object({
   userId: uuid,
@@ -60,6 +62,93 @@ const factor = z.object({
 });
 
 export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config, mailer }) => {
+  // ---- creating and joining ------------------------------------------------------------------------------
+  const created = z.object({ id: uuid, slug: z.string(), name: z.string() });
+
+  app.post(
+    "/orgs",
+    {
+      config: { rateLimit: { max: 5, timeWindow: "1 hour" } },
+      schema: {
+        tags: ["organisation"],
+        summary: "Create an organisation; the caller owns it",
+        body: z.object({ name: z.string().trim().min(2).max(120) }),
+        response: { 201: created, ...errorResponses },
+      },
+    },
+    async (req, reply) => {
+      const u = requireUser(req);
+      const org = await db.transaction(async (tx) => {
+        const [o] = await tx
+          .insert(schema.organizations)
+          .values({ name: req.body.name, slug: slugFor(req.body.name) })
+          .returning({
+            id: schema.organizations.id,
+            slug: schema.organizations.slug,
+            name: schema.organizations.name,
+          });
+        await tx.insert(schema.memberships).values({ orgId: o!.id, userId: u.userId, role: "owner" });
+        await tx.execute(sql`select set_config('app.org_id', ${o!.id}, true)`);
+        await audit(
+          tx,
+          req,
+          { orgId: o!.id, actor: { type: "user", id: u.userId } },
+          {
+            action: "organisation.create",
+            entityType: "organisation",
+            entityId: o!.id,
+            data: { name: o!.name },
+          },
+        );
+        return o!;
+      });
+      return reply.status(201).send(org);
+    },
+  );
+
+  app.post(
+    "/orgs/demo/join",
+    {
+      schema: {
+        tags: ["organisation"],
+        summary: "Join the demo organisation read-only (DEMO_ORG_SLUG), to explore with simulated data",
+        response: { 200: created, ...errorResponses },
+      },
+    },
+    async (req) => {
+      const u = requireUser(req);
+      if (!config.DEMO_ORG_SLUG) throw notFound("Demo organisation");
+      const [org] = await db
+        .select({
+          id: schema.organizations.id,
+          slug: schema.organizations.slug,
+          name: schema.organizations.name,
+        })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.slug, config.DEMO_ORG_SLUG));
+      if (!org) throw notFound("Demo organisation");
+      const [joined] = await db
+        .insert(schema.memberships)
+        .values({ orgId: org.id, userId: u.userId, role: "viewer" })
+        .onConflictDoNothing()
+        .returning({ orgId: schema.memberships.orgId });
+      if (joined)
+        await withOrg(db, org.id, (tx) =>
+          audit(
+            tx,
+            req,
+            { orgId: org.id, actor: { type: "user", id: u.userId } },
+            {
+              action: "member.join_demo",
+              entityType: "membership",
+              entityId: u.userId,
+            },
+          ),
+        );
+      return org;
+    },
+  );
+
   app.get(
     "/orgs/:orgId",
     {

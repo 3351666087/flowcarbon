@@ -81,6 +81,8 @@ in `CORS_ORIGINS`.
 | `SESSION_IDLE_HOURS`, `SESSION_MAX_DAYS` | api | 12, 7 | sliding sessions with an absolute limit; the cookie ends with the browser session |
 | `SESSION_REMEMBER_DAYS`, `SESSION_REMEMBER_MAX_DAYS` | api | 30, 90 | the same for "keep me signed in" (always on in the Android app); the cookie is renewed as the session slides |
 | `SMTP_URL`, `MAIL_FROM` | api | — | outgoing mail through an SMTP relay, e.g. `smtps://user:app-password@smtp.gmail.com:465`; enables sign-in and password-reset codes and emailed invitations. Use the provider's submission port (465/587): cloud servers usually block port 25, and a relay keeps SPF/DKIM and reputation with the provider |
+| `SIGNUP_OPEN` | api | `false` | anyone who proves an email address (by code) may create an account, with a password; otherwise accounts come by invitation. Needs `SMTP_URL` |
+| `DEMO_ORG_SLUG` | api | — | organisation new accounts may join read-only to explore (e.g. `tower-a-demo` from the seed) |
 | `RATE_LIMIT_PER_MINUTE`, `LOGIN_ATTEMPTS_PER_15_MIN` | api | 600, 10 | per IP or per API key |
 | `METRICS_TOKEN` | api | — | bearer token for `/metrics`; without it `/metrics` is closed in production |
 | `DOCS_ENABLED` | api | true | OpenAPI UI at `/api/v1/docs` |

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- long-press the app icon: straight to a page; /go/<page> finds the organisation and building -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_findings"
+        android:shortcutId="findings"
+        android:shortcutLongLabel="@string/shortcut_findings"
+        android:shortcutShortLabel="@string/shortcut_findings">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="http://localhost:3000/go/findings"
+            android:targetClass="org.veritybench.flowcarbon.MainActivity"
+            android:targetPackage="org.veritybench.flowcarbon.dev" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_floors"
+        android:shortcutId="floors"
+        android:shortcutLongLabel="@string/shortcut_floors"
+        android:shortcutShortLabel="@string/shortcut_floors">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="http://localhost:3000/go/floors"
+            android:targetClass="org.veritybench.flowcarbon.MainActivity"
+            android:targetPackage="org.veritybench.flowcarbon.dev" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_requests"
+        android:shortcutId="requests"
+        android:shortcutLongLabel="@string/shortcut_requests"
+        android:shortcutShortLabel="@string/shortcut_requests">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="http://localhost:3000/go/requests"
+            android:targetClass="org.veritybench.flowcarbon.MainActivity"
+            android:targetPackage="org.veritybench.flowcarbon.dev" />
+    </shortcut>
+</shortcuts>

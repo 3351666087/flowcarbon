@@ -9,4 +9,7 @@
     <string name="retry">重试</string>
     <string name="downloading">正在下载 %1$s</string>
     <string name="download_failed">无法开始下载</string>
+    <string name="shortcut_findings">节能机会</string>
+    <string name="shortcut_floors">楼层总览</string>
+    <string name="shortcut_requests">加班申请</string>
 </resources>

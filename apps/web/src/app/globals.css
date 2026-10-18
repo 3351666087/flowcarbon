@@ -2,6 +2,9 @@
 
 /* Design tokens. Light by default, dark when the system asks for it or the user picks it. */
 :root {
+  /* where the system bars are: the Android app sets these (it draws edge to edge), browsers use the safe area */
+  --app-top: env(safe-area-inset-top, 0px);
+  --app-bottom: env(safe-area-inset-bottom, 0px);
   --bg: #f5f6f8;
   --surface: #ffffff;
   --surface-2: #f0f2f5;
@@ -689,6 +692,105 @@ body {
     transform: translateX(14px);
   }
 
+  /* one-time code boxes: the box waiting for a digit glows, a digit pops in, a refusal turns them red */
+  .fc-otp-current {
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / 0.06),
+      inset 0 0 0 1.5px var(--accent),
+      0 0 0 4px var(--ring);
+  }
+  .fc-otp-error {
+    box-shadow:
+      inset 0 1px 2px rgb(0 0 0 / 0.06),
+      inset 0 0 0 1.5px var(--danger);
+  }
+  .fc-otp-digit {
+    animation: fc-pop 360ms var(--spring-bouncy) backwards;
+  }
+  .fc-otp-caret {
+    width: 2px;
+    height: 1.1em;
+    border-radius: 1px;
+    background: var(--accent);
+    animation: fc-caret 1s steps(1) infinite;
+  }
+
+  /* a selectable card (sign-up's "where to start"): the chosen one lifts and takes the accent rim */
+  .fc-choice-on {
+    background: color-mix(in oklab, var(--accent) 9%, var(--glass-field));
+    box-shadow:
+      inset 0 0 0 1.5px var(--accent),
+      0 10px 24px -16px color-mix(in oklab, var(--accent) 80%, transparent);
+  }
+
+  /* the sign-in sheet changes shape between steps; each step slides in from the side it comes from */
+  .fc-morph {
+    overflow: clip;
+    transition: height 560ms var(--spring);
+  }
+  .fc-step-fwd {
+    animation: fc-step-fwd 520ms var(--ease-enter) backwards;
+  }
+  .fc-step-back {
+    animation: fc-step-back 520ms var(--ease-enter) backwards;
+  }
+
+  /* the account sheet rises over a dimmed page and sinks back */
+  .fc-scrim {
+    background: rgb(4 10 14 / 0.36);
+    animation: fc-fade 300ms var(--ease-standard) backwards;
+  }
+  .fc-scrim-out {
+    opacity: 0;
+    transition: opacity 240ms var(--ease-exit);
+  }
+  .fc-sheet {
+    animation: fc-sheet-in 620ms var(--spring) backwards;
+    transition: transform 380ms var(--spring);
+  }
+  .fc-sheet-out {
+    transform: translateY(110%);
+    transition: transform 260ms var(--ease-exit);
+  }
+  @media (min-width: 64rem) {
+    .fc-sheet {
+      animation-name: fc-bloom;
+      transform-origin: 0% 100%;
+    }
+    .fc-sheet-out {
+      transform: scale(0.96);
+      opacity: 0;
+      transition:
+        transform 200ms var(--ease-exit),
+        opacity 200ms var(--ease-exit);
+    }
+  }
+
+  /* pull to refresh: the disc follows the finger, turning, and springs home on release */
+  .fc-ptr {
+    position: fixed;
+    top: calc(var(--app-top) + 52px);
+    left: 50%;
+    z-index: 25;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, calc(var(--pull) - 56px)) scale(0.6);
+    transition:
+      transform 460ms var(--spring),
+      opacity 240ms var(--ease-standard);
+  }
+  .fc-ptr[data-active] {
+    opacity: 1;
+    transform: translate(-50%, calc(var(--pull) - 56px)) scale(0.86);
+    transition-duration: 60ms, 160ms;
+  }
+  .fc-ptr[data-armed] {
+    transform: translate(-50%, calc(var(--pull) - 56px)) scale(1);
+  }
+  .fc-ptr-mark {
+    transform: rotate(var(--turn));
+  }
+
   /* the app icon's tile: the brand gradient with a little depth, like a layered home-screen icon */
   .fc-tile {
     border-radius: 28%;
@@ -748,3 +850,75 @@ input:-webkit-autofill:focus {
   }
 }
 /* biome-ignore-end lint/complexity/noImportantStyles: reduced motion must beat every component's own timing */
+
+@keyframes fc-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.6);
+  }
+}
+@keyframes fc-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes fc-step-fwd {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes fc-step-back {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+@keyframes fc-sheet-in {
+  from {
+    transform: translateY(105%);
+  }
+}
+
+/* language and theme switches dissolve the page into its new state (View Transitions) */
+::view-transition-old(root) {
+  animation: fc-vt-out 220ms var(--ease-exit) both;
+}
+::view-transition-new(root) {
+  animation: fc-vt-in 380ms var(--ease-enter) both;
+}
+@keyframes fc-vt-out {
+  to {
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+@keyframes fc-vt-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+
+/* inside the Android app: no tap flashes, no text selection on interface chrome, no rubber-band page */
+[data-app] {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+[data-app] body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+[data-app] :is(input, textarea, [contenteditable], .selectable) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* screens that should not scroll as a page (the welcome and sign-in stage) */
+html.fc-locked,
+html.fc-locked body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}

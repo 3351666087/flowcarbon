@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { Locale } from "./format";
+import { flushSync } from "react-dom";
+import { LOCALE_COOKIE, type Locale } from "./format";
 
 const en = {
   appName: "FlowCarbon",
@@ -61,7 +62,7 @@ const en = {
     hours: "h",
     noData: "No data for this period yet.",
     errorTitle: "Something went wrong",
-    forbidden: "Your role does not include this page.",
+    forbidden: "Your role does not have access to this page.",
     requestId: "Request id",
     next: "Next page",
     actions: "Actions",
@@ -70,29 +71,91 @@ const en = {
     building: "Building",
   },
   login: {
-    title: "Sign in",
-    email: "Email",
-    password: "Password",
-    submit: "Sign in",
-    failed: "Email or password is incorrect.",
-    demo: "Demo accounts are created by the seed script (see README).",
-    subtitle: "Use the account your organisation set up for you.",
     hero: "See what an empty floor is costing you.",
-    heroSub: "People, cooling and lighting, floor by floor — and what switching off on time would save.",
+    heroSub: "People, cooling and lighting on every floor, and what switching off on time would save.",
     showPassword: "Show password",
     hidePassword: "Hide password",
     remember: "Keep me signed in",
     rememberHint: "For 30 days of inactivity. Turn off on a shared computer.",
-    withPassword: "Password",
-    withCode: "Email code",
     code: "Code",
     sendCode: "Send code",
-    resendIn: "Resend in {s}s",
-    resend: "Resend",
-    codeSent: "If {email} has an account, a 6-digit code is on its way. It works for 10 minutes.",
     codeWrong: "The code is wrong or has expired.",
     mailOff: "Email codes are not available on this server.",
+  },
+  auth: {
+    welcome: "Welcome to FlowCarbon",
+    welcomeSub: "Sign in or create an account with your work email.",
+    inviteOnly: "Continue with the work email your organisation invited.",
+    email: "Work email",
+    continue: "Continue",
+    remember: "Keep me signed in",
+    checkEmail: "Check your email",
+    verifyTitle: "Verify your email",
+    noAccount: "There is no account for {email} yet. Ask your organisation to invite you.",
+    newPassword: "Password, 12 characters or more",
+    codeSentTo: "Enter the 6-digit code we sent to {email}.",
+    change: "Change email",
+    resend: "Send a new code",
+    resendIn: "New code in {s} s",
+    noCode: "Nothing yet? It can take a minute; also look in spam.",
+    codeWrong: "That code did not work. Check it, or send a new one.",
+    passwordTitle: "Enter your password",
+    password: "Password",
     forgot: "Forgot password?",
+    signIn: "Sign in",
+    wrongPassword: "Email or password is incorrect.",
+    chooseTitle: "Choose an account",
+    chooseSub: "Accounts signed in on this device.",
+    another: "Use another account",
+    addTitle: "Add an account",
+    addSub: "Your other accounts stay signed in.",
+    back: "Back",
+    profileTitle: "Set up your account",
+    verified: "{email} is confirmed.",
+    name: "Your name",
+    startQuestion: "Where do you want to start?",
+    startDemo: "Explore the demo",
+    startDemoNote: "Read-only access to {name}, a simulated office tower that runs on live data.",
+    startOrg: "Set up my organisation",
+    startOrgNote: "You will own it. Add a building and invite your team next.",
+    orgName: "Organisation name",
+    create: "Create account",
+    mailOff: "Email sign-in is not available on this server.",
+    expired: "This sign-up timed out. Start again with your email.",
+    taken: "This email already has an account. Sign in instead.",
+  },
+  account: {
+    menu: "Account",
+    organisations: "Organisations",
+    newOrg: "New organisation",
+    orgName: "Organisation name",
+    create: "Create",
+    joinDemo: "Explore the demo",
+    device: "On this device",
+    add: "Add another account",
+    language: "Language",
+    appearance: "Appearance",
+    system: "System",
+    light: "Light",
+    dark: "Dark",
+    setPassword: "Set a password",
+    changePassword: "Change password",
+    currentPassword: "Current password",
+    newPassword: "New password, 12 characters or more",
+    save: "Save",
+    saved: "Password saved. Your other sessions were signed out.",
+    signOut: "Sign out",
+    signOutAll: "Sign out of all accounts",
+  },
+  setup: {
+    title: "Add your first building",
+    sub: "The basics are enough to start. Devices, tenants and tariffs can come later.",
+    name: "Building name",
+    city: "City",
+    floors: "Number of floors",
+    area: "Typical floor area (m²)",
+    submit: "Create building",
+    noAccess: "{org} has no buildings yet. An owner or administrator adds the first one.",
   },
   reset: {
     title: "Reset password",
@@ -128,7 +191,8 @@ const en = {
   },
   findings: {
     title: "Opportunities",
-    subtitle: "Hours a floor was cooled or lit beyond need. Rules decide; people choose what to do.",
+    subtitle:
+      "Hours when a floor was cooled or lit with nobody there to need it. Rules find them; you decide what to do.",
     rule: "Rule",
     when: "When",
     avoidable: "Avoidable",
@@ -155,7 +219,7 @@ const en = {
     dismissReason: "Why is this not waste?",
     ai: "AI explanation",
     aiHint:
-      "The assistant reads the evidence above and the forecast, recommends one action from the strategy list and cites its basis. It decides nothing.",
+      "The assistant reads this evidence and the forecast, suggests one action from the strategy list and says why. The decision stays with you.",
     aiRequest: "Explain this finding",
     aiPending: "Writing the explanation…",
     aiFailed: "No explanation",
@@ -171,7 +235,7 @@ const en = {
   forecast: {
     title: "Forecast",
     subtitle:
-      "Expected after-hours headcount per floor and the cooling schedule it suggests. Median of recent same-weekday values.",
+      "How many people to expect on each floor after hours, and the cooling that fits. Based on the median of recent same weekdays.",
     advice: { on_demand: "On demand", setback: "Setback", off: "Off" } as Record<string, string>,
     basis: "days of history",
     range: "range",
@@ -179,7 +243,7 @@ const en = {
   simulate: {
     title: "Simulate",
     subtitle:
-      "Annual savings per strategy, extrapolated from the last 28 days by day type, and how an energy performance contract would share them.",
+      "What each strategy would save in a year, scaled up from the last 28 days by day type, and how an energy performance contract would split it.",
     annualKwh: "Saving per year",
     annualCost: "Value per year",
     capex: "Investment",
@@ -205,12 +269,12 @@ const en = {
     scenarios: "Saved scenarios",
     never: "Never",
     simulatedNote:
-      "Figures come from simulated data and order-of-magnitude capex; replace with metered data and supplier quotes before signing anything.",
+      "These figures use simulated data and rough investment estimates. Switch to metered data and supplier quotes before you sign anything.",
   },
   requests: {
     title: "Overtime requests",
     subtitle:
-      "Tenants request cooling for their own floors; the system suggests full floor or a zone setback, the property manager decides.",
+      "Tenants ask for cooling on their own floors. FlowCarbon suggests a full floor or a zone setback, and the property manager decides.",
     new: "New request",
     start: "Start (building time)",
     duration: "Hours",
@@ -233,7 +297,7 @@ const en = {
   report: {
     title: "Energy & carbon report",
     subtitle:
-      "Electricity and Scope 2 for the office floors. An energy and carbon report — it supplies the figures for the environmental part of an ESG report, it is not one.",
+      "Electricity and Scope 2 emissions for the office floors. It supplies the figures for the environmental part of an ESG report, but it is not an ESG report.",
     period: "Period",
     totals: "Totals",
     energy: "Electricity",
@@ -331,20 +395,20 @@ const zh: Dict = {
   simulated: "模拟数据",
   nav: {
     floors: "楼层总览",
-    findings: "机会点",
+    findings: "节能机会",
     forecast: "预测",
     simulate: "策略模拟",
-    requests: "加时申请",
+    requests: "加班空调",
     report: "能源与碳报告",
     data: "设备与数据",
     settings: "组织设置",
   },
   navShort: {
     floors: "楼层",
-    findings: "机会点",
+    findings: "机会",
     forecast: "预测",
     simulate: "模拟",
-    requests: "申请",
+    requests: "加班",
     report: "报告",
     data: "数据",
     settings: "设置",
@@ -382,7 +446,7 @@ const zh: Dict = {
     hours: "小时",
     noData: "这段时间还没有数据。",
     errorTitle: "出错了",
-    forbidden: "你的角色无权查看此页面。",
+    forbidden: "你的角色看不到这个页面。",
     requestId: "请求编号",
     next: "下一页",
     actions: "操作",
@@ -391,29 +455,91 @@ const zh: Dict = {
     building: "楼宇",
   },
   login: {
-    title: "登录",
-    email: "邮箱",
-    password: "密码",
-    submit: "登录",
-    failed: "邮箱或密码不正确。",
-    demo: "演示账号由种子脚本创建（见 README）。",
-    subtitle: "使用所在组织为你开通的账号。",
     hero: "看清每一层空着时在花的钱。",
     heroSub: "按楼层对照人数、空调与照明，算出准点关闭能省下多少。",
     showPassword: "显示密码",
     hidePassword: "隐藏密码",
     remember: "保持登录",
     rememberHint: "30 天内不用才需重新登录。公用电脑请关闭。",
-    withPassword: "密码登录",
-    withCode: "验证码登录",
     code: "验证码",
     sendCode: "发送验证码",
-    resendIn: "{s} 秒后可重发",
-    resend: "重新发送",
-    codeSent: "如果 {email} 已注册，6 位验证码已发出，10 分钟内有效。",
     codeWrong: "验证码错误或已过期。",
     mailOff: "此服务器未开通邮件验证码。",
+  },
+  auth: {
+    welcome: "欢迎使用 FlowCarbon",
+    welcomeSub: "用工作邮箱登录，或注册一个新账号。",
+    inviteOnly: "请用组织邀请你时填写的工作邮箱。",
+    email: "工作邮箱",
+    continue: "继续",
+    remember: "保持登录",
+    checkEmail: "查收验证码",
+    verifyTitle: "验证邮箱",
+    noAccount: "{email} 还没有账号。请联系你的组织发出邀请。",
+    newPassword: "设置密码，至少 12 个字符",
+    codeSentTo: "输入发到 {email} 的 6 位验证码。",
+    change: "换个邮箱",
+    resend: "重新发送",
+    resendIn: "{s} 秒后可重发",
+    noCode: "还没收到？可能要等一分钟，也看看垃圾邮件。",
+    codeWrong: "验证码不对。核对一下，或者重新发一个。",
+    passwordTitle: "输入密码",
+    password: "密码",
     forgot: "忘记密码？",
+    signIn: "登录",
+    wrongPassword: "邮箱或密码不对。",
+    chooseTitle: "选择账号",
+    chooseSub: "这台设备上已登录的账号。",
+    another: "使用其他账号",
+    addTitle: "添加账号",
+    addSub: "其他账号会保持登录。",
+    back: "返回",
+    profileTitle: "完善账号",
+    verified: "{email} 已验证。",
+    name: "你的名字",
+    startQuestion: "想从哪里开始？",
+    startDemo: "先看演示",
+    startDemoNote: "只读访问「{name}」：一栋用模拟数据实时运行的写字楼。",
+    startOrg: "创建我的组织",
+    startOrgNote: "你是组织的所有者，接下来添加楼宇、邀请同事。",
+    orgName: "组织名称",
+    create: "创建账号",
+    mailOff: "这台服务器没有开通邮箱登录。",
+    expired: "注册已超时，请用邮箱重新开始。",
+    taken: "这个邮箱已经有账号了，直接登录就好。",
+  },
+  account: {
+    menu: "账号",
+    organisations: "组织",
+    newOrg: "新建组织",
+    orgName: "组织名称",
+    create: "创建",
+    joinDemo: "看看演示",
+    device: "这台设备上",
+    add: "添加其他账号",
+    language: "语言",
+    appearance: "外观",
+    system: "跟随系统",
+    light: "浅色",
+    dark: "深色",
+    setPassword: "设置密码",
+    changePassword: "修改密码",
+    currentPassword: "当前密码",
+    newPassword: "新密码，至少 12 个字符",
+    save: "保存",
+    saved: "密码已保存，其他设备上的登录已退出。",
+    signOut: "退出登录",
+    signOutAll: "退出所有账号",
+  },
+  setup: {
+    title: "添加第一栋楼",
+    sub: "先填基本信息就能开始，设备、租户和电价可以之后再补。",
+    name: "楼宇名称",
+    city: "城市",
+    floors: "楼层数",
+    area: "标准层面积（m²）",
+    submit: "创建楼宇",
+    noAccess: "「{org}」还没有楼宇，需要所有者或管理员先添加第一栋。",
   },
   reset: {
     title: "重置密码",
@@ -449,7 +575,7 @@ const zh: Dict = {
   },
   findings: {
     title: "机会点",
-    subtitle: "楼层在不需要时仍在供冷或亮灯的时段。判断由规则给出，做不做由人决定。",
+    subtitle: "没人需要时仍在供冷或亮灯的时段。规则负责找出来，怎么处理由你决定。",
     rule: "规则",
     when: "时间",
     avoidable: "可省",
@@ -470,8 +596,8 @@ const zh: Dict = {
     reopen: "重新打开",
     dismissReason: "为什么不算浪费？",
     ai: "AI 解释",
-    aiHint: "助手只读取上面的证据和预测，从策略库中推荐一个动作并注明依据，不做任何决定。",
-    aiRequest: "解释这个机会点",
+    aiHint: "助手只看上面的证据和预测，从策略库里推荐一个做法并说明理由。决定权在你。",
+    aiRequest: "让助手解释",
     aiPending: "正在生成解释…",
     aiFailed: "未能生成解释",
     aiWhat: "发生了什么",
@@ -485,14 +611,14 @@ const zh: Dict = {
   },
   forecast: {
     title: "预测",
-    subtitle: "各楼层下班后的预计人数及对应的空调排程建议，取近几周同一星期几的中位数。",
+    subtitle: "下班后每层大概会有多少人、空调该怎么排。按最近几周同一天的中位数估算。",
     advice: { on_demand: "按需供冷", setback: "节能档", off: "关闭" },
     basis: "天历史数据",
     range: "区间",
   },
   simulate: {
     title: "策略模拟",
-    subtitle: "按日类型把近 28 天外推到全年的各策略节能量，以及合同能源管理下如何分成。",
+    subtitle: "每种策略一年能省多少（由近 28 天按日类型推算），以及合同能源管理下怎么分成。",
     annualKwh: "年节电量",
     annualCost: "年节省金额",
     capex: "投资",
@@ -517,11 +643,11 @@ const zh: Dict = {
     scenarioName: "方案名称",
     scenarios: "已保存方案",
     never: "无法回本",
-    simulatedNote: "数字来自模拟数据和量级估算的投资额；签约前请换成实测数据和供应商报价。",
+    simulatedNote: "这些数字基于模拟数据和粗略的投资估算。签约前请换成实测数据和供应商报价。",
   },
   requests: {
-    title: "加时申请",
-    subtitle: "租户只为自己的楼层申请供冷；系统建议全层供冷或区域节能档，由物业决定。",
+    title: "加班空调申请",
+    subtitle: "租户为自己的楼层申请加班空调。系统会建议开全层还是区域节能档，最后由物业决定。",
     new: "新申请",
     start: "开始时间（楼宇当地时间）",
     duration: "时长（小时）",
@@ -538,8 +664,7 @@ const zh: Dict = {
   },
   report: {
     title: "能源与碳报告",
-    subtitle:
-      "办公楼层的用电量和范围二排放。这是能源与碳报告，为 ESG 报告的环境部分提供数据，本身不是 ESG 报告。",
+    subtitle: "办公楼层的用电和范围二排放。它为 ESG 报告的环境部分提供数据，但本身不是 ESG 报告。",
     period: "报告期",
     totals: "合计",
     energy: "用电量",
@@ -597,7 +722,7 @@ const zh: Dict = {
       nightWindow: "夜间时段",
       threshold: "人数阈值",
       zoneOnlyFraction: "区域供冷能耗比例",
-      ownOvertimeApproved: "本层有已批准加时",
+      ownOvertimeApproved: "本层加班空调已批准",
       ownRequestEnded: "本层申请结束于",
       ownRequestStarts: "本层申请开始于",
     },
@@ -630,14 +755,14 @@ const zh: Dict = {
             : f.ownRequestStarts
               ? `本层申请 ${f.ownRequestStarts} 才开始`
               : "本层没有申请";
-          return `${f.floor} 在非工作日（${f.window}）供冷 ${f.hours} 小时，${own}，且无人计数；同时有 ${f.requestingFloors} 个其他楼层有已批准的加时。可省 ${kwh} kWh。`;
+          return `${f.floor} 在非工作日（${f.window}）供冷 ${f.hours} 小时，${own}，且无人计数；同时另有 ${f.requestingFloors} 个楼层的加班空调已获批准。可省 ${kwh} kWh。`;
         }
         case "hvac_empty_floor":
           return `${f.floor} 在无人时仍在供冷（${f.window}），已扣除 ${f.graceMinutes} 分钟宽限。可省 ${kwh} kWh。`;
         case "lights_on_empty_night":
           return `${f.floor} 夜间无人但灯仍亮着（${f.window}）。可省 ${kwh} kWh。`;
         case "full_floor_few_people":
-          return `${f.floor} 为最多 ${f.peakPeople} 人开了全层供冷（${f.window}），区域节能档即可满足。可省 ${kwh} kWh。`;
+          return `${f.floor} 最多只有 ${f.peakPeople} 人，却开了全层供冷（${f.window}），区域节能档就够了。可省 ${kwh} kWh。`;
         default:
           return null;
       }
@@ -681,22 +806,20 @@ interface I18n {
 
 const Ctx = createContext<I18n | null>(null);
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("en");
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "en" || saved === "zh") setLocaleState(saved);
-      else if (navigator.language.toLowerCase().startsWith("zh")) setLocaleState("zh");
-    } catch {
-      // storage can be unavailable (private mode); the default stays
-    }
-  }, []);
+/** The language also lives in a cookie (LOCALE_COOKIE), so the server renders the first paint in it. */
+export function I18nProvider({ initial, children }: { initial: Locale; children: ReactNode }) {
+  const [locale, setLocaleState] = useState<Locale>(initial);
   useEffect(() => {
     document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
   }, [locale]);
+  // a switch dissolves the old language into the new one instead of jumping (View Transitions, where supported)
   const setLocale = useCallback((l: Locale) => {
-    setLocaleState(l);
+    const apply = () => flushSync(() => setLocaleState(l));
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced && typeof document.startViewTransition === "function") document.startViewTransition(apply);
+    else apply();
+    // biome-ignore lint/suspicious/noDocumentCookie: a plain preference cookie the server reads for the first paint
+    document.cookie = `${LOCALE_COOKIE}=${l}; path=/; max-age=31536000; samesite=lax`;
     try {
       localStorage.setItem(STORAGE_KEY, l);
     } catch {

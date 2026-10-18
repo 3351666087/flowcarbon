@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.veritybench.flowcarbon",
+      "sha256_cert_fingerprints": [
+        "85:7B:2D:4E:DC:EA:3B:CC:74:12:D5:E7:14:7A:96:08:ED:DE:45:FD:44:FE:D9:D1:06:11:4E:89:E3:A4:F7:E0"
+      ]
+    }
+  }
+]

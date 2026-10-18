@@ -73,7 +73,7 @@ const codeBlock = (code: string) =>
   `<div style="margin:20px 0;font-size:32px;font-weight:700;letter-spacing:8px;font-family:'SF Mono',Menlo,Consolas,monospace">${code}</div>`;
 
 export function codeMessage(
-  purpose: "sign_in" | "password_reset",
+  purpose: "continue" | "password_reset",
   locale: string,
   to: string,
   code: string,
@@ -82,33 +82,33 @@ export function codeMessage(
   const l = pick(locale);
   const t = {
     en: {
-      sign_in: {
-        subject: `${code} is your FlowCarbon sign-in code`,
-        title: "Your sign-in code",
-        lead: "Enter this code to sign in to FlowCarbon:",
+      continue: {
+        subject: `${code} is your FlowCarbon verification code`,
+        title: "Confirm your email",
+        lead: "Enter this code to confirm your email and finish creating your FlowCarbon account.",
       },
       password_reset: {
         subject: `${code} is your FlowCarbon password reset code`,
         title: "Reset your password",
-        lead: "Enter this code to choose a new password:",
+        lead: "Enter this code to choose a new password.",
       },
-      expires: `It expires in ${minutes} minutes and works once.`,
+      expires: `The code works once, for ${minutes} minutes.`,
       footer:
-        "If you did not ask for this code, you can ignore this email; nobody can use it without access to your inbox.",
+        "If you did not ask for this, you can ignore this email. Nobody can use the code without access to your inbox.",
     },
     zh: {
-      sign_in: {
-        subject: `FlowCarbon 登录验证码：${code}`,
-        title: "登录验证码",
-        lead: "输入以下验证码登录 FlowCarbon：",
+      continue: {
+        subject: `FlowCarbon 验证码：${code}`,
+        title: "确认你的邮箱",
+        lead: "输入这个验证码，确认邮箱并完成 FlowCarbon 注册。",
       },
       password_reset: {
         subject: `FlowCarbon 重置密码验证码：${code}`,
         title: "重置密码",
-        lead: "输入以下验证码设置新密码：",
+        lead: "输入这个验证码来设置新密码。",
       },
-      expires: `${minutes} 分钟内有效，仅可使用一次。`,
-      footer: "如果不是你本人操作，请忽略此邮件；没有你的邮箱就无法使用该验证码。",
+      expires: `验证码 ${minutes} 分钟内有效，只能用一次。`,
+      footer: "如果不是你本人操作，忽略这封邮件即可。没有你的邮箱，别人用不了这个验证码。",
     },
   }[l];
   const m = t[purpose];
@@ -129,8 +129,8 @@ export function invitationMessage(
 ): MailMessage {
   // the invitee's language is unknown, so the invitation is written in both
   const date = expiresAt.toISOString().slice(0, 10);
-  const en = `${inviter ? `${inviter} invited you` : "You are invited"} to join ${orgName} on FlowCarbon.`;
-  const zh = `${inviter ? `${inviter} 邀请你` : "你受邀"}加入 FlowCarbon 上的「${orgName}」。`;
+  const en = `${inviter ? `${inviter} has invited you` : "You have been invited"} to join ${orgName} on FlowCarbon.`;
+  const zh = `${inviter ? `${inviter} 邀请你` : "有人邀请你"}加入 FlowCarbon 上的「${orgName}」。`;
   const button = `<a href="${escapeHtml(acceptUrl)}" style="display:inline-block;margin:20px 0;padding:12px 22px;border-radius:999px;background:#0d7068;color:#ffffff;text-decoration:none;font-weight:600">Accept · 接受邀请</a>`;
   return {
     to,
@@ -139,7 +139,7 @@ export function invitationMessage(
     html: layout(
       "FlowCarbon",
       `${escapeHtml(en)}<br>${escapeHtml(zh)}<br>${button}<br><span style="font-size:13px;color:#5d6675">The link works until ${date}. · 链接有效期至 ${date}。</span>`,
-      "If you were not expecting this, you can ignore it. · 如非预期，可忽略此邮件。",
+      "Not expecting this? You can ignore it. · 不认识对方的话，忽略这封邮件即可。",
     ),
   };
 }

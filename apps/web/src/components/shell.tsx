@@ -9,12 +9,9 @@ import {
   ChevronDown,
   Cpu,
   FileText,
-  Languages,
   Layers,
-  LogOut,
   Settings,
   Sparkles,
-  SunMoon,
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
@@ -23,9 +20,11 @@ import { type ReactNode, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PAGES, useBuilding, useBuildings, useIds, useMe, useMembership } from "@/lib/session";
+import { AccountMenu } from "./account-sheet";
 import { Backdrop, useLens } from "./glass";
 import { useLiquid } from "./liquid";
 import { MarkTile } from "./mark";
+import { PullToRefresh } from "./pull-refresh";
 import { TabBar } from "./tab-bar";
 import { ErrorBox, Loading } from "./ui";
 
@@ -40,35 +39,8 @@ const NAV = [
   { key: "settings", icon: Settings },
 ] as const;
 
-function useTheme() {
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("flowcarbon.theme");
-      if (saved === "light" || saved === "dark") {
-        setTheme(saved);
-        document.documentElement.dataset.theme = saved;
-      }
-    } catch {
-      // storage unavailable: follow the system
-    }
-  }, []);
-  const toggle = () => {
-    const current = theme ?? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    const next = current === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.dataset.theme = next;
-    try {
-      localStorage.setItem("flowcarbon.theme", next);
-    } catch {
-      // ignore
-    }
-  };
-  return { theme, toggle };
-}
-
 export function AppShell({ children }: { children: ReactNode }) {
-  const { t, locale, setLocale } = useI18n();
+  const { t, locale } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const qc = useQueryClient();
@@ -77,10 +49,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const membership = useMembership();
   const buildings = useBuildings(orgId);
   const { building } = useBuilding();
-  const { toggle } = useTheme();
   const side = useLens<HTMLDivElement>({ bezel: 26, depth: 16 });
   const place = useLens<HTMLDivElement>({ bezel: 14, depth: 10 });
-  const tools = useLens<HTMLDivElement>({ bezel: 14, depth: 10 });
   const [sideList, setSideList] = useState<HTMLDivElement | null>(null);
   const [sideMark, setSideMark] = useState<HTMLSpanElement | null>(null);
 
@@ -119,16 +89,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         />
       </div>
     );
-
-  async function signOut() {
-    await api.POST("/api/v1/auth/logout");
-    qc.clear();
-    router.replace("/login");
-  }
-
-  const roleName = t.settings.roles[membership.role];
-  const sideButton =
-    "fc-press flex w-full items-center gap-3 rounded-full px-3 py-2 text-muted hover:bg-[var(--glass-field)] hover:text-text";
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[288px_minmax(0,1fr)]">
@@ -174,29 +134,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               ))}
             </div>
           </nav>
-          <div className="mt-auto space-y-0.5 border-t border-[var(--glass-hairline)] pt-3 text-sm">
-            <div className="truncate px-3 pb-1 text-xs text-muted">
-              {me.data?.user.name} · {roleName}
-            </div>
-            <button
-              type="button"
-              onClick={() => setLocale(locale === "en" ? "zh" : "en")}
-              className={sideButton}
-            >
-              <Languages className="size-4" aria-hidden /> {t.common.language}
-            </button>
-            <button type="button" onClick={toggle} className={sideButton}>
-              <SunMoon className="size-4" aria-hidden /> {t.common.theme}
-            </button>
-            <button type="button" onClick={signOut} className={sideButton}>
-              <LogOut className="size-4" aria-hidden /> {t.common.signOut}
-            </button>
+          <div className="mt-auto border-t border-[var(--glass-hairline)] pt-2">
+            <AccountMenu variant="row" />
           </div>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="fc-scroll-edge sticky top-0 z-20 flex items-center gap-2 px-3 pt-3 pb-2 sm:px-6 lg:pt-4">
+        <header className="fc-scroll-edge sticky top-0 z-20 flex items-center gap-2 px-3 pt-[calc(var(--app-top)+12px)] pb-2 sm:px-6 lg:pt-4">
           <MarkTile className="size-9 lg:hidden" />
           <div
             ref={place.ref}
@@ -235,44 +180,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="hidden min-[400px]:inline">{t.simulated}</span>
             </span>
           </div>
-          <div
-            ref={tools.ref}
-            style={tools.style}
-            className="fc-glass ml-auto flex h-10 shrink-0 items-center rounded-full px-0.5 lg:hidden"
-          >
-            {tools.defs}
-            <button
-              type="button"
-              aria-label={t.common.language}
-              title={t.common.language}
-              onClick={() => setLocale(locale === "en" ? "zh" : "en")}
-              className="fc-press grid size-9 place-items-center rounded-full text-muted"
-            >
-              <Languages className="size-[18px]" aria-hidden />
-            </button>
-            <button
-              type="button"
-              aria-label={t.common.theme}
-              title={t.common.theme}
-              onClick={toggle}
-              className="fc-press grid size-9 place-items-center rounded-full text-muted"
-            >
-              <SunMoon className="size-[18px]" aria-hidden />
-            </button>
-            <button
-              type="button"
-              aria-label={t.common.signOut}
-              title={t.common.signOut}
-              onClick={signOut}
-              className="fc-press grid size-9 place-items-center rounded-full text-muted"
-            >
-              <LogOut className="size-[18px]" aria-hidden />
-            </button>
+          <div className="ml-auto lg:hidden">
+            <AccountMenu variant="avatar" />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-32 sm:px-6 lg:pt-6 lg:pb-10">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-[calc(var(--app-bottom)+128px)] sm:px-6 lg:pt-6 lg:pb-10">
           {building ? children : <Loading />}
         </main>
+        <PullToRefresh />
         <TabBar
           tabs={items.map(({ key, icon }) => ({ key, icon, href: `${base}/${key}`, label: t.navShort[key] }))}
           active={current}

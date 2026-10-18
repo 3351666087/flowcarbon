@@ -9,4 +9,7 @@
     <string name="retry">Try again</string>
     <string name="downloading">Downloading %1$s</string>
     <string name="download_failed">The download could not start</string>
+    <string name="shortcut_findings">Opportunities</string>
+    <string name="shortcut_floors">Floors</string>
+    <string name="shortcut_requests">Overtime request</string>
 </resources>

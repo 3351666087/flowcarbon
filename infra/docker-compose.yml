@@ -77,6 +77,9 @@ services:
       # outgoing mail (sign-in and reset codes, invitations) through an SMTP relay
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # self-service sign-up (needs mail) and the organisation new accounts may explore read-only
+      SIGNUP_OPEN: ${SIGNUP_OPEN:-false}
+      DEMO_ORG_SLUG: ${DEMO_ORG_SLUG:-}
     mem_limit: ${API_MEM_LIMIT:-512m}
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-4000}:4000"
