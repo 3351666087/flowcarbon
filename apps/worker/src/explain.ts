@@ -15,6 +15,9 @@ import { REFERENCE_IDS, REFERENCES } from "./references";
 
 export const PROMPT_VERSION = "explain-v1";
 
+/** how often the partly written explanation is saved while it streams */
+const DRAFT_EVERY_MS = 250;
+
 const STRATEGY_IDS = [
   "occupancy_gated_workday",
   "zone_only_non_working",
@@ -40,6 +43,13 @@ export const explanationSchema = z.object({
     .array(z.string())
     .describe("What the data cannot show, e.g. estimated rather than metered energy."),
 });
+
+// the schema only, without the SDK's parser: the stream would otherwise throw on a text block that is not the answer
+// (a declined attempt before a fallback); the response is validated against explanationSchema below instead
+const OUTPUT_FORMAT = {
+  type: "json_schema" as const,
+  schema: betaZodOutputFormat(explanationSchema).schema,
+};
 export type Explanation = z.infer<typeof explanationSchema>;
 
 const SYSTEM = `You explain energy findings for the operations team of an office building. A deterministic rule has already decided that the finding exists and how much energy was avoidable; you do not re-judge it and you do not change any setting. Your reader is a property manager or an energy engineer who will decide what to do.
@@ -177,6 +187,7 @@ export async function runExplain(
         .update(schema.aiExplanations)
         .set({
           status: "failed",
+          draft: null,
           error,
           promptVersion: PROMPT_VERSION,
           input: data.input,
@@ -189,14 +200,39 @@ export async function runExplain(
   if (!deps.client) return fail("AI explanations are not configured for this deployment.");
 
   const language = data.locale.startsWith("zh") ? "Simplified Chinese" : "English";
-  let response: Awaited<ReturnType<Anthropic["beta"]["messages"]["parse"]>>;
+  // the explanation streams; what has been written so far is saved every DRAFT_EVERY_MS so the page can show it
+  // arriving instead of waiting for the whole response
+  let draft = "";
+  let savedAt = 0;
+  let saving: Promise<unknown> = Promise.resolve();
+  const saveDraft = () => {
+    const text = draft;
+    saving = saving
+      .then(() =>
+        withOrg(db, orgId, (tx) =>
+          tx
+            .update(schema.aiExplanations)
+            .set({ draft: text })
+            .where(
+              and(
+                eq(schema.aiExplanations.id, payload.explanationId),
+                eq(schema.aiExplanations.status, "pending"),
+              ),
+            ),
+        ),
+      )
+      .catch((err) =>
+        deps.log?.({ explanationId: payload.explanationId, err: String(err) }, "draft not saved"),
+      );
+  };
+  let response: Anthropic.Beta.Messages.BetaMessage;
   try {
-    response = await deps.client.beta.messages.parse({
+    const stream = deps.client.beta.messages.stream({
       model: deps.model,
       max_tokens: 16_000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
-      output_config: { effort: deps.effort, format: betaZodOutputFormat(explanationSchema) },
+      output_config: { effort: deps.effort, format: OUTPUT_FORMAT },
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [
         {
@@ -205,7 +241,17 @@ export async function runExplain(
         },
       ],
     });
+    // the snapshot is the current text block; after a fallback it starts again with the fallback model's text
+    stream.on("text", (_delta, snapshot) => {
+      draft = snapshot;
+      if (Date.now() - savedAt >= DRAFT_EVERY_MS) {
+        savedAt = Date.now();
+        saveDraft();
+      }
+    });
+    response = await stream.finalMessage();
   } catch (err) {
+    await saving;
     // 4xx other than rate limits will not succeed on retry
     if (
       err instanceof Anthropic.RateLimitError ||
@@ -228,13 +274,21 @@ export async function runExplain(
     }
     throw err;
   }
+  await saving;
 
   const usage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens };
   if (response.stop_reason === "refusal") return fail("The AI service declined to explain this finding.");
   if (response.stop_reason === "max_tokens") return fail("The explanation was cut off.");
-  const parsed = response.parsed_output;
-  const checked = parsed ? explanationSchema.safeParse(parsed) : null;
-  if (!checked?.success) return fail("The AI response did not match the expected structure.");
+  // the answer is the last text block (earlier ones belong to a model that declined and handed over)
+  const text = response.content.filter((block) => block.type === "text").at(-1)?.text ?? "";
+  let value: unknown = null;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    // reported below as a structure mismatch
+  }
+  const checked = explanationSchema.safeParse(value);
+  if (!checked.success) return fail("The AI response did not match the expected structure.");
   const output = {
     ...checked.data,
     basis: [...new Set(checked.data.basis)].map((id) => ({ id, title: REFERENCES[id].title })),
@@ -249,6 +303,7 @@ export async function runExplain(
         promptVersion: PROMPT_VERSION,
         input: data.input,
         output,
+        draft: null,
         error: null,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,

@@ -40,7 +40,8 @@ export function AuthStage({ children, shake = 0 }: { children: ReactNode; shake?
       <Backdrop intense />
       {/* the scene runs on under the sheet, so the glass has something to bend */}
       <TowerScene className="absolute inset-0 size-full [--tower-scale:1.12] [--tower-y:0.4] lg:[--tower-scale:0.8] lg:[--tower-x:0.52] lg:[--tower-y:0.47]" />
-      <div className="fc-rise relative z-10 flex items-center gap-3 px-5 pt-[calc(var(--app-top)+18px)] lg:absolute lg:inset-x-14 lg:top-10 lg:px-0 lg:pt-0">
+      {/* above the sheet's column, which spans the full height on wide screens and would take the clicks */}
+      <div className="fc-rise relative z-20 flex items-center gap-3 px-5 pt-[calc(var(--app-top)+18px)] lg:absolute lg:inset-x-14 lg:top-10 lg:px-0 lg:pt-0">
         <MarkTile className="size-10" motion="settle" />
         <div className="min-w-0 leading-tight">
           <div className="text-[17px] font-semibold tracking-tight">{t.appName}</div>

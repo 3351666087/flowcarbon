@@ -2,10 +2,29 @@
 
 import { clsx } from "clsx";
 import { AlertTriangle } from "lucide-react";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import {
+  type ButtonHTMLAttributes,
+  Children,
+  cloneElement,
+  createContext,
+  type InputHTMLAttributes,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  useContext,
+  useEffect,
+  useRef,
+} from "react";
 import { ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Mark } from "./mark";
+
+/**
+ * The shell listens for the page's title: when the large title scrolls up under the top bar, the bar shows it
+ * small, as iOS and Android large-title screens do.
+ */
+export const ShellTitle = createContext<((title: string | null) => void) | null>(null);
 
 export function PageHeader({
   title,
@@ -16,10 +35,32 @@ export function PageHeader({
   subtitle?: string;
   actions?: ReactNode;
 }) {
+  const show = useContext(ShellTitle);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const el = heading.current;
+    if (!show || !el) return;
+    // the top bar is about 64px tall plus the status bar; the title counts as gone once it slides under it
+    const top =
+      Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--app-top")) || 0;
+    const observer = new IntersectionObserver(([entry]) => show(entry?.isIntersecting ? null : title), {
+      rootMargin: `-${Math.round(top + 60)}px 0px 0px 0px`,
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      show(null);
+    };
+  }, [show, title]);
   return (
     <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+        <h1
+          ref={heading}
+          className="text-[28px] leading-tight font-bold tracking-tight sm:text-2xl sm:font-semibold"
+        >
+          {title}
+        </h1>
         {subtitle ? <p className="mt-1 max-w-3xl text-sm text-muted">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -185,19 +226,39 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={clsx(control, "pr-8", props.className)} />;
 }
 
-/** The brand loader: the mark's floors light up in turn. `full` centres it on an empty screen. */
-export function Loading({ full = false }: { full?: boolean }) {
+/**
+ * Loading. `full`: the brand loader on an empty screen (the app starting). `page`: the outline of a page (title,
+ * figures, a card) so the screen keeps its shape while data arrives. Otherwise: a few shimmering lines in place.
+ */
+export function Loading({ full = false, page = false }: { full?: boolean; page?: boolean }) {
   const { t } = useI18n();
-  return full ? (
-    <div className="grid min-h-dvh place-items-center" role="status">
-      <div className="flex flex-col items-center gap-3 text-sm text-muted">
-        <Mark motion="breathe" className="size-10 text-accent" />
-        {t.common.loading}
+  if (full)
+    return (
+      <div className="grid min-h-dvh place-items-center" role="status">
+        <div className="flex flex-col items-center gap-3 text-sm text-muted">
+          <Mark motion="breathe" className="size-10 text-accent" />
+          {t.common.loading}
+        </div>
       </div>
-    </div>
-  ) : (
-    <div className="flex items-center gap-2.5 py-10 text-sm text-muted" role="status">
-      <Mark motion="breathe" className="size-5 text-accent" /> {t.common.loading}
+    );
+  if (page)
+    return (
+      <div role="status" aria-label={t.common.loading} className="fc-fade">
+        <div className="fc-skel mb-2 h-8 w-40" />
+        <div className="fc-skel mb-6 h-4 w-72 max-w-full" />
+        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="fc-skel h-[92px] rounded-2xl" />
+          ))}
+        </div>
+        <div className="fc-skel h-64 rounded-2xl" />
+      </div>
+    );
+  return (
+    <div role="status" aria-label={t.common.loading} className="fc-fade space-y-2.5 py-3">
+      <div className="fc-skel h-4 w-2/5" />
+      <div className="fc-skel h-4 w-4/5" />
+      <div className="fc-skel h-4 w-3/5" />
     </div>
   );
 }
@@ -244,10 +305,24 @@ export function Empty({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A data table. On a phone each row becomes a small card of label and value lines (the labels come from `head`),
+ * so nothing has to be scrolled sideways.
+ */
 export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
+  const labels = head.map((h) => (typeof h === "string" ? h : ""));
+  const rows = Children.map(children, (row) => {
+    if (!isValidElement<{ children?: ReactNode }>(row)) return row;
+    const cells = Children.map(row.props.children, (cell, i) =>
+      isValidElement(cell)
+        ? cloneElement(cell as ReactElement<{ "data-label"?: string }>, { "data-label": labels[i] ?? "" })
+        : cell,
+    );
+    return cloneElement(row, {}, cells);
+  });
   return (
     <div className="-mx-4 overflow-x-auto">
-      <table className="w-full min-w-[560px] border-collapse text-sm">
+      <table className="fc-table w-full min-w-[560px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs text-muted">
             {head.map((h, i) => (
@@ -259,7 +334,7 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
           </tr>
         </thead>
         <tbody className="[&>tr]:border-b [&>tr]:border-border [&>tr:last-child]:border-0 [&_td]:px-4 [&_td]:py-2.5">
-          {children}
+          {rows}
         </tbody>
       </table>
     </div>

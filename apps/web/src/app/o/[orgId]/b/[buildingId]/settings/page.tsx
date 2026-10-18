@@ -146,7 +146,7 @@ export default function SettingsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["keys", orgId] }),
   });
 
-  if (members.isPending) return <Loading />;
+  if (members.isPending) return <Loading page />;
   if (members.error) return <ErrorBox error={members.error} />;
 
   return (

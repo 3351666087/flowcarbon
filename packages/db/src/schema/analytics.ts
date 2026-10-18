@@ -88,6 +88,8 @@ export const aiExplanations = pgTable(
     promptVersion: text("prompt_version").notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull(),
     output: jsonb("output").$type<Record<string, unknown>>(),
+    /** the response as generated so far (partial JSON) while the explanation is being written */
+    draft: text("draft"),
     error: text("error"),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),

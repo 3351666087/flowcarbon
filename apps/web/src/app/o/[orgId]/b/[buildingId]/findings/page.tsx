@@ -1,6 +1,8 @@
 "use client";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { clsx } from "clsx";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -17,7 +19,7 @@ import {
   TierBadge,
 } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
-import { co2, dateTime, kwh, money } from "@/lib/format";
+import { co2, dateTime, day, kwh, money } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useBuilding, useFloors, useIds } from "@/lib/session";
 
@@ -73,19 +75,24 @@ function Findings() {
   return (
     <>
       <PageHeader title={t.findings.title} subtitle={t.findings.subtitle} />
-      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3 lg:max-w-3xl">
-        <Select
-          aria-label={t.common.status}
-          value={status}
-          onChange={(e) => setFilter("status", e.target.value)}
-        >
-          <option value="all">{t.common.all}</option>
-          {Object.entries(t.findings.statuses).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </Select>
+      {/* status as chips to swipe through, floor and rule side by side */}
+      <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0">
+        {(["open", "acknowledged", "fixed", "dismissed", "all"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={status === k}
+            onClick={() => setFilter("status", k === "open" ? "" : k)}
+            className={clsx(
+              "fc-press shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium",
+              status === k ? "bg-text text-bg" : "border border-border bg-surface text-muted hover:text-text",
+            )}
+          >
+            {k === "all" ? t.common.all : t.findings.statuses[k]}
+          </button>
+        ))}
+      </div>
+      <div className="mb-4 grid grid-cols-2 gap-2 lg:max-w-xl">
         <Select
           aria-label={t.common.floor}
           value={floorId}
@@ -117,69 +124,135 @@ function Findings() {
       </div>
 
       {list.isPending ? (
-        <Loading />
+        <Loading page />
       ) : list.error ? (
         <ErrorBox error={list.error} onRetry={() => list.refetch()} />
       ) : items.length === 0 ? (
         <Empty>{t.common.noData}</Empty>
       ) : (
-        <Card pad>
-          <Table
-            head={[
-              t.findings.when,
-              t.common.floor,
-              t.findings.rule,
-              t.findings.avoidable,
-              "",
-              t.common.status,
-            ]}
-          >
-            {items.map((f) => (
-              <tr key={f.id} className="hover:bg-surface-2">
-                <td className="whitespace-nowrap">
-                  <Link
-                    className="font-medium hover:underline"
-                    href={`/o/${orgId}/b/${buildingId}/findings/${f.id}`}
-                  >
-                    {dateTime(f.startAt, locale, tz)}
-                  </Link>
-                </td>
-                <td className="font-medium">{floorLabel.get(f.floorId) ?? "–"}</td>
-                <td>
-                  <div>{t.domain.ruleNames[f.ruleId] ?? f.ruleName}</div>
-                  <div className="text-xs text-muted">{t.findings.kinds[f.kind]}</div>
-                </td>
-                <td className="num whitespace-nowrap">
-                  <div className="font-medium text-waste">{kwh(f.avoidableKwh, locale)}</div>
-                  <div className="text-xs text-muted">
-                    {money(f.avoidableCost, locale, building!.currency)} · {co2(f.avoidableCo2eKg, locale)}
-                  </div>
-                </td>
-                <td>
-                  <TierBadge tier={f.tier} />
-                </td>
-                <td>
-                  <Badge tone={STATUS_TONE[f.status]}>{t.findings.statuses[f.status]}</Badge>
-                </td>
-              </tr>
+        <>
+          {/* phones: cards grouped by day, each one opens the finding */}
+          <div className="space-y-5 md:hidden">
+            {groupByDay(items, tz).map(([d, group]) => (
+              <section key={d}>
+                <h2 className="mb-2 px-1 text-xs font-semibold text-muted">{day(d, locale)}</h2>
+                <ul className="overflow-hidden rounded-2xl border border-border bg-surface">
+                  {group.map((f) => (
+                    <li key={f.id} className="border-b border-border last:border-0">
+                      <Link
+                        href={`/o/${orgId}/b/${buildingId}/findings/${f.id}`}
+                        className="fc-press flex items-center gap-3 px-3.5 py-3"
+                      >
+                        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface-2 text-[15px] font-semibold">
+                          {floorLabel.get(f.floorId) ?? "–"}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] font-medium">
+                            {t.domain.ruleNames[f.ruleId] ?? f.ruleName}
+                          </span>
+                          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+                            {dateTime(f.startAt, locale, tz, { dateStyle: undefined, timeStyle: "short" })}
+                            <span aria-hidden>·</span>
+                            <span className="num font-medium whitespace-nowrap text-waste">
+                              {kwh(f.avoidableKwh, locale)}
+                            </span>
+                            <span className="num truncate">
+                              {money(f.avoidableCost, locale, building!.currency)}
+                            </span>
+                          </span>
+                        </span>
+                        <Badge tone={STATUS_TONE[f.status]}>{t.findings.statuses[f.status]}</Badge>
+                        <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </Table>
-          {list.hasNextPage ? (
-            <div className="mt-4 flex justify-center">
-              <Button busy={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
-                {t.common.next}
-              </Button>
-            </div>
-          ) : null}
-        </Card>
+            {list.hasNextPage ? (
+              <div className="flex justify-center">
+                <Button busy={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
+                  {t.common.next}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          <Card pad className="hidden md:block">
+            <Table
+              head={[
+                t.findings.when,
+                t.common.floor,
+                t.findings.rule,
+                t.findings.avoidable,
+                "",
+                t.common.status,
+              ]}
+            >
+              {items.map((f) => (
+                <tr key={f.id} className="hover:bg-surface-2">
+                  <td className="whitespace-nowrap">
+                    <Link
+                      className="font-medium hover:underline"
+                      href={`/o/${orgId}/b/${buildingId}/findings/${f.id}`}
+                    >
+                      {dateTime(f.startAt, locale, tz)}
+                    </Link>
+                  </td>
+                  <td className="font-medium">{floorLabel.get(f.floorId) ?? "–"}</td>
+                  <td>
+                    <div>{t.domain.ruleNames[f.ruleId] ?? f.ruleName}</div>
+                    <div className="text-xs text-muted">{t.findings.kinds[f.kind]}</div>
+                  </td>
+                  <td className="num whitespace-nowrap">
+                    <div className="font-medium text-waste">{kwh(f.avoidableKwh, locale)}</div>
+                    <div className="text-xs text-muted">
+                      {money(f.avoidableCost, locale, building!.currency)} · {co2(f.avoidableCo2eKg, locale)}
+                    </div>
+                  </td>
+                  <td>
+                    <TierBadge tier={f.tier} />
+                  </td>
+                  <td>
+                    <Badge tone={STATUS_TONE[f.status]}>{t.findings.statuses[f.status]}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+            {list.hasNextPage ? (
+              <div className="mt-4 flex justify-center">
+                <Button busy={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
+                  {t.common.next}
+                </Button>
+              </div>
+            ) : null}
+          </Card>
+        </>
       )}
     </>
   );
 }
 
+/** Findings in order, grouped under the building-local day they started. */
+function groupByDay<T extends { startAt: string }>(items: T[], tz: string): [string, T[]][] {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const groups = new Map<string, T[]>();
+  for (const f of items) {
+    const d = fmt.format(new Date(f.startAt));
+    const g = groups.get(d);
+    if (g) g.push(f);
+    else groups.set(d, [f]);
+  }
+  return [...groups];
+}
+
 export default function FindingsPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Loading page />}>
       <Findings />
     </Suspense>
   );

@@ -63,7 +63,7 @@ export default function ReportPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["snapshots", orgId, buildingId] }),
   });
 
-  if (report.isPending) return <Loading />;
+  if (report.isPending) return <Loading page />;
   if (report.error || !r) return <ErrorBox error={report.error} onRetry={() => report.refetch()} />;
   const csvHref = `/api/v1/orgs/${orgId}/buildings/${buildingId}/report?format=csv&from=${periodFrom}&to=${periodTo}`;
   const factor = (f: { kgPerKwh: number; source: string; year: number; region: string; status: string }) => (

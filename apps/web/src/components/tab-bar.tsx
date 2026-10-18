@@ -48,7 +48,17 @@ export function TabBar({
   const [row, setRow] = useState<HTMLDivElement | null>(null);
   useLiquid("x", slot, row, lens.el, dragging);
 
-  const drag = useRef<{ x: number; id: number; moved: boolean; over: string | null } | null>(null);
+  const drag = useRef<{
+    x: number;
+    id: number;
+    moved: boolean;
+    over: string | null;
+    // measured once when the slide starts, so moving the finger never forces a layout
+    left?: number;
+    scale?: number;
+    span?: number;
+    items?: { key: string; right: number; width: number }[];
+  } | null>(null);
   const swallowClick = useRef(false);
 
   // shrink while reading down the page, return when heading back up
@@ -111,16 +121,29 @@ export function TabBar({
       if (Math.abs(e.clientX - d.x) < 8) return;
       d.moved = true;
       box.setPointerCapture(e.pointerId);
+      const r = box.getBoundingClientRect();
+      d.left = r.left;
+      d.scale = r.width / box.offsetWidth || 1;
+      d.span = box.offsetWidth;
+      d.items = [...box.querySelectorAll<HTMLElement>("[data-liquid-key]")].map((x) => ({
+        key: x.dataset.liquidKey ?? "",
+        right: x.getBoundingClientRect().right,
+        width: x.offsetWidth,
+      }));
+      for (const a of el.getAnimations()) a.cancel();
       setDragging(true);
     }
-    const key = keyAt(e.clientX);
-    const under = key ? box.querySelector<HTMLElement>(`[data-liquid-key="${key}"]`) : null;
-    const width = under?.offsetWidth ?? el.offsetWidth;
-    const r = box.getBoundingClientRect();
-    const scale = r.width / box.offsetWidth || 1;
-    const centre = Math.max(width / 2, Math.min(box.offsetWidth - width / 2, (e.clientX - r.left) / scale));
-    el.style.setProperty("--ia", `${centre - width / 2}px`);
-    el.style.setProperty("--ib", `${centre + width / 2}px`);
+    const items = d.items ?? [];
+    const under = items.find((x) => e.clientX < x.right) ?? items[items.length - 1];
+    const key = under?.key ?? null;
+    const width = under?.width ?? el.offsetWidth;
+    const span = d.span ?? box.offsetWidth;
+    const centre = Math.max(
+      width / 2,
+      Math.min(span - width / 2, (e.clientX - (d.left ?? 0)) / (d.scale ?? 1)),
+    );
+    // the selection lifts into a lens under the finger and follows it directly
+    el.style.transform = `translate3d(${centre - width / 2}px,0,0) scale(1.14,1.08)`;
     if (key !== d.over) {
       d.over = key;
       tick();

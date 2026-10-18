@@ -312,16 +312,6 @@ body {
   inherits: true;
   initial-value: 315deg;
 }
-@property --ia {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-@property --ib {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
 
 :root {
   /* springs: a soft one for things that travel, a livelier one for things that are pressed */
@@ -509,39 +499,26 @@ body {
       0 0 0 4px var(--ring);
   }
 
-  /* a liquid selection: its two edges travel separately, the leading one first, so it stretches toward where it is
-     going and gathers itself on arrival (useLiquid sets --ia/--ib and data-dir) */
+  /* a liquid selection: it travels by transform on the compositor (useLiquid), stretching on the way */
   .fc-liquid {
     position: absolute;
     border-radius: 999px;
     pointer-events: none;
+    will-change: transform;
     transition:
-      --ia 560ms var(--spring),
-      --ib 560ms var(--spring),
-      transform 420ms var(--spring-bouncy),
-      opacity 300ms var(--ease-standard);
+      opacity 300ms var(--ease-standard),
+      width 320ms var(--ease-standard),
+      height 320ms var(--ease-standard);
   }
   .fc-liquid[data-axis="x"] {
     top: 0;
     bottom: 0;
-    left: var(--ia);
-    width: max(0px, calc(var(--ib) - var(--ia)));
+    left: 0;
   }
   .fc-liquid[data-axis="y"] {
     left: 0;
     right: 0;
-    top: var(--ia);
-    height: max(0px, calc(var(--ib) - var(--ia)));
-  }
-  .fc-liquid[data-dir="fwd"] {
-    transition-duration: 640ms, 380ms, 420ms, 300ms;
-  }
-  .fc-liquid[data-dir="back"] {
-    transition-duration: 380ms, 640ms, 420ms, 300ms;
-  }
-  .fc-liquid[data-drag] {
-    transition-duration: 90ms, 90ms, 420ms, 300ms;
-    transform: scale(1.16, 1.1);
+    top: 0;
   }
 
   /* the scroll edge under a floating header: content fades and blurs progressively as it passes beneath */
@@ -644,14 +621,11 @@ body {
 
   /* the tab bar shrinks while the page is read downward: labels fold away, the capsule settles lower */
   .fc-tabbar {
-    transition:
-      transform 560ms var(--spring),
-      padding 420ms var(--spring);
+    transition: transform 560ms var(--spring);
     transform-origin: 50% 100%;
   }
   .fc-tabbar[data-compact] {
-    transform: translateY(6px) scale(0.9);
-    padding-block: 4px;
+    transform: translateY(8px) scale(0.92);
   }
   .fc-tab-label {
     display: block;
@@ -713,6 +687,36 @@ body {
     border-radius: 1px;
     background: var(--accent);
     animation: fc-caret 1s steps(1) infinite;
+  }
+
+  /* an AI answer as it is written: the caret rides the end of the text, each section eases in as it starts, and
+     the waiting line has a light passing over it */
+  .fc-stream-caret {
+    display: inline-block;
+    width: 0.5em;
+    height: 0.95em;
+    margin-left: 2px;
+    vertical-align: -0.1em;
+    border-radius: 3px;
+    background: var(--accent);
+    box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 55%, transparent);
+    animation: fc-stream-caret 0.9s var(--ease-standard) infinite;
+  }
+  .fc-stream-in {
+    animation: fc-stream-in 420ms var(--ease-standard) backwards;
+  }
+  .fc-stream-wait {
+    background:
+      linear-gradient(
+        100deg,
+        var(--muted) 30%,
+        color-mix(in oklab, var(--accent) 70%, var(--text)) 50%,
+        var(--muted) 70%
+      )
+      0 0 / 250% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: fc-stream-wait 1.8s linear infinite;
   }
 
   /* a selectable card (sign-up's "where to start"): the chosen one lifts and takes the accent rim */
@@ -862,6 +866,26 @@ input:-webkit-autofill:focus {
     opacity: 0;
   }
 }
+@keyframes fc-stream-caret {
+  50% {
+    opacity: 0.35;
+    transform: scaleY(0.82);
+  }
+}
+@keyframes fc-stream-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes fc-stream-wait {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
 @keyframes fc-step-fwd {
   from {
     opacity: 0;
@@ -910,6 +934,10 @@ input:-webkit-autofill:focus {
   user-select: none;
   -webkit-touch-callout: none;
 }
+/* things only a browser needs, such as the link to download the app */
+[data-app] .fc-web-only {
+  display: none;
+}
 [data-app] :is(input, textarea, [contenteditable], .selectable) {
   -webkit-user-select: text;
   user-select: text;
@@ -921,4 +949,158 @@ html.fc-locked body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* Touch devices get the light version of the material: the same tint and rim, but no refraction (useLens is off),
+   no blur on the scroll edge, and nothing moving behind the glass, so scrolling does not make the GPU re-filter
+   every glass surface on every frame. */
+@media (pointer: coarse) {
+  .fc-backdrop span {
+    animation: none;
+    will-change: auto;
+  }
+  .fc-scroll-edge::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 62%, transparent);
+    mask: none;
+  }
+  [data-spotlight]::before,
+  [data-spotlight]::after {
+    content: none;
+  }
+}
+
+/* loading outlines: a soft sheen passes over the shapes (a transform, so it stays on the compositor) */
+.fc-skel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.fc-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+  animation: fc-shimmer 1.3s var(--ease-standard) infinite;
+}
+:root[data-theme="dark"] .fc-skel::after {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .fc-skel::after {
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+  }
+}
+@keyframes fc-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* tables on a phone: every row a card of "label   value" lines */
+@media (max-width: 47.99rem) {
+  .fc-table {
+    min-width: 0;
+  }
+  .fc-table thead {
+    display: none;
+  }
+  .fc-table tbody,
+  .fc-table tr {
+    display: block;
+  }
+  .fc-table tr {
+    padding: 10px 16px;
+  }
+  .fc-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 3px 0;
+    text-align: right;
+    white-space: normal;
+  }
+  .fc-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: left;
+  }
+  .fc-table td[data-label=""]::before {
+    content: none;
+  }
+  .fc-table td:first-child {
+    padding-bottom: 6px;
+    font-weight: 600;
+  }
+}
+
+/* page arrivals follow the direction of travel: deeper slides in from the right, back from the left, sideways
+   between tabs; all on transform and opacity */
+@keyframes fc-push {
+  from {
+    opacity: 0;
+    transform: translateX(14%);
+  }
+}
+@keyframes fc-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-14%);
+  }
+}
+@keyframes fc-next {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes fc-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+.fc-route-push {
+  animation: fc-push 420ms var(--ease-enter) backwards;
+}
+.fc-route-pop {
+  animation: fc-pop 420ms var(--ease-enter) backwards;
+}
+.fc-route-next {
+  animation: fc-next 360ms var(--ease-enter) backwards;
+}
+.fc-route-prev {
+  animation: fc-prev 360ms var(--ease-enter) backwards;
+}
+.fc-route-fade {
+  animation: fc-rise 360ms var(--ease-enter) backwards;
+}
+
+/* the top bar's place pill gives way to the page title once the large title has scrolled under it (phones) */
+.fc-bar-title,
+.fc-bar-place {
+  grid-area: 1 / 1;
+  transition:
+    opacity 260ms var(--ease-standard),
+    transform 360ms var(--ease-enter);
+}
+.fc-bar-title {
+  opacity: 0;
+  transform: translateY(10px);
+}
+@media (max-width: 63.99rem) {
+  [data-titled] .fc-bar-title {
+    opacity: 1;
+    transform: none;
+  }
+  [data-titled] .fc-bar-place {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
 }

@@ -4,22 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { AiExplanation, type Explanation } from "@/components/ai-explanation";
 import { IntervalChart } from "@/components/charts";
 import { Badge, Button, Card, ErrorBox, Input, Loading, Metric, TierBadge } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { co2, dateTime, kwh, money } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { can, useBuilding, useFloors, useIds, useMembership } from "@/lib/session";
-
-interface ExplanationOutput {
-  whatHappened: string;
-  likelyCauses: string[];
-  outlook: string;
-  recommendedAction: { strategyId: string; reason: string };
-  basis: { id: string; title: string }[];
-  uncertainties: string[];
-}
 
 export default function FindingPage() {
   const { t, locale } = useI18n();
@@ -38,8 +30,6 @@ export default function FindingPage() {
       unwrap(
         api.GET("/api/v1/orgs/{orgId}/buildings/{buildingId}/findings/{findingId}", { params: { path } }),
       ),
-    // poll while an explanation is being written
-    refetchInterval: (q) => (q.state.data?.explanations[0]?.status === "pending" ? 3000 : false),
   });
   const rules = useQuery({
     queryKey: ["rules"],
@@ -83,16 +73,19 @@ export default function FindingPage() {
           params: { path },
         }),
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["finding", findingId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finding", findingId], exact: true }),
   });
+  const strategyNames = rules.data?.strategies;
+  const strategyName = useCallback(
+    (id: string) => t.domain.strategies[id]?.name ?? strategyNames?.find((s) => s.id === id)?.name,
+    [t, strategyNames],
+  );
 
-  if (finding.isPending) return <Loading />;
+  if (finding.isPending) return <Loading page />;
   if (finding.error || !f) return <ErrorBox error={finding.error} onRetry={() => finding.refetch()} />;
   const floor = floors.data?.find((x) => x.id === f.floorId);
   const rule = rules.data?.rules.find((r) => r.id === f.ruleId);
-  const strategies = new Map((rules.data?.strategies ?? []).map((s) => [s.id, s.name]));
-  const latest = f.explanations[0];
-  const out = latest?.status === "done" ? (latest.output as unknown as ExplanationOutput) : null;
+  const latest = f.explanations[0] as Explanation | undefined;
 
   return (
     <>
@@ -239,65 +232,17 @@ export default function FindingPage() {
             }
           >
             <p className="text-xs text-muted">{t.findings.aiHint}</p>
-            {latest?.status === "pending" ? <p className="mt-3 text-sm">{t.findings.aiPending}</p> : null}
-            {latest?.status === "failed" ? (
-              <p className="mt-3 text-sm text-danger">
-                {t.findings.aiFailed}: {latest.error}
-              </p>
-            ) : null}
-            {out ? (
-              <div className="mt-3 space-y-3 text-sm">
-                <section>
-                  <h3 className="text-xs font-semibold text-muted">{t.findings.aiWhat}</h3>
-                  <p>{out.whatHappened}</p>
-                </section>
-                <section>
-                  <h3 className="text-xs font-semibold text-muted">{t.findings.aiCauses}</h3>
-                  <ul className="list-disc pl-5">
-                    {out.likelyCauses.map((c) => (
-                      <li key={c}>{c}</li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h3 className="text-xs font-semibold text-muted">{t.findings.aiOutlook}</h3>
-                  <p>{out.outlook}</p>
-                </section>
-                <section className="rounded-lg bg-accent-soft p-3">
-                  <h3 className="text-xs font-semibold text-accent">{t.findings.aiAction}</h3>
-                  <p className="font-medium">
-                    {t.domain.strategies[out.recommendedAction.strategyId]?.name ??
-                      strategies.get(out.recommendedAction.strategyId) ??
-                      out.recommendedAction.strategyId}
-                  </p>
-                  <p>{out.recommendedAction.reason}</p>
-                </section>
-                <section>
-                  <h3 className="text-xs font-semibold text-muted">{t.findings.aiBasis}</h3>
-                  <ul className="list-disc pl-5 text-xs">
-                    {out.basis.map((b) => (
-                      <li key={b.id}>{b.title}</li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h3 className="text-xs font-semibold text-muted">{t.findings.aiUncertain}</h3>
-                  <ul className="list-disc pl-5 text-xs text-muted">
-                    {out.uncertainties.map((u) => (
-                      <li key={u}>{u}</li>
-                    ))}
-                  </ul>
-                </section>
-                <p className="text-[11px] text-muted">
-                  {latest?.model} · {latest?.promptVersion} ·{" "}
-                  {dateTime(latest?.completedAt ?? null, locale, tz)}
-                </p>
-              </div>
-            ) : null}
+            <AiExplanation
+              key={latest?.id}
+              path={path}
+              latest={latest}
+              strategyName={strategyName}
+              timeZone={tz}
+            />
             {can.explain(role) && latest?.status !== "pending" ? (
               <Button
                 className="mt-4"
-                variant={out ? "secondary" : "primary"}
+                variant={latest?.status === "done" ? "secondary" : "primary"}
                 busy={explain.isPending}
                 onClick={() => explain.mutate()}
               >

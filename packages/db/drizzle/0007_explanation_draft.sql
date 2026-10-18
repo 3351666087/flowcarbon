@@ -1,0 +1,1 @@
+ALTER TABLE "ai_explanations" ADD COLUMN "draft" text;

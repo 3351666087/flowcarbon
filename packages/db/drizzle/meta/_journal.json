@@ -50,6 +50,13 @@
       "when": 1792338404157,
       "tag": "0006_email_codes_by_address",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792342430064,
+      "tag": "0007_explanation_draft",
+      "breakpoints": true
     }
   ]
 }

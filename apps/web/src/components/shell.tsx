@@ -26,7 +26,7 @@ import { useLiquid } from "./liquid";
 import { MarkTile } from "./mark";
 import { PullToRefresh } from "./pull-refresh";
 import { TabBar } from "./tab-bar";
-import { ErrorBox, Loading } from "./ui";
+import { ErrorBox, Loading, ShellTitle } from "./ui";
 
 const NAV = [
   { key: "floors", icon: Layers },
@@ -53,6 +53,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const place = useLens<HTMLDivElement>({ bezel: 14, depth: 10 });
   const [sideList, setSideList] = useState<HTMLDivElement | null>(null);
   const [sideMark, setSideMark] = useState<HTMLSpanElement | null>(null);
+  // the page's title, once its large title has scrolled under the top bar
+  const [barTitle, setBarTitle] = useState<string | null>(null);
 
   useEffect(() => {
     if (me.error && (me.error as { status?: number }).status === 401)
@@ -141,51 +143,66 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="fc-scroll-edge sticky top-0 z-20 flex items-center gap-2 px-3 pt-[calc(var(--app-top)+12px)] pb-2 sm:px-6 lg:pt-4">
+        <header
+          data-titled={barTitle ? "" : undefined}
+          className="fc-scroll-edge sticky top-0 z-20 flex items-center gap-2 px-3 pt-[calc(var(--app-top)+12px)] pb-2 sm:px-6 lg:pt-4"
+        >
           <MarkTile className="size-9 lg:hidden" />
-          <div
-            ref={place.ref}
-            style={place.style}
-            className="fc-glass flex h-10 min-w-0 items-center gap-2 rounded-full pr-3 pl-3.5 text-sm"
-          >
-            {place.defs}
-            <Building2 className="size-4 shrink-0 text-muted" aria-hidden />
-            {buildings.data && buildings.data.length > 1 ? (
-              <span className="relative flex min-w-0 items-center">
-                <select
-                  aria-label={t.common.building}
-                  className="min-w-0 appearance-none truncate bg-transparent pr-5 font-medium outline-none"
-                  value={buildingId}
-                  onChange={(e) => router.push(pathname.replace(`/b/${buildingId}`, `/b/${e.target.value}`))}
-                >
-                  {buildings.data.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="pointer-events-none absolute right-0 size-3.5 text-muted"
-                  aria-hidden
-                />
-              </span>
-            ) : (
-              <span className="truncate font-medium">{building?.name}</span>
-            )}
-            <span
-              title={t.simulated}
-              className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-waste-soft px-2 py-0.5 text-[11px] font-medium text-waste"
+          <div className="grid min-w-0 flex-1 items-center lg:flex-none">
+            <div
+              ref={place.ref}
+              style={place.style}
+              className="fc-glass fc-bar-place flex h-10 min-w-0 items-center gap-2 justify-self-start rounded-full pr-3 pl-3.5 text-sm"
             >
-              <span className="size-1.5 animate-pulse rounded-full bg-waste" aria-hidden />
-              <span className="hidden min-[400px]:inline">{t.simulated}</span>
-            </span>
+              {place.defs}
+              <Building2 className="size-4 shrink-0 text-muted" aria-hidden />
+              {buildings.data && buildings.data.length > 1 ? (
+                <span className="relative flex min-w-0 items-center">
+                  <select
+                    aria-label={t.common.building}
+                    className="min-w-0 appearance-none truncate bg-transparent pr-5 font-medium outline-none"
+                    value={buildingId}
+                    onChange={(e) =>
+                      router.push(pathname.replace(`/b/${buildingId}`, `/b/${e.target.value}`))
+                    }
+                  >
+                    {buildings.data.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-0 size-3.5 text-muted"
+                    aria-hidden
+                  />
+                </span>
+              ) : (
+                <span className="truncate font-medium">{building?.name}</span>
+              )}
+              <span
+                title={t.simulated}
+                className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-waste-soft px-2 py-0.5 text-[11px] font-medium text-waste"
+              >
+                <span className="size-1.5 animate-pulse rounded-full bg-waste" aria-hidden />
+                <span className="hidden min-[400px]:inline">{t.simulated}</span>
+              </span>
+            </div>
+            <div
+              aria-hidden={!barTitle}
+              className="fc-bar-title min-w-0 truncate px-1 text-[17px] font-semibold"
+            >
+              {barTitle}
+            </div>
           </div>
           <div className="ml-auto lg:hidden">
             <AccountMenu variant="avatar" />
           </div>
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-[calc(var(--app-bottom)+128px)] sm:px-6 lg:pt-6 lg:pb-10">
-          {building ? children : <Loading />}
+          <ShellTitle.Provider value={setBarTitle}>
+            {building ? children : <Loading page />}
+          </ShellTitle.Provider>
         </main>
         <PullToRefresh />
         <TabBar

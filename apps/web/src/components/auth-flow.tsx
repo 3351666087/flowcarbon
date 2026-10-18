@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   Plus,
+  Smartphone,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -336,6 +337,13 @@ export function AuthFlow() {
         </FieldGroup>
         {alert}
         <Primary busy={busy}>{t.auth.continue}</Primary>
+        <Link
+          href="/app"
+          className="fc-web-only fc-press mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted hover:text-text"
+        >
+          <Smartphone className="size-3.5" aria-hidden />
+          {t.download.get}
+        </Link>
       </form>
     );
 

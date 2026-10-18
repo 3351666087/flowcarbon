@@ -105,7 +105,11 @@ function lensMap(
 
 let supported: boolean | null = null;
 
-/** SVG filters in `backdrop-filter`: Chromium only, and not when the system asks for less transparency. */
+/**
+ * SVG filters in `backdrop-filter`: Chromium only, not when the system asks for less transparency, and not on touch
+ * devices, where re-running the displacement for every glass surface on every scrolled frame cost a quarter of the
+ * frames on a mid-range phone; they get the same glass without the bending.
+ */
 export function lensSupported(): boolean {
   if (supported !== null) return supported;
   if (typeof window === "undefined") return false;
@@ -113,7 +117,8 @@ export function lensSupported(): boolean {
   supported =
     /Chrome\/\d|Chromium\/\d/.test(ua) &&
     !/Firefox|FxiOS|CriOS|EdgiOS/.test(ua) &&
-    !matchMedia("(prefers-reduced-transparency: reduce)").matches;
+    !matchMedia("(prefers-reduced-transparency: reduce)").matches &&
+    !matchMedia("(pointer: coarse)").matches;
   return supported;
 }
 
@@ -214,7 +219,9 @@ export function useLens<T extends HTMLElement>({
  */
 export function MaterialLight() {
   useEffect(() => {
-    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // on touch devices the light stays put: following the gyroscope repainted every rim many times a second
+    const still = matchMedia("(pointer: coarse)").matches;
+    const reduced = still || matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame = 0;
     let current = 315; // top left, where interface light conventionally comes from
     let target = current;
@@ -273,12 +280,12 @@ export function MaterialLight() {
       aim(315 + roll * 1.6 - pitch);
     };
 
-    addEventListener("pointermove", onMove, { passive: true });
+    if (!still) addEventListener("pointermove", onMove, { passive: true });
     addEventListener("pointerdown", onDown, { passive: true });
     addEventListener("pointerup", onUp, { passive: true });
     addEventListener("pointercancel", onUp, { passive: true });
     document.documentElement.addEventListener("pointerleave", onLeave);
-    addEventListener("deviceorientation", onTilt, { passive: true });
+    if (!still) addEventListener("deviceorientation", onTilt, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
       removeEventListener("pointermove", onMove);

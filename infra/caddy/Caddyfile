@@ -10,6 +10,10 @@
 	handle_path /download/* {
 		root * /srv/download
 		header Content-Disposition attachment
+		# Android installs from a download only when it is labelled as a package
+		@apk path *.apk
+		header @apk Content-Type application/vnd.android.package-archive
+		header @apk Cache-Control "no-cache"
 		file_server
 	}
 	handle {

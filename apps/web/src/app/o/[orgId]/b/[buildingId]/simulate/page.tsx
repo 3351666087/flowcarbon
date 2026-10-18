@@ -69,7 +69,7 @@ export default function SimulatePage() {
     return () => clearTimeout(id);
   }, [strategyId, escoShare, years, achieved, discountRate]);
 
-  if (strategies.isPending) return <Loading />;
+  if (strategies.isPending) return <Loading page />;
   if (strategies.error) return <ErrorBox error={strategies.error} onRetry={() => strategies.refetch()} />;
   const s = strategies.data;
   const r = epc.data;

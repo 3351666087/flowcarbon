@@ -74,16 +74,38 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
         return e!.id;
       });
     }
-    const fakeClient = (response: Record<string, unknown>, seen?: unknown[]) =>
+    // streams the response text in small pieces, as the API does; `during` runs once it has all been sent
+    const fakeClient = (
+      response: { stop_reason: string; text?: string },
+      seen?: unknown[],
+      during?: () => Promise<void>,
+    ) =>
       ({
         beta: {
           messages: {
-            parse: async (params: unknown) => {
+            stream: (params: unknown) => {
               seen?.push(params);
+              const listeners: ((delta: string, snapshot: string) => void)[] = [];
               return {
-                model: "claude-opus-5-5",
-                usage: { input_tokens: 1200, output_tokens: 180 },
-                ...response,
+                on(event: string, listener: (delta: string, snapshot: string) => void) {
+                  if (event === "text") listeners.push(listener);
+                  return this;
+                },
+                async finalMessage() {
+                  const text = response.text ?? "";
+                  let snapshot = "";
+                  for (let i = 0; i < text.length; i += 40) {
+                    snapshot += text.slice(i, i + 40);
+                    for (const listener of listeners) listener(text.slice(i, i + 40), snapshot);
+                  }
+                  await during?.();
+                  return {
+                    model: "claude-opus-5-5",
+                    usage: { input_tokens: 1200, output_tokens: 180 },
+                    stop_reason: response.stop_reason,
+                    content: text ? [{ type: "text", text }] : [],
+                  };
+                },
               };
             },
           },
@@ -104,10 +126,20 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
     it("stores a structured explanation with checked citations", async () => {
       const id = await pendingExplanation();
       const seen: unknown[] = [];
+      const text = JSON.stringify(output);
+      // what the page sees while the answer is still arriving
+      let draft: string | null = null;
+      const readDraft = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const [row] = await inOrg((tx) =>
+          tx.select().from(schema.aiExplanations).where(eq(schema.aiExplanations.id, id)),
+        );
+        draft = row!.draft;
+      };
       const r = await runExplain(
         {
           db: h.db,
-          client: fakeClient({ stop_reason: "end_turn", parsed_output: output }, seen),
+          client: fakeClient({ stop_reason: "end_turn", text }, seen, readDraft),
           model: "claude-opus-5-5",
           effort: "medium",
         },
@@ -117,10 +149,13 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
       const [row] = await inOrg((tx) =>
         tx.select().from(schema.aiExplanations).where(eq(schema.aiExplanations.id, id)),
       );
+      expect(draft).toBeTruthy();
+      expect(text.startsWith(draft!)).toBe(true);
       expect(row).toMatchObject({
         status: "done",
         model: "claude-opus-5-5",
         promptVersion: PROMPT_VERSION,
+        draft: null,
         inputTokens: 1200,
         outputTokens: 180,
       });
@@ -144,7 +179,7 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
         await runExplain(
           {
             db: h.db,
-            client: fakeClient({ stop_reason: "end_turn", parsed_output: output }),
+            client: fakeClient({ stop_reason: "end_turn", text }),
             model: "m",
             effort: "medium",
           },
@@ -159,11 +194,23 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
         await runExplain(
           {
             db: h.db,
-            client: fakeClient({ stop_reason: "refusal", parsed_output: null }),
+            client: fakeClient({ stop_reason: "refusal" }),
             model: "m",
             effort: "medium",
           },
           { orgId: seeded.orgId, explanationId: refused },
+        ),
+      ).toBe("failed");
+      const malformed = await pendingExplanation();
+      expect(
+        await runExplain(
+          {
+            db: h.db,
+            client: fakeClient({ stop_reason: "end_turn", text: '{"whatHappened": "F12 was' }),
+            model: "m",
+            effort: "medium",
+          },
+          { orgId: seeded.orgId, explanationId: malformed },
         ),
       ).toBe("failed");
       const unconfigured = await pendingExplanation();
@@ -179,6 +226,7 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
       expect(rows.map((r) => r.error)).toEqual(
         expect.arrayContaining([
           "The AI service declined to explain this finding.",
+          "The AI response did not match the expected structure.",
           "AI explanations are not configured for this deployment.",
         ]),
       );

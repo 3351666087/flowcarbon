@@ -56,8 +56,36 @@ function readPalette(): Palette {
 
 const easeOut = (t: number) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
 
-export function TowerScene({ className }: { className?: string }) {
+/** A real floor for the live view: how full it is (0–1) and whether it is cooled or lit with nobody there. */
+export interface LiveFloor {
+  occ: number;
+  waste: boolean;
+}
+
+/**
+ * Without `live` the tower tells FlowCarbon's story by itself (the sign-in stage). With `live` (floors bottom to top)
+ * it is the building as it is now: each floor glows with its people and turns amber while it wastes, and tapping a
+ * floor calls `onPick` with its index; `picked` lifts that floor.
+ */
+export function TowerScene({
+  className,
+  live,
+  onPick,
+  picked = null,
+}: {
+  className?: string;
+  live?: LiveFloor[];
+  onPick?: (index: number) => void;
+  picked?: number | null;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
+  const pickedRef = useRef(picked);
+  pickedRef.current = picked;
+  const count = live?.length || FLOORS;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -69,7 +97,7 @@ export function TowerScene({ className }: { className?: string }) {
     let height = 0;
     let dpr = 1;
     let place = { x: 0.5, y: 0.5, scale: 1 };
-    const floors: Floor[] = Array.from({ length: FLOORS }, (_, i) => ({
+    const floors: Floor[] = Array.from({ length: count }, (_, i) => ({
       occ: 0.15 + ((i * 37) % 11) / 14,
       target: Math.random(),
       waste: 0,
@@ -109,13 +137,15 @@ export function TowerScene({ className }: { className?: string }) {
     const geometry = (i: number) => {
       const a = Math.min(width * 0.3, height * 0.34) * place.scale;
       const b = a * 0.5 * (1 + tilt.y * 0.18);
-      const gap = a * 0.165 * (1 + spread * 0.55);
-      const thick = a * 0.065;
-      const total = (FLOORS - 1) * gap + thick;
+      // taller buildings stack tighter, so any number of floors fits the same frame
+      const fit = Math.min(1, 12 / count);
+      const gap = a * 0.165 * fit * (1 + spread * 0.55);
+      const thick = a * 0.065 * Math.sqrt(fit);
+      const total = (count - 1) * gap + thick;
       const cx = width * place.x + tilt.x * a * 0.08;
       const baseY = height * place.y + total / 2 + b * 0.4;
       const y = baseY - i * gap - thick;
-      const lean = (i - FLOORS / 2) * gap * tilt.x * 0.22;
+      const lean = (i - count / 2) * gap * tilt.x * 0.22;
       const left = a * (1 - tilt.x * 0.14);
       const right = a * (1 + tilt.x * 0.14);
       return { x: cx + lean, y, left, right, b, thick };
@@ -126,14 +156,15 @@ export function TowerScene({ className }: { className?: string }) {
       ctx.clearRect(0, 0, width, height);
       const accent = palette.accent;
 
-      for (let i = 0; i < FLOORS; i++) {
+      for (let i = 0; i < count; i++) {
         const f = floors[i]!;
         const arrive = reduced ? 1 : easeOut(Math.max(0, (t - 120 - i * 85) / 750));
         if (arrive <= 0) continue;
         const g = geometry(i);
         const drop = (1 - arrive) * -26;
+        const chosen = pickedRef.current === i;
         const x = g.x;
-        const y = g.y + drop;
+        const y = g.y + drop - (chosen ? Math.min(8, g.b * 0.3) : 0);
         const L = [x - g.left, y] as const;
         const T = [x, y - g.b] as const;
         const R = [x + g.right, y] as const;
@@ -168,10 +199,15 @@ export function TowerScene({ className }: { className?: string }) {
         ctx.closePath();
         ctx.fillStyle = palette.slab;
         ctx.fill();
-        const edgeGlow = 0.28 + f.occ * 0.35 + pulse * 0.6;
+        if (chosen) {
+          ctx.globalAlpha = arrive * 0.22;
+          ctx.fillStyle = f.waste > 0.02 ? palette.waste : accent;
+          ctx.fill();
+        }
+        const edgeGlow = chosen ? 1 : 0.28 + f.occ * 0.35 + pulse * 0.6;
         ctx.strokeStyle = f.waste > 0.02 ? palette.waste : accent;
         ctx.globalAlpha = arrive * Math.min(1, edgeGlow);
-        ctx.lineWidth = 1;
+        ctx.lineWidth = chosen ? 1.8 : 1;
         ctx.stroke();
 
         // windows along both side faces: teal with people, amber when cooled while empty
@@ -226,16 +262,27 @@ export function TowerScene({ className }: { className?: string }) {
       tilt.y += (aim.y - tilt.y) * 0.06;
       spread += (spreadAim - spread) * 0.08;
 
-      // occupancy drifts toward targets that change every few seconds
-      for (const f of floors) {
-        if (Math.random() < 0.004) f.target = Math.random() ** 1.4;
-        f.occ += (f.target - f.occ) * 0.012;
+      const data = liveRef.current;
+      if (data) {
+        // the real building: each floor eases toward what it is doing now
+        floors.forEach((f, i) => {
+          const d = data[i];
+          f.target = d?.occ ?? 0;
+          f.occ += (f.target - f.occ) * 0.06;
+          f.waste += ((d?.waste ? 1 : 0) - f.waste) * 0.06;
+        });
+      } else {
+        // occupancy drifts toward targets that change every few seconds
+        for (const f of floors) {
+          if (Math.random() < 0.004) f.target = Math.random() ** 1.4;
+          f.occ += (f.target - f.occ) * 0.012;
+        }
       }
 
-      // the waste story: a quiet floor starts cooling for nobody, then gets fixed
-      if (wasteFloor < 0 && t > nextWasteAt) {
+      // the waste story (sign-in stage only): a quiet floor starts cooling for nobody, then gets fixed
+      if (!data && wasteFloor < 0 && t > nextWasteAt) {
         let quietest = 0;
-        for (let i = 1; i < FLOORS; i++) if (floors[i]!.occ < floors[quietest]!.occ) quietest = i;
+        for (let i = 1; i < count; i++) if (floors[i]!.occ < floors[quietest]!.occ) quietest = i;
         wasteFloor = quietest;
         wasteStartedAt = t;
         floors[quietest]!.target = 0;
@@ -256,9 +303,9 @@ export function TowerScene({ className }: { className?: string }) {
       }
 
       // particles
-      if (now - lastSpawn > 70 && particles.length < 70 && t > 900) {
+      if (now - lastSpawn > (data ? 140 : 70) && particles.length < (data ? 36 : 70) && t > 900) {
         lastSpawn = now;
-        const i = Math.floor(Math.random() * FLOORS);
+        const i = Math.floor(Math.random() * count);
         const g = geometry(i);
         const side = Math.random() < 0.5 ? -g.left : g.right;
         particles.push({
@@ -270,8 +317,14 @@ export function TowerScene({ className }: { className?: string }) {
           life: 1600 + Math.random() * 1400,
           amber: false,
         });
-        if (wasteFloor >= 0 && floors[wasteFloor]!.waste > 0.5) {
-          const w = geometry(wasteFloor);
+        // amber leaks from a wasting floor: the story's one, or any real one wasting now
+        const wasting = data
+          ? floors.flatMap((f, k) => (f.waste > 0.5 ? [k] : []))
+          : wasteFloor >= 0 && floors[wasteFloor]!.waste > 0.5
+            ? [wasteFloor]
+            : [];
+        if (wasting.length) {
+          const w = geometry(wasting[Math.floor(Math.random() * wasting.length)]!);
           const dir = Math.random() < 0.5 ? -1 : 1;
           particles.push({
             x: w.x + dir * (dir < 0 ? w.left : w.right) * 0.95,
@@ -319,8 +372,30 @@ export function TowerScene({ className }: { className?: string }) {
     const onPointerDown = (e: PointerEvent) => {
       const r = canvas.getBoundingClientRect();
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
-      spreadAim = 1;
       const now = performance.now();
+      const pick = pickRef.current;
+      if (pick) {
+        // the floor at the height of the finger, within the tower's width
+        const px = e.clientX - r.left;
+        const py = e.clientY - r.top;
+        let best = -1;
+        let bestDistance = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < count; i++) {
+          const g = geometry(i);
+          if (Math.abs(px - g.x) > Math.max(g.left, g.right)) continue;
+          const distance = Math.abs(py - (g.y + g.b * 0.5));
+          if (distance < bestDistance) {
+            best = i;
+            bestDistance = distance;
+          }
+        }
+        if (best >= 0) {
+          floors[best]!.pulseAt = now;
+          pick(best);
+        }
+        return;
+      }
+      spreadAim = 1;
       floors.forEach((f, i) => {
         f.pulseAt = now + i * 45;
       });
@@ -374,7 +449,7 @@ export function TowerScene({ className }: { className?: string }) {
       window.removeEventListener("deviceorientation", onTilt);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+  }, [count]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden />;
 }

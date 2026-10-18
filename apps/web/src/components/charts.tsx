@@ -60,8 +60,23 @@ export function DailyEnergyChart({
               name === "avoidable" ? labels.avoidable : labels.energy,
             ]}
           />
-          <Bar dataKey="base" stackId="e" fill="var(--chart-4)" name="energy" radius={[0, 0, 0, 0]} />
-          <Bar dataKey="avoidable" stackId="e" fill="var(--chart-2)" name="avoidable" radius={[3, 3, 0, 0]} />
+          {/* the grow-in animation runs on the main thread, right when a page is being rendered */}
+          <Bar
+            dataKey="base"
+            stackId="e"
+            fill="var(--chart-4)"
+            name="energy"
+            radius={[0, 0, 0, 0]}
+            isAnimationActive={false}
+          />
+          <Bar
+            dataKey="avoidable"
+            stackId="e"
+            fill="var(--chart-2)"
+            name="avoidable"
+            radius={[3, 3, 0, 0]}
+            isAnimationActive={false}
+          />
           <Legend
             formatter={(v) => (v === "avoidable" ? labels.avoidable : labels.energy)}
             iconType="square"

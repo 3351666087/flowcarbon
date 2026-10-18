@@ -36,7 +36,7 @@ export default function DataPage() {
       ),
     refetchInterval: 15_000,
   });
-  if (health.isPending) return <Loading />;
+  if (health.isPending) return <Loading page />;
   if (health.error) return <ErrorBox error={health.error} onRetry={() => health.refetch()} />;
   const h = health.data;
   const floorLabel = new Map((floors.data ?? []).map((f) => [f.id, f.label]));

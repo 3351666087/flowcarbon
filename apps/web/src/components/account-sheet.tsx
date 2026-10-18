@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { Check, ChevronDown, KeyRound, LogOut, Plus, Sparkles, UserPlus } from "lucide-react";
+import { Check, ChevronDown, KeyRound, LogOut, Plus, Smartphone, Sparkles, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -322,6 +322,16 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
                   ]}
                 />
               </div>
+            </div>
+            <div className="fc-web-only">
+              <Row
+                onClick={() => {
+                  onClose();
+                  router.push("/app");
+                }}
+                icon={<Smartphone className="size-[18px]" aria-hidden />}
+                title={t.download.get}
+              />
             </div>
             <Row
               onClick={() => setSection(section === "password" ? null : "password")}

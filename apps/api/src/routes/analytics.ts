@@ -102,10 +102,25 @@ const explanationOut = z.object({
   model: z.string().nullable(),
   promptVersion: z.string(),
   output: z.record(z.string(), z.unknown()).nullable(),
+  /** while pending: the explanation as written so far (partial JSON), for showing it as it streams */
+  draft: z.string().nullable(),
   error: z.string().nullable(),
   createdAt: z.string(),
   completedAt: z.string().nullable(),
 });
+function explanationJson(e: typeof schema.aiExplanations.$inferSelect) {
+  return {
+    id: e.id,
+    status: e.status,
+    model: e.model,
+    promptVersion: e.promptVersion,
+    output: e.output,
+    draft: e.status === "pending" ? e.draft : null,
+    error: e.error,
+    createdAt: e.createdAt.toISOString(),
+    completedAt: iso(e.completedAt),
+  };
+}
 const epcInputs = z.object({
   strategyId: z.enum(["occupancy_gated_workday", "zone_only_non_working", "auto_lights_off", "full_package"]),
   annualKwh: z.number().min(0).max(1e10).optional(),
@@ -353,17 +368,38 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           .limit(10);
         return {
           ...findingJson(f),
-          explanations: ex.map((e) => ({
-            id: e.id,
-            status: e.status,
-            model: e.model,
-            promptVersion: e.promptVersion,
-            output: e.output,
-            error: e.error,
-            createdAt: e.createdAt.toISOString(),
-            completedAt: iso(e.completedAt),
-          })),
+          explanations: ex.map(explanationJson),
         };
+      }),
+  );
+
+  app.get(
+    "/orgs/:orgId/buildings/:buildingId/findings/:findingId/explanations/:explanationId",
+    {
+      // polled about twice a second while the explanation streams in
+      config: { rateLimit: { max: 600, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["analytics"],
+        summary: "One AI explanation, including the text written so far while it is pending",
+        params: findingParams.extend({ explanationId: uuid }),
+        response: { 200: explanationOut, ...errorResponses },
+      },
+    },
+    async (req) =>
+      inBuilding(db, req, req.params, "finding:read", async (tx, _a, b) => {
+        const [row] = await tx
+          .select({ e: schema.aiExplanations })
+          .from(schema.aiExplanations)
+          .innerJoin(schema.findings, eq(schema.findings.id, schema.aiExplanations.findingId))
+          .where(
+            and(
+              eq(schema.aiExplanations.id, req.params.explanationId),
+              eq(schema.aiExplanations.findingId, req.params.findingId),
+              eq(schema.findings.buildingId, b.id),
+            ),
+          );
+        if (!row) throw notFound("Explanation");
+        return explanationJson(row.e);
       }),
   );
 
