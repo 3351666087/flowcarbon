@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/worker",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "FlowCarbon background jobs: recompute after ingestion, nightly forecasts, AI explanations.",
   "license": "Apache-2.0",
