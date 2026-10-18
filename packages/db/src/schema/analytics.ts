@@ -1,3 +1,4 @@
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   date,
   doublePrecision,
@@ -23,6 +24,8 @@ import {
   findingStatusEnum,
   hvacModeEnum,
   instrumentKindEnum,
+  measureSourceEnum,
+  measureStatusEnum,
   overtimeStatusEnum,
   scheduleAdviceEnum,
 } from "./enums";
@@ -64,12 +67,57 @@ export const findings = pgTable(
     statusNote: text("status_note"),
     statusBy: uuid("status_by").references(() => users.id, { onDelete: "set null" }),
     statusAt: ts("status_at"),
+    /** the measure this finding is being answered by */
+    measureId: uuid("measure_id").references((): AnyPgColumn => measures.id, { onDelete: "set null" }),
     detectedAt: ts("detected_at").notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("findings_fingerprint_uq").on(t.floorId, t.ruleId, t.startAt),
     index("findings_building_time_idx").on(t.buildingId, t.startAt),
     index("findings_status_idx").on(t.orgId, t.status),
+    index("findings_measure_idx").on(t.measureId),
+  ],
+);
+
+/**
+ * What the team decided to do about a kind of finding on a floor: a control strategy (or an on-site check), agreed
+ * from a finding, often on the AI assistant's recommendation, then put into effect. Findings of the kinds it covers
+ * on that floor are linked to it; after it takes effect the data shows whether they stopped.
+ */
+export const measures = pgTable(
+  "measures",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "cascade" }),
+    floorId: uuid("floor_id")
+      .notNull()
+      .references(() => floors.id, { onDelete: "cascade" }),
+    strategyId: text("strategy_id").notNull(),
+    /** for the people carrying it out: what to change, when */
+    note: text("note"),
+    source: measureSourceEnum("source").notNull(),
+    explanationId: uuid("explanation_id").references(() => aiExplanations.id, { onDelete: "set null" }),
+    originFindingId: uuid("origin_finding_id").references((): AnyPgColumn => findings.id, {
+      onDelete: "set null",
+    }),
+    /** the rule of the finding it was agreed from (what an on-site check is about) */
+    originRuleId: text("origin_rule_id").notNull(),
+    status: measureStatusEnum("status").notNull().default("planned"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    implementedBy: uuid("implemented_by").references(() => users.id, { onDelete: "set null" }),
+    implementedAt: ts("implemented_at"),
+    cancelledBy: uuid("cancelled_by").references(() => users.id, { onDelete: "set null" }),
+    cancelledAt: ts("cancelled_at"),
+  },
+  (t) => [
+    index("measures_building_status_idx").on(t.buildingId, t.status),
+    index("measures_floor_idx").on(t.floorId),
   ],
 );
 

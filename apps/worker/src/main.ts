@@ -1,11 +1,19 @@
 import { createServer } from "node:http";
 import Anthropic from "@anthropic-ai/sdk";
 import { createDb, schema, withOrg } from "@flowcarbon/db";
-import { createBoss, explainPayload, PgBossJobQueue, QUEUES, recomputePayload } from "@flowcarbon/jobs";
+import {
+  createBoss,
+  demoPayload,
+  explainPayload,
+  PgBossJobQueue,
+  QUEUES,
+  recomputePayload,
+} from "@flowcarbon/jobs";
 import { eq } from "drizzle-orm";
 import { pino } from "pino";
 import { Counter, collectDefaultMetrics, Histogram, Registry } from "prom-client";
 import { loadWorkerConfig } from "./config";
+import { runDemoWorkspace } from "./demo";
 import { runExplain } from "./explain";
 import { runNightly } from "./nightly";
 import { markRecomputeFailed, runRecompute } from "./recompute";
@@ -101,6 +109,14 @@ await boss.work(
   },
 );
 
+// one at a time: building a demo tower simulates three weeks of a 12-floor building
+await boss.work(QUEUES.demo.name, { localConcurrency: 1, batchSize: 1 }, async ([job]) => {
+  if (!job) return;
+  const payload = demoPayload.parse(job.data);
+  const r = await timed("demo", () => runDemoWorkspace(db, payload));
+  log.info({ jobId: job.id, ...payload, result: r }, "demo workspace done");
+});
+
 await boss.work(QUEUES.nightly.name, { batchSize: 1 }, async () => {
   const r = await timed("nightly", () => runNightly(db, jobs, { localHour: config.NIGHTLY_LOCAL_HOUR }));
   log.info(r, "nightly tick");
@@ -129,6 +145,11 @@ await boss.work(QUEUES.deadLetter.name, { batchSize: 10 }, async (dead) => {
           .where(eq(schema.aiExplanations.id, explain.data.explanationId)),
       );
       log.error({ jobId: job.id, ...explain.data }, "explanation gave up");
+      continue;
+    }
+    if (demoPayload.safeParse(job.data).success) {
+      // the workspace stays empty; asking for it again from the app queues a new attempt
+      log.error({ jobId: job.id, data: job.data }, "demo workspace gave up");
       continue;
     }
     log.error({ jobId: job.id, data: job.data }, "unrecognised dead-letter job");

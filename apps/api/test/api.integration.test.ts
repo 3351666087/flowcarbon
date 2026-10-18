@@ -3,7 +3,7 @@ import { addDays, localParts, zonedTime } from "@flowcarbon/core";
 import { createDb, type DbHandle, schema } from "@flowcarbon/db";
 import { type SeedResult, seedDemo } from "@flowcarbon/demo";
 import { createTestDatabase, type TestDatabase } from "@flowcarbon/demo/testing";
-import type { ExplainPayload, JobQueue, RecomputePayload } from "@flowcarbon/jobs";
+import type { DemoPayload, ExplainPayload, JobQueue, RecomputePayload } from "@flowcarbon/jobs";
 import { sha256 } from "@flowcarbon/security";
 import { eq } from "drizzle-orm";
 import type { InjectOptions } from "fastify";
@@ -21,7 +21,11 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
   let handle: DbHandle;
   let seeded: SeedResult;
   let app: Awaited<ReturnType<typeof buildApp>>;
-  const sent: { recompute: RecomputePayload[]; explain: ExplainPayload[] } = { recompute: [], explain: [] };
+  const sent: { recompute: RecomputePayload[]; explain: ExplainPayload[]; demo: DemoPayload[] } = {
+    recompute: [],
+    explain: [],
+    demo: [],
+  };
   const jobs: JobQueue = {
     recompute: async (p) => {
       sent.recompute.push(p);
@@ -29,6 +33,10 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
     },
     explain: async (p) => {
       sent.explain.push(p);
+      return "job";
+    },
+    demo: async (p) => {
+      sent.demo.push(p);
       return "job";
     },
   };
@@ -373,6 +381,75 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
     });
   });
 
+  describe("measures", () => {
+    it("closes the loop: agree a measure, put it into effect, undo, cancel", async () => {
+      const open = (
+        await as(manager, { url: `${bld()}/findings?status=open&ruleId=full_floor_few_people&limit=200` })
+      ).json().items as { id: string; dayType: string; floorId: string }[];
+      const f = open.find((x) => x.dayType === "workday")!;
+      const detail = (await as(manager, { url: `${bld()}/findings/${f.id}` })).json();
+      expect(detail.options.fits).toEqual(["occupancy_gated_workday", "investigate_on_site"]);
+      expect(detail.thresholds.map((t: { key: string }) => t.key)).toEqual([
+        "fullFloorMinPeople",
+        "minFindingKwh",
+      ]);
+      expect(detail.measureDetail).toBeNull();
+      const similar = detail.options.similar.occupancy_gated_workday as number;
+
+      const body = {
+        strategyId: "occupancy_gated_workday",
+        source: "ai_edited",
+        note: "Zone off 30 min after empty",
+      };
+      const url = `${bld()}/findings/${f.id}/measure`;
+      // reading is not deciding
+      expect((await as(analyst, { method: "POST", url, payload: body })).statusCode).toBe(403);
+      const adopted = await as(manager, { method: "POST", url, payload: body });
+      expect(adopted.statusCode).toBe(201);
+      const { measure, linked, joined } = adopted.json();
+      expect(joined).toBe(false);
+      expect(linked).toBe(similar + 1);
+      expect(measure).toMatchObject({
+        status: "planned",
+        source: "ai_edited",
+        floorId: f.floorId,
+        findings: { total: linked, acknowledged: linked, fixed: 0 },
+        verification: { verdict: "projected", dayTypes: ["workday"] },
+      });
+      expect((await as(manager, { method: "POST", url, payload: body })).statusCode).toBe(409);
+
+      const after = (await as(manager, { url: `${bld()}/findings/${f.id}` })).json();
+      expect(after).toMatchObject({ status: "acknowledged", measure: { id: measure.id, status: "planned" } });
+      expect(after.activity.map((a: { action: string }) => a.action)).toContain("measure.create");
+
+      const m = `${bld()}/measures/${measure.id}`;
+      const inEffect = (
+        await as(manager, { method: "PATCH", url: m, payload: { status: "in_effect" } })
+      ).json();
+      expect(inEffect).toMatchObject({ status: "in_effect", findings: { acknowledged: 0 } });
+      expect(inEffect.findings.fixed).toBeGreaterThanOrEqual(linked);
+      expect(inEffect.implementedAt).toBeTruthy();
+      expect(inEffect.verification.verdict).toBe("waiting");
+      const list = (await as(analyst, { url: `${bld()}/measures` })).json();
+      expect(list.totals.inEffect).toBe(1);
+      expect((await as(analyst, { url: m })).json().linked).toHaveLength(inEffect.findings.total);
+
+      const undone = (await as(manager, { method: "PATCH", url: m, payload: { status: "planned" } })).json();
+      expect(undone).toMatchObject({ status: "planned", implementedAt: null, findings: { fixed: 0 } });
+      const cancelled = (
+        await as(manager, { method: "PATCH", url: m, payload: { status: "cancelled" } })
+      ).json();
+      expect(cancelled).toMatchObject({ status: "cancelled", findings: { total: 0 } });
+      expect((await as(manager, { url: `${bld()}/findings/${f.id}` })).json()).toMatchObject({
+        status: "open",
+        measure: null,
+      });
+      expect((await as(manager, { method: "PATCH", url: m, payload: { note: "again" } })).statusCode).toBe(
+        422,
+      );
+    });
+  });
+
   describe("analytics", () => {
     it("serves the report as JSON and CSV", async () => {
       const r = (await as(analyst, { url: `${bld()}/report?from=2026-09-15&to=2026-10-13` })).json();
@@ -576,9 +653,21 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       });
       expect(demo.statusCode).toBe(200);
       expect(demo.json().user).toMatchObject({ email: ada, locale: "zh", hasPassword: true });
+      // the demo is a building of one's own, built by a background job
       expect(demo.json().memberships).toEqual([
-        expect.objectContaining({ orgId: seeded.orgId, role: "viewer" }),
+        expect.objectContaining({ role: "owner", orgSlug: expect.stringMatching(/^demo-/) }),
       ]);
+      const adaDemo = demo.json().memberships[0].orgId;
+      expect(sent.demo.at(-1)).toEqual({ orgId: adaDemo });
+      const adaCookie = demo.cookies.find((c) => c.name === "fc_session")!.value;
+      const again = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/orgs/demo`,
+        cookies: { fc_session: adaCookie },
+        headers: { origin: ORIGIN },
+      });
+      expect(again.statusCode).toBe(200);
+      expect(again.json()).toMatchObject({ id: adaDemo, ready: false });
       expect(
         (await signup({ name: "Ada", password: "a long enough passphrase", start: "demo" })).statusCode,
       ).toBe(410);

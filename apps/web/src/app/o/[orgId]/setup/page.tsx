@@ -1,15 +1,15 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { AccountMenu } from "@/components/account-sheet";
 import { AuthStage, FieldGroup, GroupField, groupInput, StepHeader } from "@/components/auth-stage";
 import { Mark } from "@/components/mark";
 import { ApiError, api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { useMe } from "@/lib/session";
+import { useBuildings, useMe } from "@/lib/session";
 
 /** Cities offered for a first building, with the regional grid whose emission factor applies there. */
 const CITIES = [
@@ -98,6 +98,9 @@ export default function SetupPage() {
     }
   }
 
+  // a demo building of one's own is built in the background: wait for it instead of asking for one
+  if (membership?.orgSlug.startsWith("demo-")) return <DemoPreparing orgId={orgId} />;
+
   if (me.data && !canBuild)
     return (
       <AuthStage>
@@ -180,6 +183,56 @@ export default function SetupPage() {
           {busy ? null : <ArrowRight className="size-[18px]" aria-hidden />}
         </button>
       </form>
+    </AuthStage>
+  );
+}
+
+/** While the worker builds a person's demo tower: what is happening, then straight into it. */
+function DemoPreparing({ orgId }: { orgId: string }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const buildings = useBuildings(orgId);
+  const [slow, setSlow] = useState(false);
+  useQuery({
+    queryKey: ["buildings", orgId, "wait"],
+    queryFn: async () => {
+      const list = await unwrap(api.GET("/api/v1/orgs/{orgId}/buildings", { params: { path: { orgId } } }));
+      if (list.length) buildings.refetch();
+      return list.length;
+    },
+    refetchInterval: (q) => (q.state.data ? false : 1500),
+  });
+  const ready = buildings.data?.[0];
+  useEffect(() => {
+    if (ready) router.replace(`/o/${orgId}/b/${ready.id}/floors`);
+  }, [ready, orgId, router]);
+  useEffect(() => {
+    const id = setTimeout(() => setSlow(true), 45_000);
+    return () => clearTimeout(id);
+  }, []);
+  return (
+    <AuthStage>
+      <div className="flex flex-col items-center py-6 text-center">
+        <Mark motion="breathe" className="size-14" />
+        <h1 className="mt-6 text-[22px] leading-tight font-semibold tracking-tight">{t.demo.preparing}</h1>
+        <p className="mt-2 max-w-xs text-sm text-muted">{t.demo.preparingSub}</p>
+        <div className="fc-skel mt-6 h-1.5 w-48 rounded-full" />
+        {slow ? (
+          <div className="mt-6 space-y-2">
+            <p className="text-sm text-muted">{t.demo.slow}</p>
+            <button
+              type="button"
+              className="text-sm font-medium text-accent"
+              onClick={async () => {
+                setSlow(false);
+                await api.POST("/api/v1/orgs/demo");
+              }}
+            >
+              {t.demo.retry}
+            </button>
+          </div>
+        ) : null}
+      </div>
     </AuthStage>
   );
 }

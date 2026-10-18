@@ -1,10 +1,11 @@
 import { parseArgs } from "node:util";
 import { createDb } from "@flowcarbon/db";
-import { pumpDemo } from "./pump";
+import { pumpAllDemos, pumpDemo } from "./pump";
 
 const { values } = parseArgs({
   options: {
-    slug: { type: "string", default: "tower-a-demo" },
+    /** one organisation; without it every demo organisation is kept live */
+    slug: { type: "string" },
     once: { type: "boolean", default: false },
   },
 });
@@ -31,7 +32,11 @@ for (const signal of ["SIGINT", "SIGTERM"] as const)
 
 const run = async () => {
   try {
-    await pumpDemo(db, { slug: values.slug, log: (m) => console.log(`${new Date().toISOString()} ${m}`) });
+    const log = (m: string) => console.log(`${new Date().toISOString()} ${m}`);
+    if (values.slug) await pumpDemo(db, { slug: values.slug, log: (m) => log(m) });
+    else
+      for (const r of await pumpAllDemos(db, { log: (m) => log(m) }))
+        if (r.error) log(`${r.slug}: ${r.error}`);
   } catch (err) {
     // keep running: the next tick catches up whatever this one missed
     console.error(`${new Date().toISOString()} pump failed:`, err instanceof Error ? err.message : err);

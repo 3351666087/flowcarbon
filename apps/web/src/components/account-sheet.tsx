@@ -109,7 +109,8 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
   const user = me.data?.user;
   const memberships = me.data?.memberships ?? [];
   const others = (device.data?.accounts ?? []).filter((a) => !a.active);
-  const inDemo = memberships.some((m) => m.orgSlug === methods.data?.demo?.slug);
+  // a demo building of one's own (the shared demonstration is read-only)
+  const inDemo = memberships.some((m) => m.orgSlug.startsWith("demo-"));
 
   async function act(task: () => Promise<void>) {
     setBusy(true);
@@ -145,7 +146,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
   };
   const joinDemo = () =>
     act(async () => {
-      const org = await unwrap(api.POST("/api/v1/orgs/demo/join"));
+      const org = await unwrap(api.POST("/api/v1/orgs/demo"));
       await qc.invalidateQueries({ queryKey: ["me"] });
       openOrg(org.id);
     });
@@ -248,7 +249,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
                 onClick={joinDemo}
                 icon={<Sparkles className="size-[18px]" aria-hidden />}
                 title={t.account.joinDemo}
-                note={methods.data.demo.name}
+                note={t.account.joinDemoNote}
               />
             ) : null}
             <Row

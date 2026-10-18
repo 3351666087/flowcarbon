@@ -57,6 +57,13 @@
       "when": 1792342430064,
       "tag": "0007_explanation_draft",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792345234776,
+      "tag": "0008_measures",
+      "breakpoints": true
     }
   ]
 }

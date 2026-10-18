@@ -21,11 +21,13 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PAGES, useBuilding, useBuildings, useIds, useMe, useMembership } from "@/lib/session";
 import { AccountMenu } from "./account-sheet";
+import { DemoBanner } from "./demo-banner";
 import { Backdrop, useLens } from "./glass";
 import { useLiquid } from "./liquid";
 import { MarkTile } from "./mark";
 import { PullToRefresh } from "./pull-refresh";
 import { TabBar } from "./tab-bar";
+import { Toaster } from "./toast";
 import { ErrorBox, Loading, ShellTitle } from "./ui";
 
 const NAV = [
@@ -71,7 +73,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const role = membership?.role;
   const items = role ? NAV.filter((n) => PAGES[n.key]?.includes(role)) : [];
   const base = `/o/${orgId}/b/${buildingId}`;
-  const current = items.find(({ key }) => pathname.startsWith(`${base}/${key}`))?.key ?? null;
+  // measures are reached from the opportunities, and live under that tab
+  const section = pathname.startsWith(`${base}/measures`) ? `${base}/findings` : pathname;
+  const current = items.find(({ key }) => section.startsWith(`${base}/${key}`))?.key ?? null;
   useLiquid("y", current, sideList, sideMark);
 
   if (me.isPending || buildings.isPending)
@@ -201,9 +205,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-[calc(var(--app-bottom)+128px)] sm:px-6 lg:pt-6 lg:pb-10">
           <ShellTitle.Provider value={setBarTitle}>
+            <DemoBanner />
             {building ? children : <Loading page />}
           </ShellTitle.Provider>
         </main>
+        <Toaster />
         <PullToRefresh />
         <TabBar
           tabs={items.map(({ key, icon }) => ({ key, icon, href: `${base}/${key}`, label: t.navShort[key] }))}

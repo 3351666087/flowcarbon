@@ -241,6 +241,7 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
         return "id";
       },
       explain: async () => null,
+      demo: async () => null,
     };
     // 03:10 local in Shanghai: not due
     expect(

@@ -824,7 +824,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign-up, step 3: create the account for a verified address with a password, then join the demo organisation read-only or found one */
+        /** Sign-up, step 3: create the account for a verified address with a password, then start in a demo building of one's own (built in the background) or found an organisation */
         post: {
             parameters: {
                 query?: never;
@@ -2164,6 +2164,165 @@ export interface paths {
                             id: string;
                             slug: string;
                             name: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The caller's own demo organisation with a simulated building, created on first call (the building is built in the background; `ready` says when it is there) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            slug: string;
+                            name: string;
+                            ready: boolean;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            slug: string;
+                            name: string;
+                            ready: boolean;
                         };
                     };
                 };
@@ -8454,6 +8613,13 @@ export interface paths {
                                 status: "open" | "acknowledged" | "fixed" | "dismissed";
                                 statusNote: string | null;
                                 statusAt: string | null;
+                                measure: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    strategyId: string;
+                                    /** @enum {string} */
+                                    status: "planned" | "in_effect" | "cancelled";
+                                } | null;
                             }[];
                             nextCursor: string | null;
                         };
@@ -8578,7 +8744,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One finding with its AI explanations */
+        /** One finding with its AI explanations, the measure answering it, what could be done about it, the thresholds it was judged by, and what happened to it */
         get: {
             parameters: {
                 query?: never;
@@ -8630,6 +8796,13 @@ export interface paths {
                             status: "open" | "acknowledged" | "fixed" | "dismissed";
                             statusNote: string | null;
                             statusAt: string | null;
+                            measure: {
+                                /** Format: uuid */
+                                id: string;
+                                strategyId: string;
+                                /** @enum {string} */
+                                status: "planned" | "in_effect" | "cancelled";
+                            } | null;
                             explanations: {
                                 /** Format: uuid */
                                 id: string;
@@ -8644,6 +8817,96 @@ export interface paths {
                                 error: string | null;
                                 createdAt: string;
                                 completedAt: string | null;
+                            }[];
+                            measureDetail: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorId: string;
+                                floorLabel: string;
+                                strategyId: string;
+                                note: string | null;
+                                /** @enum {string} */
+                                source: "ai" | "ai_edited" | "manual";
+                                /** @enum {string} */
+                                status: "planned" | "in_effect" | "cancelled";
+                                originFindingId: string | null;
+                                originRuleId: string;
+                                explanationId: string | null;
+                                createdAt: string;
+                                createdBy: string | null;
+                                implementedAt: string | null;
+                                implementedBy: string | null;
+                                cancelledAt: string | null;
+                                findings: {
+                                    total: number;
+                                    acknowledged: number;
+                                    fixed: number;
+                                };
+                                verification: {
+                                    dayTypes: ("workday" | "weekend" | "holiday")[];
+                                    series: {
+                                        date: string;
+                                        /** @enum {string} */
+                                        dayType: "workday" | "weekend" | "holiday";
+                                        covered: boolean;
+                                        /** @enum {string} */
+                                        phase: "before" | "change" | "after";
+                                        complete: boolean;
+                                        kwh: number;
+                                        cost: number;
+                                    }[];
+                                    before: {
+                                        days: number;
+                                        kwh: number;
+                                        cost: number;
+                                        perDayKwh: number;
+                                        perDayCost: number;
+                                    };
+                                    after: {
+                                        days: number;
+                                        kwh: number;
+                                        cost: number;
+                                        perDayKwh: number;
+                                        perDayCost: number;
+                                        recurrences: number;
+                                        lastAt: string | null;
+                                    } | null;
+                                    weekly: {
+                                        kwh: number;
+                                        cost: number;
+                                    };
+                                    /** @enum {string} */
+                                    verdict: "projected" | "waiting" | "working" | "partly" | "not_working";
+                                };
+                            } | null;
+                            options: {
+                                fits: string[];
+                                similar: {
+                                    [key: string]: number;
+                                };
+                                floorMeasures: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    strategyId: string;
+                                    /** @enum {string} */
+                                    status: "planned" | "in_effect";
+                                }[];
+                            };
+                            thresholds: {
+                                key: string;
+                                value: number | string;
+                                current: number | string;
+                                defaultValue: number | string;
+                            }[];
+                            reviewedBy: string | null;
+                            activity: {
+                                at: string;
+                                action: string;
+                                actor: string | null;
+                                data: {
+                                    [key: string]: unknown;
+                                } | null;
                             }[];
                         };
                     };
@@ -8757,7 +9020,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Review a finding: acknowledge, mark fixed or dismiss (with a reason) */
+        /** Review a finding: acknowledge, mark fixed or dismiss (with a reason). Reopening or dismissing takes it out of its measure. */
         patch: {
             parameters: {
                 query?: never;
@@ -8817,6 +9080,13 @@ export interface paths {
                             status: "open" | "acknowledged" | "fixed" | "dismissed";
                             statusNote: string | null;
                             statusAt: string | null;
+                            measure: {
+                                /** Format: uuid */
+                                id: string;
+                                strategyId: string;
+                                /** @enum {string} */
+                                status: "planned" | "in_effect" | "cancelled";
+                            } | null;
                         };
                     };
                 };
@@ -11131,6 +11401,922 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/{orgId}/buildings/{buildingId}/measures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Measures agreed for the building, newest first, each with what the data says about it */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "planned" | "in_effect" | "cancelled";
+                };
+                header?: never;
+                path: {
+                    orgId: string;
+                    buildingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorId: string;
+                                floorLabel: string;
+                                strategyId: string;
+                                note: string | null;
+                                /** @enum {string} */
+                                source: "ai" | "ai_edited" | "manual";
+                                /** @enum {string} */
+                                status: "planned" | "in_effect" | "cancelled";
+                                originFindingId: string | null;
+                                originRuleId: string;
+                                explanationId: string | null;
+                                createdAt: string;
+                                createdBy: string | null;
+                                implementedAt: string | null;
+                                implementedBy: string | null;
+                                cancelledAt: string | null;
+                                findings: {
+                                    total: number;
+                                    acknowledged: number;
+                                    fixed: number;
+                                };
+                                verification: {
+                                    dayTypes: ("workday" | "weekend" | "holiday")[];
+                                    series: {
+                                        date: string;
+                                        /** @enum {string} */
+                                        dayType: "workday" | "weekend" | "holiday";
+                                        covered: boolean;
+                                        /** @enum {string} */
+                                        phase: "before" | "change" | "after";
+                                        complete: boolean;
+                                        kwh: number;
+                                        cost: number;
+                                    }[];
+                                    before: {
+                                        days: number;
+                                        kwh: number;
+                                        cost: number;
+                                        perDayKwh: number;
+                                        perDayCost: number;
+                                    };
+                                    after: {
+                                        days: number;
+                                        kwh: number;
+                                        cost: number;
+                                        perDayKwh: number;
+                                        perDayCost: number;
+                                        recurrences: number;
+                                        lastAt: string | null;
+                                    } | null;
+                                    weekly: {
+                                        kwh: number;
+                                        cost: number;
+                                    };
+                                    /** @enum {string} */
+                                    verdict: "projected" | "waiting" | "working" | "partly" | "not_working";
+                                };
+                            }[];
+                            totals: {
+                                planned: number;
+                                inEffect: number;
+                                measured: number;
+                                weeklyKwh: number;
+                                weeklyCost: number;
+                                expectedWeeklyKwh: number;
+                                expectedWeeklyCost: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/{orgId}/buildings/{buildingId}/measures/{measureId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One measure: its findings, what came back after it took effect, and the before/after comparison */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    orgId: string;
+                    buildingId: string;
+                    measureId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorId: string;
+                            floorLabel: string;
+                            strategyId: string;
+                            note: string | null;
+                            /** @enum {string} */
+                            source: "ai" | "ai_edited" | "manual";
+                            /** @enum {string} */
+                            status: "planned" | "in_effect" | "cancelled";
+                            originFindingId: string | null;
+                            originRuleId: string;
+                            explanationId: string | null;
+                            createdAt: string;
+                            createdBy: string | null;
+                            implementedAt: string | null;
+                            implementedBy: string | null;
+                            cancelledAt: string | null;
+                            findings: {
+                                total: number;
+                                acknowledged: number;
+                                fixed: number;
+                            };
+                            verification: {
+                                dayTypes: ("workday" | "weekend" | "holiday")[];
+                                series: {
+                                    date: string;
+                                    /** @enum {string} */
+                                    dayType: "workday" | "weekend" | "holiday";
+                                    covered: boolean;
+                                    /** @enum {string} */
+                                    phase: "before" | "change" | "after";
+                                    complete: boolean;
+                                    kwh: number;
+                                    cost: number;
+                                }[];
+                                before: {
+                                    days: number;
+                                    kwh: number;
+                                    cost: number;
+                                    perDayKwh: number;
+                                    perDayCost: number;
+                                };
+                                after: {
+                                    days: number;
+                                    kwh: number;
+                                    cost: number;
+                                    perDayKwh: number;
+                                    perDayCost: number;
+                                    recurrences: number;
+                                    lastAt: string | null;
+                                } | null;
+                                weekly: {
+                                    kwh: number;
+                                    cost: number;
+                                };
+                                /** @enum {string} */
+                                verdict: "projected" | "waiting" | "working" | "partly" | "not_working";
+                            };
+                            linked: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorId: string;
+                                ruleId: string;
+                                ruleName: string;
+                                /** @enum {string} */
+                                kind: "waste" | "opportunity";
+                                startAt: string;
+                                endAt: string;
+                                /** @enum {string} */
+                                dayType: "workday" | "weekend" | "holiday";
+                                avoidableKwh: number;
+                                avoidableCost: number;
+                                avoidableCo2eKg: number;
+                                peakPeople: number;
+                                /** @enum {string} */
+                                tier: "measured" | "estimated";
+                                evidence: {
+                                    summary: string;
+                                    facts: {
+                                        [key: string]: string | number;
+                                    };
+                                };
+                                params: {
+                                    [key: string]: unknown;
+                                };
+                                /** @enum {string} */
+                                status: "open" | "acknowledged" | "fixed" | "dismissed";
+                                statusNote: string | null;
+                                statusAt: string | null;
+                                measure: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    strategyId: string;
+                                    /** @enum {string} */
+                                    status: "planned" | "in_effect" | "cancelled";
+                                } | null;
+                            }[];
+                            recurring: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorId: string;
+                                ruleId: string;
+                                ruleName: string;
+                                /** @enum {string} */
+                                kind: "waste" | "opportunity";
+                                startAt: string;
+                                endAt: string;
+                                /** @enum {string} */
+                                dayType: "workday" | "weekend" | "holiday";
+                                avoidableKwh: number;
+                                avoidableCost: number;
+                                avoidableCo2eKg: number;
+                                peakPeople: number;
+                                /** @enum {string} */
+                                tier: "measured" | "estimated";
+                                evidence: {
+                                    summary: string;
+                                    facts: {
+                                        [key: string]: string | number;
+                                    };
+                                };
+                                params: {
+                                    [key: string]: unknown;
+                                };
+                                /** @enum {string} */
+                                status: "open" | "acknowledged" | "fixed" | "dismissed";
+                                statusNote: string | null;
+                                statusAt: string | null;
+                                measure: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    strategyId: string;
+                                    /** @enum {string} */
+                                    status: "planned" | "in_effect" | "cancelled";
+                                } | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a measure: its note, its strategy while planned, or its status. In effect resolves its findings (and the floor's earlier open ones it covers); back to planned undoes that; cancelled reopens them. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    orgId: string;
+                    buildingId: string;
+                    measureId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        note?: string | null;
+                        /** @enum {string} */
+                        strategyId?: "occupancy_gated_workday" | "zone_only_non_working" | "auto_lights_off" | "investigate_on_site";
+                        /** @enum {string} */
+                        status?: "planned" | "in_effect" | "cancelled";
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            floorId: string;
+                            floorLabel: string;
+                            strategyId: string;
+                            note: string | null;
+                            /** @enum {string} */
+                            source: "ai" | "ai_edited" | "manual";
+                            /** @enum {string} */
+                            status: "planned" | "in_effect" | "cancelled";
+                            originFindingId: string | null;
+                            originRuleId: string;
+                            explanationId: string | null;
+                            createdAt: string;
+                            createdBy: string | null;
+                            implementedAt: string | null;
+                            implementedBy: string | null;
+                            cancelledAt: string | null;
+                            findings: {
+                                total: number;
+                                acknowledged: number;
+                                fixed: number;
+                            };
+                            verification: {
+                                dayTypes: ("workday" | "weekend" | "holiday")[];
+                                series: {
+                                    date: string;
+                                    /** @enum {string} */
+                                    dayType: "workday" | "weekend" | "holiday";
+                                    covered: boolean;
+                                    /** @enum {string} */
+                                    phase: "before" | "change" | "after";
+                                    complete: boolean;
+                                    kwh: number;
+                                    cost: number;
+                                }[];
+                                before: {
+                                    days: number;
+                                    kwh: number;
+                                    cost: number;
+                                    perDayKwh: number;
+                                    perDayCost: number;
+                                };
+                                after: {
+                                    days: number;
+                                    kwh: number;
+                                    cost: number;
+                                    perDayKwh: number;
+                                    perDayCost: number;
+                                    recurrences: number;
+                                    lastAt: string | null;
+                                } | null;
+                                weekly: {
+                                    kwh: number;
+                                    cost: number;
+                                };
+                                /** @enum {string} */
+                                verdict: "projected" | "waiting" | "working" | "partly" | "not_working";
+                            };
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/orgs/{orgId}/buildings/{buildingId}/findings/{findingId}/measure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Agree a measure for a finding: the AI assistant's recommendation as it stands, edited, or the team's own. Joins the floor's active measure with the same strategy if there is one; with `similar`, the floor's other open findings it covers are linked too. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    orgId: string;
+                    buildingId: string;
+                    findingId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        strategyId: "occupancy_gated_workday" | "zone_only_non_working" | "auto_lights_off" | "investigate_on_site";
+                        note?: string;
+                        /** @enum {string} */
+                        source: "ai" | "ai_edited" | "manual";
+                        /** Format: uuid */
+                        explanationId?: string;
+                        /** @default true */
+                        similar?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            measure: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                floorId: string;
+                                floorLabel: string;
+                                strategyId: string;
+                                note: string | null;
+                                /** @enum {string} */
+                                source: "ai" | "ai_edited" | "manual";
+                                /** @enum {string} */
+                                status: "planned" | "in_effect" | "cancelled";
+                                originFindingId: string | null;
+                                originRuleId: string;
+                                explanationId: string | null;
+                                createdAt: string;
+                                createdBy: string | null;
+                                implementedAt: string | null;
+                                implementedBy: string | null;
+                                cancelledAt: string | null;
+                                findings: {
+                                    total: number;
+                                    acknowledged: number;
+                                    fixed: number;
+                                };
+                                verification: {
+                                    dayTypes: ("workday" | "weekend" | "holiday")[];
+                                    series: {
+                                        date: string;
+                                        /** @enum {string} */
+                                        dayType: "workday" | "weekend" | "holiday";
+                                        covered: boolean;
+                                        /** @enum {string} */
+                                        phase: "before" | "change" | "after";
+                                        complete: boolean;
+                                        kwh: number;
+                                        cost: number;
+                                    }[];
+                                    before: {
+                                        days: number;
+                                        kwh: number;
+                                        cost: number;
+                                        perDayKwh: number;
+                                        perDayCost: number;
+                                    };
+                                    after: {
+                                        days: number;
+                                        kwh: number;
+                                        cost: number;
+                                        perDayKwh: number;
+                                        perDayCost: number;
+                                        recurrences: number;
+                                        lastAt: string | null;
+                                    } | null;
+                                    weekly: {
+                                        kwh: number;
+                                        cost: number;
+                                    };
+                                    /** @enum {string} */
+                                    verdict: "projected" | "waiting" | "working" | "partly" | "not_working";
+                                };
+                            };
+                            linked: number;
+                            joined: boolean;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;

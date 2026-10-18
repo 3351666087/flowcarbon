@@ -756,10 +756,30 @@ body {
     transform: translateY(110%);
     transition: transform 260ms var(--ease-exit);
   }
+  /* a short note at the bottom of the screen */
+  .fc-toast {
+    animation: fc-toast-in 420ms var(--spring) backwards;
+    transition:
+      transform 220ms var(--ease-exit),
+      opacity 220ms var(--ease-exit);
+  }
+  .fc-toast-out {
+    transform: translateY(12px) scale(0.96);
+    opacity: 0;
+  }
+  /* charts take focus for keyboard reading; a tap should not draw a ring around them */
+  .recharts-wrapper:focus,
+  .recharts-surface:focus,
+  .recharts-wrapper *:focus {
+    outline: none;
+  }
   @media (min-width: 64rem) {
     .fc-sheet {
       animation-name: fc-bloom;
       transform-origin: 0% 100%;
+    }
+    .fc-sheet-center {
+      transform-origin: 50% 50%;
     }
     .fc-sheet-out {
       transform: scale(0.96);
@@ -896,6 +916,12 @@ input:-webkit-autofill:focus {
   from {
     opacity: 0;
     transform: translateX(-28px);
+  }
+}
+@keyframes fc-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
   }
 }
 @keyframes fc-sheet-in {

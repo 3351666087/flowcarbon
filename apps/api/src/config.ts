@@ -47,6 +47,10 @@ const schema = z.object({
   SIGNUP_OPEN: bool,
   /** organisation (slug) that new accounts may join read-only to explore, e.g. the simulated demo tower */
   DEMO_ORG_SLUG: z.string().min(1).max(80).optional(),
+  /** people choosing the demo get a simulated building of their own; at most this many exist at once */
+  DEMO_WORKSPACES_MAX: z.coerce.number().int().min(0).default(300),
+  /** AI explanations per demo organisation per 24 hours */
+  DEMO_AI_PER_DAY: z.coerce.number().int().min(0).default(20),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).default(600),
   /** sign-in attempts per IP per 15 minutes */
   LOGIN_ATTEMPTS_PER_15_MIN: z.coerce.number().int().min(1).default(10),

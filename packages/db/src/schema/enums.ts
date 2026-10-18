@@ -40,3 +40,7 @@ export const instrumentKindEnum = pgEnum("instrument_kind", [
 ]);
 export const aiStatusEnum = pgEnum("ai_status", ["pending", "done", "failed"]);
 export const batchStatusEnum = pgEnum("ingest_status", ["accepted", "processed", "failed"]);
+/** a measure is agreed (planned), then put into effect on site; cancelled ones stay for the record */
+export const measureStatusEnum = pgEnum("measure_status", ["planned", "in_effect", "cancelled"]);
+/** whether the measure is the AI assistant's recommendation as it stood, an edited one, or the team's own */
+export const measureSourceEnum = pgEnum("measure_source", ["ai", "ai_edited", "manual"]);

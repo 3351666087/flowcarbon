@@ -4,7 +4,17 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 /** the tabs, in the order the tab bar and sidebar show them */
-const ORDER = ["floors", "findings", "forecast", "simulate", "requests", "report", "data", "settings"];
+const ORDER = [
+  "floors",
+  "findings",
+  "measures",
+  "forecast",
+  "simulate",
+  "requests",
+  "report",
+  "data",
+  "settings",
+];
 
 // where the previous page was, to tell which way this one arrives
 let previous: string | null = null;

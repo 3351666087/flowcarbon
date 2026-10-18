@@ -1,22 +1,28 @@
 import {
   averageRate,
+  type DayType,
   DEFAULT_RULE_PARAMS,
   evaluateEpc,
+  MEASURE_STRATEGY_IDS,
+  RULE_PARAM_KEYS,
   RULE_PARAM_RATIONALE,
   RULES,
+  type RuleId,
   SCHEDULE_LABELS,
   STRATEGIES,
+  strategiesFor,
   zonedTime,
 } from "@flowcarbon/core";
-import { schema } from "@flowcarbon/db";
+import { schema, type Tx } from "@flowcarbon/db";
 import { buildingReport, floorsNow, latestDataDay, strategySummary } from "@flowcarbon/pipeline";
-import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { RouteDeps } from "../app";
 import { audit } from "../audit";
 import { visibleFloorIds } from "../auth/access";
-import { badRequest, notFound, unprocessable } from "../errors";
+import { badRequest, HttpError, notFound, unprocessable } from "../errors";
+import { activityOf, activityOut, coveredBy, measureJson, measureOut, userNames } from "../measures";
 import { buildingParams, dateKey, decodeCursor, encodeCursor, errorResponses, iso, uuid } from "../schemas";
 import { addDaysKey, dateRange, inBuilding, todayIn, withBuildingContext } from "./helpers";
 
@@ -76,7 +82,7 @@ const reportOut = z.object({
   ),
   disclosures: z.array(z.string()),
 });
-const findingOut = z.object({
+export const findingOut = z.object({
   id: uuid,
   floorId: uuid,
   ruleId: z.string(),
@@ -95,6 +101,10 @@ const findingOut = z.object({
   status: z.enum(["open", "acknowledged", "fixed", "dismissed"]),
   statusNote: z.string().nullable(),
   statusAt: z.string().nullable(),
+  /** the measure answering it, if any */
+  measure: z
+    .object({ id: uuid, strategyId: z.string(), status: z.enum(["planned", "in_effect", "cancelled"]) })
+    .nullable(),
 });
 const explanationOut = z.object({
   id: uuid,
@@ -153,7 +163,8 @@ const epcOut = z.object({
 });
 
 type FindingRow = typeof schema.findings.$inferSelect;
-const findingJson = (f: FindingRow) => ({
+type MeasureRef = { id: string; strategyId: string; status: "planned" | "in_effect" | "cancelled" };
+export const findingJson = (f: FindingRow, measures?: Map<string, MeasureRef> | MeasureRef | null) => ({
   id: f.id,
   floorId: f.floorId,
   ruleId: f.ruleId,
@@ -172,10 +183,33 @@ const findingJson = (f: FindingRow) => ({
   status: f.status,
   statusNote: f.statusNote,
   statusAt: iso(f.statusAt),
+  measure: measureRef(f, measures),
 });
+function measureRef(
+  f: FindingRow,
+  measures?: Map<string, MeasureRef> | MeasureRef | null,
+): MeasureRef | null {
+  if (!f.measureId || !measures) return null;
+  const m = measures instanceof Map ? measures.get(f.measureId) : measures;
+  return m && m.id === f.measureId ? { id: m.id, strategyId: m.strategyId, status: m.status } : null;
+}
+/** the measures the given findings belong to, by id */
+async function measureRefs(tx: Tx, rows: FindingRow[]) {
+  const ids = [...new Set(rows.map((f) => f.measureId).filter((x): x is string => !!x))];
+  if (!ids.length) return new Map<string, MeasureRef>();
+  const ms = await tx
+    .select({
+      id: schema.measures.id,
+      strategyId: schema.measures.strategyId,
+      status: schema.measures.status,
+    })
+    .from(schema.measures)
+    .where(inArray(schema.measures.id, ids));
+  return new Map(ms.map((m) => [m.id, m]));
+}
 const finite = (n: number) => (Number.isFinite(n) ? n : null);
 
-export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, jobs }) => {
+export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, jobs, config }) => {
   app.get(
     "/rules",
     {
@@ -330,9 +364,10 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           .orderBy(desc(schema.findings.startAt), desc(schema.findings.id))
           .limit(q.limit + 1);
         const page = rows.slice(0, q.limit);
+        const refs = await measureRefs(tx, page);
         const lastRow = page[page.length - 1];
         return {
-          items: page.map(findingJson),
+          items: page.map((f) => findingJson(f, refs)),
           nextCursor:
             rows.length > q.limit && lastRow
               ? encodeCursor([lastRow.startAt.toISOString(), lastRow.id])
@@ -348,17 +383,51 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
     {
       schema: {
         tags: ["analytics"],
-        summary: "One finding with its AI explanations",
+        summary:
+          "One finding with its AI explanations, the measure answering it, what could be done about it, the thresholds it was judged by, and what happened to it",
         params: findingParams,
-        response: { 200: findingOut.extend({ explanations: z.array(explanationOut) }), ...errorResponses },
+        response: {
+          200: findingOut.extend({
+            explanations: z.array(explanationOut),
+            measureDetail: measureOut.nullable(),
+            options: z.object({
+              /** strategies that remove this kind of finding on this kind of day, then an on-site check */
+              fits: z.array(z.string()),
+              /** for each strategy: the floor's other open findings it would answer too */
+              similar: z.record(z.string(), z.number()),
+              /** measures already agreed for this floor, which a new one with the same strategy joins */
+              floorMeasures: z.array(
+                z.object({ id: uuid, strategyId: z.string(), status: z.enum(["planned", "in_effect"]) }),
+              ),
+            }),
+            thresholds: z.array(
+              z.object({
+                key: z.string(),
+                /** in force when the finding was produced */
+                value: z.union([z.number(), z.string()]),
+                /** in force for the building now */
+                current: z.union([z.number(), z.string()]),
+                defaultValue: z.union([z.number(), z.string()]),
+              }),
+            ),
+            reviewedBy: z.string().nullable(),
+            activity: z.array(activityOut),
+          }),
+          ...errorResponses,
+        },
       },
     },
     async (req) =>
-      inBuilding(db, req, req.params, "finding:read", async (tx, _a, b) => {
+      withBuildingContext(db, req, req.params, "finding:read", async (tx, _a, ctx) => {
         const [f] = await tx
           .select()
           .from(schema.findings)
-          .where(and(eq(schema.findings.id, req.params.findingId), eq(schema.findings.buildingId, b.id)));
+          .where(
+            and(
+              eq(schema.findings.id, req.params.findingId),
+              eq(schema.findings.buildingId, ctx.building.id),
+            ),
+          );
         if (!f) throw notFound("Finding");
         const ex = await tx
           .select()
@@ -366,9 +435,59 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           .where(eq(schema.aiExplanations.findingId, f.id))
           .orderBy(desc(schema.aiExplanations.createdAt))
           .limit(10);
+        const [m] = f.measureId
+          ? await tx.select().from(schema.measures).where(eq(schema.measures.id, f.measureId))
+          : [];
+        const similar: Record<string, number> = {};
+        for (const strategyId of MEASURE_STRATEGY_IDS) {
+          const [row] = await tx
+            .select({ n: sql<number>`count(*)::int` })
+            .from(schema.findings)
+            .where(
+              and(
+                eq(schema.findings.buildingId, ctx.building.id),
+                eq(schema.findings.status, "open"),
+                isNull(schema.findings.measureId),
+                ne(schema.findings.id, f.id),
+                coveredBy({ floorId: f.floorId, strategyId, originRuleId: f.ruleId }),
+              ),
+            );
+          similar[strategyId] = row?.n ?? 0;
+        }
+        const floorMeasures = await tx
+          .select({
+            id: schema.measures.id,
+            strategyId: schema.measures.strategyId,
+            status: schema.measures.status,
+          })
+          .from(schema.measures)
+          .where(
+            and(
+              eq(schema.measures.floorId, f.floorId),
+              inArray(schema.measures.status, ["planned", "in_effect"]),
+            ),
+          );
+        const used = { ...DEFAULT_RULE_PARAMS, ...f.params } as Record<string, number | string>;
+        const now = { ...DEFAULT_RULE_PARAMS, ...ctx.ruleParams } as Record<string, number | string>;
+        const defaults = DEFAULT_RULE_PARAMS as unknown as Record<string, number | string>;
+        const names = await userNames(tx, [f.statusBy]);
         return {
-          ...findingJson(f),
+          ...findingJson(f, m ?? null),
           explanations: ex.map(explanationJson),
+          measureDetail: m ? await measureJson(tx, ctx, m) : null,
+          options: {
+            fits: strategiesFor(f.ruleId as RuleId, f.dayType as DayType),
+            similar,
+            floorMeasures: floorMeasures.map((x) => ({ ...x, status: x.status as "planned" | "in_effect" })),
+          },
+          thresholds: (RULE_PARAM_KEYS[f.ruleId as RuleId] ?? []).map((key) => ({
+            key,
+            value: used[key]!,
+            current: now[key]!,
+            defaultValue: defaults[key]!,
+          })),
+          reviewedBy: f.statusBy ? (names.get(f.statusBy) ?? null) : null,
+          activity: await activityOf(tx, f.id, f.measureId),
         };
       }),
   );
@@ -408,7 +527,8 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
     {
       schema: {
         tags: ["analytics"],
-        summary: "Review a finding: acknowledge, mark fixed or dismiss (with a reason)",
+        summary:
+          "Review a finding: acknowledge, mark fixed or dismiss (with a reason). Reopening or dismissing takes it out of its measure.",
         params: findingParams,
         body: z.object({
           status: z.enum(["open", "acknowledged", "fixed", "dismissed"]),
@@ -426,6 +546,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           .from(schema.findings)
           .where(and(eq(schema.findings.id, req.params.findingId), eq(schema.findings.buildingId, b.id)));
         if (!before) throw notFound("Finding");
+        const leaves = req.body.status === "open" || req.body.status === "dismissed";
         const [f] = await tx
           .update(schema.findings)
           .set({
@@ -433,6 +554,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
             statusNote: req.body.note ?? null,
             statusBy: access.actor.type === "user" ? access.actor.id : null,
             statusAt: new Date(),
+            ...(leaves ? { measureId: null } : {}),
           })
           .where(eq(schema.findings.id, before.id))
           .returning();
@@ -442,7 +564,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           entityId: before.id,
           data: { from: before.status, to: req.body.status, note: req.body.note },
         });
-        return findingJson(f!);
+        return findingJson(f!, (await measureRefs(tx, [f!])) ?? null);
       }),
   );
 
@@ -481,6 +603,23 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
               and(eq(schema.aiExplanations.findingId, f.id), eq(schema.aiExplanations.status, "pending")),
             );
           if (pending) return pending.id;
+          // demo organisations are open to anyone who signs up, so their AI use is capped per day
+          const [org] = await tx
+            .select({ plan: schema.organizations.plan })
+            .from(schema.organizations)
+            .where(eq(schema.organizations.id, access.orgId));
+          if (org?.plan === "demo") {
+            const [used] = await tx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(schema.aiExplanations)
+              .where(gte(schema.aiExplanations.createdAt, new Date(Date.now() - 86_400_000)));
+            if ((used?.n ?? 0) >= config.DEMO_AI_PER_DAY)
+              throw new HttpError(
+                429,
+                `A demo building gets ${config.DEMO_AI_PER_DAY} AI explanations a day. Try again tomorrow.`,
+                "rate_limited",
+              );
+          }
           const [e] = await tx
             .insert(schema.aiExplanations)
             .values({

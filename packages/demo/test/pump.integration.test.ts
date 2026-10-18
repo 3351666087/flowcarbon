@@ -3,7 +3,7 @@
  */
 import { zonedTime } from "@flowcarbon/core";
 import { createDb, type DbHandle, schema, withOrg } from "@flowcarbon/db";
-import { and, count, eq, lt, max } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lt, max } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pumpDemo, seedDemo } from "../src";
 import { createTestDatabase, type TestDatabase } from "../src/testing";
@@ -96,5 +96,44 @@ describe.skipIf(!adminUrl)("demo pump", () => {
     expect(after.floorDays).toBe(before.floorDays + 24);
     expect(after.seededHvacEvents).toBe(before.seededHvacEvents);
     expect(after.overtime).toBeGreaterThanOrEqual(before.overtime);
+  });
+
+  it("runs a floor by the measure put into effect on it, so its waste stops", async () => {
+    const from = at("2026-09-18", 8, 0);
+    const covered = ["hvac_empty_floor", "full_floor_few_people"];
+    const [floor] = await withOrg(app.db, orgId, (tx) =>
+      tx.select().from(schema.floors).where(eq(schema.floors.label, "F10")),
+    );
+    await withOrg(app.db, orgId, async (tx) => {
+      const [b] = await tx.select().from(schema.buildings);
+      await tx.insert(schema.measures).values({
+        orgId,
+        buildingId: b!.id,
+        floorId: floor!.id,
+        strategyId: "occupancy_gated_workday",
+        source: "manual",
+        originRuleId: "full_floor_few_people",
+        status: "in_effect",
+        implementedAt: new Date(from),
+      });
+    });
+    await pumpDemo(app.db, { slug: SLUG, now: at("2026-09-23", 8, 0) });
+    const since = (onFloor: boolean) =>
+      withOrg(app.db, orgId, (tx) =>
+        tx
+          .select({ floorId: schema.findings.floorId, dayType: schema.findings.dayType })
+          .from(schema.findings)
+          .where(
+            and(
+              gte(schema.findings.startAt, new Date(from)),
+              inArray(schema.findings.ruleId, covered),
+              eq(schema.findings.dayType, "workday"),
+            ),
+          )
+          .then((rows) => rows.filter((r) => (r.floorId === floor!.id) === onFloor)),
+      );
+    // the other floors still waste the way they did, F10 no longer does
+    expect((await since(false)).length).toBeGreaterThan(0);
+    expect(await since(true)).toEqual([]);
   });
 });

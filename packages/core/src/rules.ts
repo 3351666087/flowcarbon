@@ -34,6 +34,20 @@ export const DEFAULT_RULE_PARAMS: RuleParams = {
   startupWindowMinutes: 60,
 };
 
+/** The thresholds each rule reads, in the order a reader needs them. */
+export const RULE_PARAM_KEYS: Record<RuleId, (keyof RuleParams)[]> = {
+  hvac_empty_floor: ["emptyGraceMinutes", "startupWindowMinutes", "minFindingKwh"],
+  hvac_unrequested_non_working: ["minFindingKwh"],
+  lights_on_empty_night: [
+    "lightsNightStart",
+    "lightsNightEnd",
+    "lightsMinLevel",
+    "lightsGraceMinutes",
+    "minFindingKwh",
+  ],
+  full_floor_few_people: ["fullFloorMinPeople", "minFindingKwh"],
+};
+
 /** Why each threshold has the value it has. Shown next to every finding; reviewers asked for this explicitly. */
 export const RULE_PARAM_RATIONALE: Record<keyof RuleParams, string> = {
   emptyGraceMinutes:

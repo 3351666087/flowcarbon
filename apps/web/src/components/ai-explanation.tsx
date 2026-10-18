@@ -72,11 +72,14 @@ export function AiExplanation({
   latest,
   strategyName,
   timeZone,
+  actions,
 }: {
   path: { orgId: string; buildingId: string; findingId: string };
   latest: Explanation | undefined;
   strategyName: (id: string) => string | undefined;
   timeZone: string;
+  /** what can be done with the recommendation (adopt it, edit it), shown once it has been written out */
+  actions?: ReactNode;
 }) {
   const { t, locale } = useI18n();
   const qc = useQueryClient();
@@ -199,6 +202,9 @@ export function AiExplanation({
           <h3 className="text-xs font-semibold text-accent">{t.findings.aiAction}</h3>
           <p className="font-medium">{text("action")}</p>
           {has("reason") ? <p>{text("reason")}</p> : null}
+          {done && !writing && actions ? (
+            <div className="fc-stream-in mt-3 flex flex-wrap gap-2">{actions}</div>
+          ) : null}
         </section>
       ) : null}
       {unsure.length ? (

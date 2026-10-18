@@ -8,6 +8,7 @@ import { audit } from "../audit";
 import { orgAccess, requireOrg } from "../auth/access";
 import { canGrant } from "../auth/permissions";
 import { requireUser } from "../auth/principal";
+import { createPersonalDemo, demoReady, personalDemoOf } from "../demo";
 import { conflict, forbidden, notFound, unprocessable } from "../errors";
 import { invitationMessage } from "../mail";
 import {
@@ -61,7 +62,7 @@ const factor = z.object({
   status: z.enum(["verified", "to_verify"]),
 });
 
-export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config, mailer }) => {
+export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config, mailer, jobs }) => {
   // ---- creating and joining ------------------------------------------------------------------------------
   const created = z.object({ id: uuid, slug: z.string(), name: z.string() });
 
@@ -103,6 +104,47 @@ export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, con
         return o!;
       });
       return reply.status(201).send(org);
+    },
+  );
+
+  app.post(
+    "/orgs/demo",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+      schema: {
+        tags: ["organisation"],
+        summary:
+          "The caller's own demo organisation with a simulated building, created on first call (the building is built in the background; `ready` says when it is there)",
+        response: {
+          200: created.extend({ ready: z.boolean() }),
+          201: created.extend({ ready: z.boolean() }),
+          ...errorResponses,
+        },
+      },
+    },
+    async (req, reply) => {
+      const u = requireUser(req);
+      if (!config.DEMO_ORG_SLUG) throw notFound("Demo");
+      let org = await personalDemoOf(db, u.userId);
+      const created = !org;
+      if (!org) {
+        const [user] = await db
+          .select({ id: schema.users.id, name: schema.users.name, locale: schema.users.locale })
+          .from(schema.users)
+          .where(eq(schema.users.id, u.userId));
+        if (!user) throw notFound("User");
+        org = await db.transaction((tx) =>
+          createPersonalDemo(tx, user, {
+            max: config.DEMO_WORKSPACES_MAX,
+            ip: req.ip,
+            requestId: String(req.id),
+          }),
+        );
+      }
+      const ready = await demoReady(db, org.id);
+      // also when it exists but is still empty: a job that gave up gets another go
+      if (!ready) await jobs.demo({ orgId: org.id });
+      return reply.status(created ? 201 : 200).send({ ...org, ready });
     },
   );
 

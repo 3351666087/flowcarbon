@@ -21,6 +21,7 @@ import { createMetrics, instrument, type Metrics } from "./metrics";
 import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
 import { buildingRoutes } from "./routes/buildings";
+import { measureRoutes } from "./routes/measures";
 import { opsRoutes } from "./routes/ops";
 import { orgRoutes } from "./routes/org";
 import { overtimeRoutes } from "./routes/overtime";
@@ -150,6 +151,7 @@ export async function buildApp({ db, config, jobs, mailer, logger }: AppDeps) {
       await api.register(buildingRoutes, deps);
       await api.register(telemetryRoutes, deps);
       await api.register(analyticsRoutes, deps);
+      await api.register(measureRoutes, deps);
       await api.register(overtimeRoutes, deps);
     },
     { prefix: API_PREFIX },

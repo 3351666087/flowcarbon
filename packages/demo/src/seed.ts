@@ -80,7 +80,6 @@ export function deviceIds(floorLabel: string) {
 export async function seedDemo(db: Db, opts: SeedOptions): Promise<SeedResult> {
   const log = opts.log ?? (() => {});
   const slug = opts.slug ?? "tower-a-demo";
-  const sb: SimBuilding = sampleTower();
 
   const [existing] = await db.select().from(schema.organizations).where(eq(schema.organizations.slug, slug));
   if (existing) {
@@ -112,7 +111,54 @@ export async function seedDemo(db: Db, opts: SeedOptions): Promise<SeedResult> {
     userIds.set(u.email, row.id);
   }
 
-  const result = await withOrg(db, org.id, async (tx) => {
+  const result = await seedDemoBuilding(db, org.id, {
+    slug,
+    startDate: opts.startDate,
+    days: opts.days,
+    seed: opts.seed,
+    forecastDays: opts.forecastDays,
+    decidedBy: userIds.get("manager@flowcarbon-demo.example") ?? null,
+    log,
+  });
+  await withOrg(db, org.id, async (tx) => {
+    for (const u of DEMO_USERS)
+      await tx.insert(schema.memberships).values({
+        orgId: org.id,
+        userId: userIds.get(u.email)!,
+        role: u.role,
+        tenantId: u.tenant ? result.tenantIds[u.tenant]! : null,
+      });
+  });
+  return { orgId: org.id, ...result, users: DEMO_USERS.map((u) => ({ email: u.email, role: u.role })) };
+}
+
+export interface BuildingSeedOptions {
+  /** prefix of the ingestion idempotency keys (the organisation's slug) */
+  slug: string;
+  startDate: string;
+  days: number;
+  seed?: number;
+  forecastDays?: number;
+  /** who approved the simulated overtime requests */
+  decidedBy?: string | null;
+  log?: (msg: string) => void;
+}
+
+/**
+ * Builds the simulated Tower A inside an existing organisation: tenants, leases and devices, the simulated telemetry
+ * pushed through the ingestion path gateways use, approved overtime requests, and processed intervals, findings and
+ * forecasts. Used for the shared demonstration and for each person's own demo workspace.
+ */
+export async function seedDemoBuilding(
+  db: Db,
+  orgId: string,
+  opts: BuildingSeedOptions,
+): Promise<Omit<SeedResult, "orgId" | "users">> {
+  const log = opts.log ?? (() => {});
+  const slug = opts.slug;
+  const sb: SimBuilding = sampleTower();
+  const org = { id: orgId };
+  return withOrg(db, org.id, async (tx) => {
     const b = sb.building;
     const [building] = await tx
       .insert(schema.buildings)
@@ -272,7 +318,7 @@ export async function seedDemo(db: Db, opts: SeedOptions): Promise<SeedResult> {
     );
 
     const tenantProfile = new Map(sb.tenants.map((t) => [t.id, t]));
-    const managerId = userIds.get("manager@flowcarbon-demo.example") ?? null;
+    const managerId = opts.decidedBy ?? null;
     for (const o of sim.overtime) {
       const floor = sb.floors.find((f) => f.id === o.floorId)!;
       const triage = triageOvertime(o, tenantProfile.get(o.tenantId)!, floor);
@@ -305,13 +351,6 @@ export async function seedDemo(db: Db, opts: SeedOptions): Promise<SeedResult> {
       .set({ status: "processed", processedAt: new Date() })
       .where(eq(schema.ingestionBatches.buildingId, building.id));
 
-    for (const u of DEMO_USERS)
-      await tx.insert(schema.memberships).values({
-        orgId: org.id,
-        userId: userIds.get(u.email)!,
-        role: u.role,
-        tenantId: u.tenant ? tenantIds[u.tenant]! : null,
-      });
     await tx.insert(schema.auditLog).values({
       orgId: org.id,
       actorType: "system",
@@ -322,8 +361,6 @@ export async function seedDemo(db: Db, opts: SeedOptions): Promise<SeedResult> {
     });
     return { buildingId: building.id, floorIds, tenantIds, telemetry, findings: processed.upserted };
   });
-
-  return { orgId: org.id, ...result, users: DEMO_USERS.map((u) => ({ email: u.email, role: u.role })) };
 }
 
 /** Keeps the last event per device and timestamp (the simulator can emit two at the same instant). */

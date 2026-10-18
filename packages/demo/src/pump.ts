@@ -7,8 +7,8 @@ import {
   processDays,
   refreshForecasts,
 } from "@flowcarbon/pipeline";
-import { sampleTower, simulate } from "@flowcarbon/sim";
-import { and, eq, like, max } from "drizzle-orm";
+import { type SimControl, sampleTower, simulate } from "@flowcarbon/sim";
+import { and, eq, inArray, isNotNull, like, max } from "drizzle-orm";
 import { dedupeLast, deviceIds } from "./seed";
 
 export interface PumpOptions {
@@ -87,6 +87,7 @@ export async function pumpDemo(db: Db, opts: PumpOptions = {}): Promise<PumpResu
       ]),
     );
     const label = new Map(sb.floors.map((f) => [f.id, f.label]));
+    const controls = await measureControls(tx, building.id, sb);
     const tenantProfile = new Map(sb.tenants.map((t) => [t.id, t]));
     const telemetry: Record<string, number> = {
       readings: 0,
@@ -100,7 +101,13 @@ export async function pumpDemo(db: Db, opts: PumpOptions = {}): Promise<PumpResu
 
     for (const day of days) {
       const dayIndex = Math.floor(Date.parse(`${day}T00:00:00Z`) / DAY_MS);
-      const sim = simulate(sb, { startDate: day, days: 1, seed: (opts.seed ?? 20261013) + dayIndex });
+      const sim = simulate(sb, {
+        startDate: day,
+        days: 1,
+        seed: (opts.seed ?? 20261013) + dayIndex,
+        controls,
+        params: ctx.ruleParams,
+      });
       const until = Math.min(now, sim.to);
       // only complete readings and buckets, so a later run never overwrites a partial value with a different one
       const batch: IngestBatch = {
@@ -201,4 +208,74 @@ export async function pumpDemo(db: Db, opts: PumpOptions = {}): Promise<PumpResu
     );
     return { days, telemetry, overtimeRequests, findings: processed.upserted };
   });
+}
+
+const SIMULATED_STRATEGIES = new Set<string>([
+  "occupancy_gated_workday",
+  "zone_only_non_working",
+  "auto_lights_off",
+]);
+
+/**
+ * The measures put into effect in the building, as simulator controls: the simulated floor follows each strategy
+ * from the moment it was marked in effect until it was cancelled, so the data answers the team's decisions.
+ */
+async function measureControls(
+  tx: Parameters<Parameters<typeof withOrg>[2]>[0],
+  buildingId: string,
+  sb: ReturnType<typeof sampleTower>,
+): Promise<SimControl[]> {
+  const rows = await tx
+    .select({
+      strategyId: schema.measures.strategyId,
+      implementedAt: schema.measures.implementedAt,
+      cancelledAt: schema.measures.cancelledAt,
+      label: schema.floors.label,
+    })
+    .from(schema.measures)
+    .innerJoin(schema.floors, eq(schema.floors.id, schema.measures.floorId))
+    .where(
+      and(
+        eq(schema.measures.buildingId, buildingId),
+        isNotNull(schema.measures.implementedAt),
+        inArray(schema.measures.status, ["in_effect", "cancelled"]),
+      ),
+    );
+  const simFloor = new Map(sb.floors.map((f) => [f.label, f.id]));
+  return rows.flatMap((r) => {
+    const floorId = simFloor.get(r.label);
+    if (!floorId || !r.implementedAt || !SIMULATED_STRATEGIES.has(r.strategyId)) return [];
+    const to = r.cancelledAt?.getTime();
+    if (to !== undefined && to <= r.implementedAt.getTime()) return [];
+    return [
+      {
+        floorId,
+        strategy: r.strategyId as SimControl["strategy"],
+        from: r.implementedAt.getTime(),
+        ...(to === undefined ? {} : { to }),
+      },
+    ];
+  });
+}
+
+/** Keeps every simulated building live: the shared demonstration and each person's own demo workspace. */
+export async function pumpAllDemos(
+  db: Db,
+  opts: Omit<PumpOptions, "slug"> = {},
+): Promise<{ slug: string; result?: PumpResult; error?: string }[]> {
+  const orgs = await db
+    .select({ slug: schema.organizations.slug })
+    .from(schema.organizations)
+    .where(eq(schema.organizations.plan, "demo"));
+  const out: { slug: string; result?: PumpResult; error?: string }[] = [];
+  for (const { slug } of orgs) {
+    try {
+      const log = opts.log && ((m: string) => opts.log?.(`${slug} ${m}`));
+      out.push({ slug, result: await pumpDemo(db, { ...opts, slug, log }) });
+    } catch (err) {
+      // a workspace still being prepared has no building yet; the next tick picks it up
+      out.push({ slug, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return out;
 }

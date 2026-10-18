@@ -10,8 +10,10 @@ import {
   MINUTE,
   type OvertimeWindow,
   occupancyFromDoorCounts,
+  type RuleParams,
   zonedTime,
 } from "@flowcarbon/core";
+import { applyControls, type SimControl } from "./controls";
 import { Rng } from "./rng";
 import type { SimBuilding, SimTenant } from "./tower";
 
@@ -41,11 +43,18 @@ export interface SimOptions {
   days: number;
   seed?: number;
   bucketMinutes?: number;
+  /** strategies in effect on some floors (measures put into effect); without them the tower runs as it does today */
+  controls?: readonly SimControl[];
+  /** the building's rule thresholds, which the controls use too */
+  params?: Partial<RuleParams>;
 }
 
 const H = 60 * MINUTE;
 
-/** Behaviour of today's tower before FlowCarbon: fixed BMS schedules, whole-zone weekend cooling. */
+/**
+ * Behaviour of today's tower before FlowCarbon: fixed BMS schedules, whole-zone weekend cooling. Floors with
+ * `controls` follow those strategies from the time each one starts.
+ */
 export function simulate(sb: SimBuilding, opts: SimOptions): SimOutput {
   const rng = new Rng(opts.seed ?? 20261013);
   const tz = sb.building.timezone;
@@ -57,8 +66,8 @@ export function simulate(sb: SimBuilding, opts: SimOptions): SimOutput {
   const tenantById = new Map(sb.tenants.map((t) => [t.id, t]));
 
   const moves = new Map<string, { ts: number; dir: 1 | -1 }[]>();
-  const hvacEvents: HvacEvent[] = [];
-  const lightingEvents: LightingEvent[] = [];
+  let hvacEvents: HvacEvent[] = [];
+  let lightingEvents: LightingEvent[] = [];
   const overtime: SimOvertime[] = [];
   const addMove = (floorId: string, ts: number, dir: 1 | -1) => {
     const l = moves.get(floorId);
@@ -190,6 +199,15 @@ export function simulate(sb: SimBuilding, opts: SimOptions): SimOutput {
 
   // sub-meter readings on refurbished floors: physics estimate × weather factor × noise
   const occ = occupancyFromDoorCounts(doorCounts, { timeZone: tz, bucketMinutes: bucket / MINUTE });
+  if (opts.controls?.length)
+    ({ hvacEvents, lightingEvents } = applyControls(
+      sb,
+      { from, to, hvacEvents, lightingEvents },
+      occ,
+      overtime,
+      opts.controls,
+      { bucketMinutes: bucket / MINUTE, params: opts.params },
+    ));
   const occupancy = [...occ].flatMap(([floorId, pts]) =>
     pts.map((p) => ({ floorId, ts: p.start, count: p.count })),
   );

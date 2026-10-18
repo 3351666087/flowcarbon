@@ -18,6 +18,7 @@ import type { RouteDeps } from "../app";
 import { deviceAccounts, signIn, signOut, switchTo } from "../auth/device";
 import { assertSameSite, requireUser } from "../auth/principal";
 import { clearSessionCookie, revokeOtherSessions } from "../auth/sessions";
+import { createPersonalDemo } from "../demo";
 import { HttpError, unauthorized, unprocessable } from "../errors";
 import { codeMessage } from "../mail";
 import { errorResponses, roleSchema, uuid } from "../schemas";
@@ -62,7 +63,7 @@ export function slugFor(name: string) {
   }`;
 }
 
-export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config, mailer }) => {
+export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config, mailer, jobs }) => {
   const allowed = new Set(config.CORS_ORIGINS);
   async function loadMe(userId: string) {
     const [user] = await db
@@ -398,7 +399,7 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
       schema: {
         tags: ["auth"],
         summary:
-          "Sign-up, step 3: create the account for a verified address with a password, then join the demo organisation read-only or found one",
+          "Sign-up, step 3: create the account for a verified address with a password, then start in a demo building of one's own (built in the background) or found an organisation",
         body: z.object({
           ticket: z.string().min(20).max(100),
           name: z.string().trim().min(1).max(120),
@@ -425,8 +426,9 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
       const problems = passwordProblems(password, { email: pending?.email });
       if (problems.length) throw unprocessable("The password is not acceptable.", problems);
       const passwordHash = await hashPassword(password);
-      const demo = start === "demo" ? await demoOrg() : null;
-      if (start === "demo" && !demo) throw unprocessable("There is no demo organisation to join.");
+      if (start === "demo" && !config.DEMO_ORG_SLUG)
+        throw unprocessable("There is no demo here to start with.");
+      let demoId: string | null = null;
       const userId = await db.transaction(async (tx) => {
         const [t] = await tx
           .update(schema.emailCodes)
@@ -451,31 +453,36 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
           .insert(schema.users)
           .values({ email: t.email, name, locale, passwordHash, emailVerifiedAt: new Date() })
           .returning({ id: schema.users.id });
-        const orgId = demo
-          ? demo.id
-          : (
-              await tx
-                .insert(schema.organizations)
-                .values({ name: organisation!, slug: slugFor(organisation!) })
-                .returning({ id: schema.organizations.id })
-            )[0]!.id;
-        await tx
-          .insert(schema.memberships)
-          .values({ orgId, userId: user!.id, role: demo ? "viewer" : "owner" });
+        if (start === "demo") {
+          const demo = await createPersonalDemo(
+            tx,
+            { id: user!.id, name, locale },
+            { max: config.DEMO_WORKSPACES_MAX, ip: req.ip, requestId: String(req.id) },
+          );
+          demoId = demo.id;
+          return user!.id;
+        }
+        const [org] = await tx
+          .insert(schema.organizations)
+          .values({ name: organisation!, slug: slugFor(organisation!) })
+          .returning({ id: schema.organizations.id });
+        const orgId = org!.id;
+        await tx.insert(schema.memberships).values({ orgId, userId: user!.id, role: "owner" });
         await tx.execute(sql`select set_config('app.org_id', ${orgId}, true)`);
         await tx.insert(schema.auditLog).values({
           orgId,
           actorType: "user",
           actorId: user!.id,
-          action: demo ? "member.join_demo" : "organisation.create",
-          entityType: demo ? "membership" : "organisation",
-          entityId: demo ? user!.id : orgId,
+          action: "organisation.create",
+          entityType: "organisation",
+          entityId: orgId,
           data: { via: "signup" },
           ip: req.ip,
           requestId: String(req.id),
         });
         return user!.id;
       });
+      if (demoId) await jobs.demo({ orgId: demoId });
       await signIn(db, config, req, reply, userId, req.body.remember);
       return loadMe(userId);
     },

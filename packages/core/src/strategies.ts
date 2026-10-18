@@ -53,6 +53,47 @@ export const STRATEGIES: Record<Exclude<StrategyId, "full_package">, StrategyMet
   },
 };
 
+/**
+ * What a measure on a floor can do about a finding: one of the control strategies, or an on-site check when the
+ * cause has to be found first.
+ */
+export type MeasureStrategyId = Exclude<StrategyId, "full_package"> | "investigate_on_site";
+export const MEASURE_STRATEGY_IDS = [
+  "occupancy_gated_workday",
+  "zone_only_non_working",
+  "auto_lights_off",
+  "investigate_on_site",
+] as const satisfies readonly MeasureStrategyId[];
+
+const EVERY_DAY: DayType[] = ["workday", "weekend", "holiday"];
+
+/**
+ * The findings a measure answers on its floor: the rules and day types its strategy removes. An on-site check
+ * answers the kind of finding it was opened for, on any day.
+ */
+export function measureCovers(
+  strategyId: MeasureStrategyId,
+  originRule: RuleId,
+): { rule: RuleId; dayTypes: DayType[] }[] {
+  if (strategyId === "investigate_on_site") return [{ rule: originRule, dayTypes: EVERY_DAY }];
+  return STRATEGIES[strategyId].covers;
+}
+
+export function covers(
+  list: readonly { rule: RuleId; dayTypes: readonly DayType[] }[],
+  f: { ruleId: string; dayType: DayType },
+): boolean {
+  return list.some((c) => c.rule === f.ruleId && c.dayTypes.includes(f.dayType));
+}
+
+/** The strategies that remove a finding of this rule on this kind of day, then an on-site check. */
+export function strategiesFor(rule: RuleId, dayType: DayType): MeasureStrategyId[] {
+  const fitting = (Object.keys(STRATEGIES) as Exclude<StrategyId, "full_package">[]).filter((id) =>
+    covers(STRATEGIES[id].covers, { ruleId: rule, dayType }),
+  );
+  return [...fitting, "investigate_on_site"];
+}
+
 export interface CapexModel {
   perFloor: { doorCounters: number; zoneValves: number; lightingRelays: number };
   integrationFixed: number;

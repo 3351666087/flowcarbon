@@ -34,6 +34,8 @@ export const can = {
   snapshot: (r?: Role) => !!r && ["owner", "admin", "energy_analyst"].includes(r),
   saveScenario: (r?: Role) =>
     !!r && ["owner", "admin", "property_manager", "engineer", "energy_analyst"].includes(r),
+  /** building settings, including the rule thresholds */
+  editBuilding: (r?: Role) => !!r && ["owner", "admin", "property_manager"].includes(r),
 };
 
 export function useMe() {

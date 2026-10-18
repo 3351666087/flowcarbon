@@ -6,6 +6,8 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { MEASURE_TONE, strategyName } from "@/components/finding-plan";
+import { FindingsTabs } from "@/components/findings-tabs";
 import {
   Badge,
   Button,
@@ -20,7 +22,7 @@ import {
 } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { co2, dateTime, day, kwh, money } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
+import { fill, useI18n } from "@/lib/i18n";
 import { useBuilding, useFloors, useIds } from "@/lib/session";
 
 const STATUS_TONE = { open: "waste", acknowledged: "accent", fixed: "saving", dismissed: "neutral" } as const;
@@ -75,6 +77,7 @@ function Findings() {
   return (
     <>
       <PageHeader title={t.findings.title} subtitle={t.findings.subtitle} />
+      <FindingsTabs active="findings" />
       {/* status as chips to swipe through, floor and rule side by side */}
       <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0">
         {(["open", "acknowledged", "fixed", "dismissed", "all"] as const).map((k) => (
@@ -160,6 +163,14 @@ function Findings() {
                               {money(f.avoidableCost, locale, building!.currency)}
                             </span>
                           </span>
+                          {f.measure && f.measure.status !== "cancelled" ? (
+                            <span className="mt-1 block truncate text-xs text-accent">
+                              {fill(t.findings.inMeasure, {
+                                strategy: strategyName(t, f.measure.strategyId),
+                                status: t.plan.statuses[f.measure.status] ?? "",
+                              })}
+                            </span>
+                          ) : null}
                         </span>
                         <Badge tone={STATUS_TONE[f.status]}>{t.findings.statuses[f.status]}</Badge>
                         <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />
@@ -214,6 +225,13 @@ function Findings() {
                   </td>
                   <td>
                     <Badge tone={STATUS_TONE[f.status]}>{t.findings.statuses[f.status]}</Badge>
+                    {f.measure && f.measure.status !== "cancelled" ? (
+                      <div className="mt-1">
+                        <Badge tone={MEASURE_TONE[f.measure.status]}>
+                          {strategyName(t, f.measure.strategyId)}
+                        </Badge>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               ))}
