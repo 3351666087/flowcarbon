@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-10-18
 
+- **Live demo data**: `npm run pump` / the `pump` compose profile keeps the simulated tower live, simulating the
+  elapsed part of each day and ingesting it through the telemetry ingestion function; idempotent, never rewrites
+  complete days.
+- **Single-host HTTPS**: the `edge` compose profile (Caddy) issues certificates for `DOMAIN` and routes `/api/v1` to
+  the API and everything else to the web app.
+- **Safer compose defaults**: published ports bind to `127.0.0.1`, every service has a memory cap, PostgreSQL memory
+  settings are configurable.
 - `npm run snapshot` exports the demo building as one JSON file, computed by the real pipeline in a throw-away
   database, with optional AI explanations from the worker. Static prototypes load it instead of running the stack.
 - Building reports and strategy estimates read their rows in a fixed order, so floating-point totals are identical
