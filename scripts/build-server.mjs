@@ -23,6 +23,7 @@ await build({
     worker: "apps/worker/src/main.ts",
     migrate: "scripts/migrate-all.ts",
     seed: "packages/demo/src/cli.ts",
+    pump: "packages/demo/src/pump-cli.ts",
   },
   outdir: out,
   outExtension: { ".js": ".mjs" },

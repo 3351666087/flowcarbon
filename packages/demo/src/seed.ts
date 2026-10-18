@@ -327,7 +327,7 @@ export async function seedDemo(db: Db, opts: SeedOptions): Promise<SeedResult> {
 }
 
 /** Keeps the last event per device and timestamp (the simulator can emit two at the same instant). */
-function dedupeLast<T extends { device: string; at: string }>(events: T[]): T[] {
+export function dedupeLast<T extends { device: string; at: string }>(events: T[]): T[] {
   const m = new Map<string, T>();
   for (const e of events) m.set(`${e.device}|${e.at}`, e);
   return [...m.values()];
