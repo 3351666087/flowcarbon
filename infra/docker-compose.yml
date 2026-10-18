@@ -2,6 +2,9 @@
 #   docker compose -f infra/docker-compose.yml up -d db                    # database only (for `npm run dev:*`)
 #   docker compose -f infra/docker-compose.yml --profile app up -d --build # full stack on :3000 (web) and :4000 (API)
 #   DEMO_PASSWORD=... docker compose -f infra/docker-compose.yml --profile demo run --rm seed   # simulated tower
+#   docker compose -f infra/docker-compose.yml --profile pump up -d pump          # keep the simulated tower live
+#   DOMAIN=fc.example.org docker compose -f infra/docker-compose.yml --profile app --profile edge up -d   # HTTPS on :443
+# Published ports bind to 127.0.0.1 unless *_BIND says otherwise; only the edge proxy listens publicly.
 # Settings come from the environment or an .env file next to this one; see .env.example at the repository root.
 name: flowcarbon
 
@@ -24,8 +27,19 @@ services:
       POSTGRES_DB: flowcarbon
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-flowcarbon-app-dev}
       TIMESCALEDB_TELEMETRY: "off"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-512MB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-4MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-64MB}
+    mem_limit: ${DB_MEM_LIMIT:-1g}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_BIND:-127.0.0.1}:${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -60,8 +74,9 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TRUST_PROXY: "true"
       METRICS_TOKEN: ${METRICS_TOKEN:-}
+    mem_limit: ${API_MEM_LIMIT:-512m}
     ports:
-      - "${API_PORT:-4000}:4000"
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-4000}:4000"
 
   worker:
     <<: *server
@@ -75,6 +90,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_WORKSPACE_ID: ${ANTHROPIC_WORKSPACE_ID:-}
       AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
+      AI_EFFORT: ${AI_EFFORT:-medium}
+    mem_limit: ${WORKER_MEM_LIMIT:-512m}
 
   web:
     profiles: [app]
@@ -86,8 +103,9 @@ services:
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }
+    mem_limit: ${WEB_MEM_LIMIT:-512m}
     ports:
-      - "${WEB_PORT:-3000}:3000"
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"
 
   seed:
     profiles: [demo]
@@ -101,5 +119,40 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: "no"
 
+  # keeps the simulated tower live: simulates the elapsed part of each day and ingests it (run the seed first)
+  pump:
+    profiles: [pump]
+    image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
+    build: { context: .., target: server }
+    command: ["node", "pump.mjs"]
+    environment:
+      DATABASE_URL: *app-db
+      PUMP_INTERVAL_MINUTES: ${PUMP_INTERVAL_MINUTES:-15}
+    mem_limit: ${PUMP_MEM_LIMIT:-384m}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # HTTPS for a single host: automatic certificates for DOMAIN, the API and the web app behind one origin
+  edge:
+    profiles: [edge]
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}  # the public host name
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: ${EDGE_MEM_LIMIT:-128m}
+    depends_on:
+      web: { condition: service_healthy }
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

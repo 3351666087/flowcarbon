@@ -4,6 +4,7 @@
     "includes": [
       "**",
       "!**/node_modules",
+      "!.data",
       "!**/.next",
       "!**/dist",
       "!**/drizzle/meta",

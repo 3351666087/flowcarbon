@@ -4,7 +4,7 @@ FlowCarbon ships as two images built from the repository's `Dockerfile`:
 
 | Image | Runs | Command |
 |---|---|---|
-| `ghcr.io/3351666087/flowcarbon-server` | API (port 4000), worker (health/metrics on 4100), migrations, demo seed | `node api.mjs`, `node worker.mjs`, `node migrate.mjs`, `node seed.mjs` |
+| `ghcr.io/3351666087/flowcarbon-server` | API (port 4000), worker (health/metrics on 4100), migrations, demo seed and pump | `node api.mjs`, `node worker.mjs`, `node migrate.mjs`, `node seed.mjs`, `node pump.mjs` |
 | `ghcr.io/3351666087/flowcarbon-web` | Web application (port 3000) | default |
 
 Both run as the unprivileged `node` user, carry a health check, and contain production dependencies only.
@@ -18,6 +18,32 @@ DEMO_PASSWORD='choose-one' docker compose -f infra/docker-compose.yml --profile 
 ```
 
 Order of start-up: `db` → `migrate` (one-shot, owner role) → `api` and `worker` (runtime role) → `web`.
+
+Published ports (database 5432, API 4000, web 3000) bind to `127.0.0.1` unless `DB_BIND`, `API_BIND` or `WEB_BIND`
+says otherwise; Docker publishes ports past host firewalls, so keep them local and let a proxy face the internet.
+Each service has a memory cap (`DB_MEM_LIMIT`, `API_MEM_LIMIT`, `WORKER_MEM_LIMIT`, `WEB_MEM_LIMIT`) and PostgreSQL
+takes `PG_SHARED_BUFFERS` and `PG_EFFECTIVE_CACHE_SIZE`; the defaults suit a 4 GB host shared with nothing else.
+
+### HTTPS on a single host
+
+The `edge` profile adds Caddy, which obtains and renews a certificate for `DOMAIN` and serves the API under
+`/api/v1` and the web app under one origin. Point the host name's DNS record at the server and open ports 80 and 443.
+
+```bash
+# infra/.env: DOMAIN=fc.example.org, PUBLIC_URL=https://fc.example.org, COOKIE_SECURE=true
+docker compose -f infra/docker-compose.yml --profile app --profile edge up -d
+```
+
+### Live demo data
+
+`seed` creates the simulated tower for the last 28 days. The `pump` profile keeps it live: every
+`PUMP_INTERVAL_MINUTES` (15) it simulates the elapsed part of the day, writes it through the same ingestion function
+the telemetry API uses, records the simulated tenants' overtime requests and recomputes intervals, findings and
+forecasts. It only continues days it started itself, so the seeded history is never rewritten.
+
+```bash
+docker compose -f infra/docker-compose.yml --profile pump up -d pump
+```
 
 ## Database
 

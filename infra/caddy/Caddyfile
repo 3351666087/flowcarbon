@@ -1,0 +1,17 @@
+# One public origin: the API under /api/v1, everything else to the web app.
+# Certificates are issued and renewed automatically for {$DOMAIN}.
+{$DOMAIN} {
+	encode zstd gzip
+
+	handle /api/v1/* {
+		reverse_proxy api:4000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
