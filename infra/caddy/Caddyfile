@@ -6,6 +6,12 @@
 	handle /api/v1/* {
 		reverse_proxy api:4000
 	}
+	# files placed in infra/download, e.g. the Android APK: /download/FlowCarbon.apk
+	handle_path /download/* {
+		root * /srv/download
+		header Content-Disposition attachment
+		file_server
+	}
 	handle {
 		reverse_proxy web:3000
 	}

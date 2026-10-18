@@ -418,9 +418,13 @@ public final class MainActivity extends Activity {
         }
     }
 
-    /** Android 8–12. */
+    /**
+     * Android 8–12 only. From Android 13 the manifest opts into OnBackInvokedCallback (updateBack), and the system
+     * no longer calls this method, so predictive back is unaffected.
+     */
     @Override
     @SuppressWarnings("deprecation")
+    @SuppressLint("GestureBackNavigation")
     public void onBackPressed() {
         if (web != null && web.canGoBack() && !stage.isOffline()) web.goBack();
         else super.onBackPressed();

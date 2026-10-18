@@ -50,7 +50,7 @@ services:
       retries: 20
 
   migrate:
-    profiles: [app, demo]
+    profiles: [app, demo, pump]
     image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
     build: { context: .., target: server }
     command: ["node", "migrate.mjs"]
@@ -125,6 +125,8 @@ services:
     image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
     build: { context: .., target: server }
     command: ["node", "pump.mjs"]
+    healthcheck:
+      disable: true # no HTTP server to probe; the log shows each run
     environment:
       DATABASE_URL: *app-db
       PUMP_INTERVAL_MINUTES: ${PUMP_INTERVAL_MINUTES:-15}
@@ -146,6 +148,7 @@ services:
       - "443:443/udp"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./download:/srv/download:ro
       - caddy_data:/data
       - caddy_config:/config
     mem_limit: ${EDGE_MEM_LIMIT:-128m}
