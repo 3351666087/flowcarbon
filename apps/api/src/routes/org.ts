@@ -8,6 +8,7 @@ import { audit } from "../audit";
 import { orgAccess, requireOrg } from "../auth/access";
 import { canGrant } from "../auth/permissions";
 import { conflict, forbidden, notFound, unprocessable } from "../errors";
+import { invitationMessage } from "../mail";
 import {
   decodeCursor,
   encodeCursor,
@@ -58,7 +59,7 @@ const factor = z.object({
   status: z.enum(["verified", "to_verify"]),
 });
 
-export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config }) => {
+export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config, mailer }) => {
   app.get(
     "/orgs/:orgId",
     {
@@ -278,7 +279,7 @@ export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, con
       schema: {
         tags: ["organisation"],
         summary:
-          "Invite someone. The link is returned once; deliver it yourself or through your mail integration.",
+          "Invite someone. The link is returned once, and emailed to the invitee when outgoing mail is configured (`emailed`).",
         params: orgParams,
         body: z.object({
           email: z.email().max(320),
@@ -287,7 +288,7 @@ export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, con
           expiresInDays: z.number().int().min(1).max(30).default(7),
         }),
         response: {
-          201: z.object({ id: uuid, acceptUrl: z.string(), expiresAt: z.string() }),
+          201: z.object({ id: uuid, acceptUrl: z.string(), expiresAt: z.string(), emailed: z.boolean() }),
           ...errorResponses,
         },
       },
@@ -323,7 +324,36 @@ export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, con
         return inv!.id;
       });
       const acceptUrl = `${config.APP_URL.replace(/\/$/, "")}/invite#${token}`;
-      return reply.status(201).send({ id, acceptUrl, expiresAt: expiresAt.toISOString() });
+      let emailed = false;
+      if (mailer.enabled) {
+        const [org] = await db
+          .select({ name: schema.organizations.name })
+          .from(schema.organizations)
+          .where(eq(schema.organizations.id, req.params.orgId));
+        const [inviter] =
+          access.actor.type === "user"
+            ? await db
+                .select({ name: schema.users.name })
+                .from(schema.users)
+                .where(eq(schema.users.id, access.actor.id))
+            : [];
+        try {
+          await mailer.send(
+            invitationMessage(
+              email.toLowerCase(),
+              org?.name ?? "",
+              inviter?.name ?? null,
+              acceptUrl,
+              expiresAt,
+            ),
+          );
+          emailed = true;
+        } catch (err) {
+          // the link is still returned, so the inviter can deliver it another way
+          req.log.error({ err }, "invitation mail failed");
+        }
+      }
+      return reply.status(201).send({ id, acceptUrl, expiresAt: expiresAt.toISOString(), emailed });
     },
   );
 

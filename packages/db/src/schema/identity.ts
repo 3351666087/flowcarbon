@@ -4,6 +4,7 @@ import {
   boolean,
   index,
   inet,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -119,6 +120,28 @@ export const invitations = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [index("invitations_org_idx").on(t.orgId)],
+);
+
+/**
+ * One-time codes sent by email, to sign in without a password or to reset it. Only a hash is stored; a code lives
+ * minutes, allows a few attempts, and is consumed on use. Issuing a new code retires the previous one.
+ */
+export const emailCodes = pgTable(
+  "email_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** sign_in | password_reset */
+    purpose: text("purpose").notNull(),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: ts("expires_at").notNull(),
+    consumedAt: ts("consumed_at"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("email_codes_user_idx").on(t.userId, t.purpose)],
 );
 
 /** Append-only record of every mutation. */

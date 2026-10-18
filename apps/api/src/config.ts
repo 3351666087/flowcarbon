@@ -36,6 +36,13 @@ const schema = z.object({
   SESSION_REMEMBER_DAYS: z.coerce.number().min(1).max(365).default(30),
   SESSION_REMEMBER_MAX_DAYS: z.coerce.number().min(1).max(365).default(90),
   TRUST_PROXY: bool,
+  /**
+   * outgoing mail (sign-in and reset codes, invitations) through an SMTP relay, e.g.
+   * smtps://user:app-password@smtp.gmail.com:465; unset = no mail (codes are logged in development)
+   */
+  SMTP_URL: z.string().url().optional(),
+  /** sender, e.g. "FlowCarbon <noreply@example.com>"; defaults to the SMTP user */
+  MAIL_FROM: z.string().min(3).optional(),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(10).default(600),
   /** sign-in attempts per IP per 15 minutes */
   LOGIN_ATTEMPTS_PER_15_MIN: z.coerce.number().int().min(1).default(10),

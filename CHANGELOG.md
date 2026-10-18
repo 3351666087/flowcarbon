@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.4 — 2026-10-18
+
+- **Email codes.** With an SMTP relay configured (`SMTP_URL`, `MAIL_FROM`), people can sign in with a six-digit code
+  instead of their password, and reset a forgotten password with one (which signs out every other session). Codes
+  last 10 minutes, allow five tries, are stored only as hashes, and a new one retires the last; requesting one
+  answers the same whether or not the address has an account. `GET /auth/methods` tells clients whether codes are
+  available; without a relay the options stay hidden.
+- **Invitations are emailed** to the invitee when mail is configured (`emailed` in the response); the link is still
+  shown once.
+- The sign-in form gets a segmented control for password or email code, a forgot-password page, and the code field
+  takes the code the keyboard offers from the email.
+- Migration `0005` adds `email_codes`.
+
 ## 0.1.3 — 2026-10-18
 
 - **Keep me signed in.** Sign-in and invitations take a `remember` flag, a switch on the form that is on by

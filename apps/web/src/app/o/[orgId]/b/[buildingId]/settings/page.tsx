@@ -98,6 +98,7 @@ export default function SettingsPage() {
       ),
     onSettled: () => qc.invalidateQueries({ queryKey: ["members", orgId] }),
   });
+  const [invited, setInvited] = useState("");
   const invite = useMutation({
     mutationFn: () =>
       unwrap(
@@ -112,6 +113,7 @@ export default function SettingsPage() {
         }),
       ),
     onSuccess: () => {
+      setInvited(inviteEmail);
       setInviteEmail("");
       qc.invalidateQueries({ queryKey: ["invitations", orgId] });
     },
@@ -223,7 +225,16 @@ export default function SettingsPage() {
               </Field>
             ) : null}
           </form>
-          {invite.data ? <CopyOnce label={t.settings.inviteLink} value={invite.data.acceptUrl} /> : null}
+          {invite.data ? (
+            <CopyOnce
+              label={
+                invite.data.emailed
+                  ? t.settings.inviteEmailed.replace("{email}", invited)
+                  : t.settings.inviteLink
+              }
+              value={invite.data.acceptUrl}
+            />
+          ) : null}
           {invite.error ? <ErrorBox error={invite.error} /> : null}
           {invitations.data?.filter((i) => !i.acceptedAt).length ? (
             <div className="mt-4">

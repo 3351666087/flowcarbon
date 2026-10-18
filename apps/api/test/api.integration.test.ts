@@ -10,6 +10,7 @@ import type { InjectOptions } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { API_PREFIX, buildApp } from "../src/app";
 import { loadConfig } from "../src/config";
+import type { Mailer, MailMessage } from "../src/mail";
 
 const adminUrl = process.env.TEST_DATABASE_URL;
 const PASSWORD = "api-test-password-2026";
@@ -32,6 +33,15 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
     },
   };
   const sessions = new Map<string, string>();
+  const outbox: MailMessage[] = [];
+  const mailer: Mailer = {
+    enabled: true,
+    send: async (m) => {
+      outbox.push(m);
+    },
+  };
+  const lastMailTo = (to: string) => outbox.filter((m) => m.to === to).at(-1);
+  const codeIn = (m: MailMessage | undefined) => /\b(\d{6})\b/.exec(m?.text ?? "")?.[1];
 
   beforeAll(async () => {
     tdb = await createTestDatabase(adminUrl!);
@@ -43,7 +53,7 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       CORS_ORIGINS: ORIGIN,
       LOGIN_ATTEMPTS_PER_15_MIN: "100",
     });
-    app = await buildApp({ db: handle.db, config, jobs, logger: false });
+    app = await buildApp({ db: handle.db, config, jobs, mailer, logger: false });
     await app.ready();
   }, 180_000);
 
@@ -453,6 +463,9 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
         payload: { email: "new.viewer@example.com", role: "viewer" },
       });
       expect(inv.statusCode).toBe(201);
+      // with outgoing mail configured the invitee gets the link too
+      expect(inv.json().emailed).toBe(true);
+      expect(lastMailTo("new.viewer@example.com")?.text).toContain(inv.json().acceptUrl);
       const token = inv.json().acceptUrl.split("#")[1];
       const weak = await app.inject({
         method: "POST",
@@ -498,6 +511,81 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       const owner = members.find((m) => m.role === "owner")!;
       const res = await as(ownerEmail, { method: "DELETE", url: `${org()}/members/${owner.userId}` });
       expect(res.statusCode).toBe(409);
+    });
+  });
+
+  describe("email codes", () => {
+    const engineer = "engineer@flowcarbon-demo.example";
+    const requestCode = (email: string, purpose: "sign_in" | "password_reset") =>
+      app.inject({ method: "POST", url: `${API_PREFIX}/auth/code`, payload: { email, purpose } });
+    const signInWith = (email: string, code: string) =>
+      app.inject({ method: "POST", url: `${API_PREFIX}/auth/code/sign-in`, payload: { email, code } });
+
+    it("says email codes are available", async () => {
+      expect((await app.inject({ url: `${API_PREFIX}/auth/methods` })).json()).toEqual({
+        password: true,
+        emailCode: true,
+      });
+    });
+
+    it("signs in with an emailed code, once", async () => {
+      expect((await requestCode(engineer.toUpperCase(), "sign_in")).statusCode).toBe(202);
+      const mail = lastMailTo(engineer);
+      const code = codeIn(mail)!;
+      expect(mail?.subject).toContain(code);
+      const wrong = code === "000000" ? "111111" : "000000";
+      expect((await signInWith(engineer, wrong)).statusCode).toBe(401);
+      const ok = await signInWith(engineer, code);
+      expect(ok.statusCode).toBe(200);
+      expect(ok.json().user.email).toBe(engineer);
+      expect(ok.cookies.find((c) => c.name === "fc_session")).toBeDefined();
+      expect((await signInWith(engineer, code)).statusCode).toBe(401);
+    });
+
+    it("answers the same for unknown addresses and sends nothing", async () => {
+      const before = outbox.length;
+      expect((await requestCode("nobody@example.com", "sign_in")).statusCode).toBe(202);
+      expect(outbox.length).toBe(before);
+    });
+
+    it("stops accepting a code after five wrong tries", async () => {
+      await requestCode(analyst, "sign_in");
+      const code = codeIn(lastMailTo(analyst))!;
+      const wrong = code === "000000" ? "111111" : "000000";
+      for (let i = 0; i < 5; i++) expect((await signInWith(analyst, wrong)).statusCode).toBe(401);
+      expect((await signInWith(analyst, code)).statusCode).toBe(401);
+    });
+
+    it("resets a password with a code and signs out every other session", async () => {
+      const viewer = "new.viewer@example.com";
+      const old = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/login`,
+        payload: { email: viewer, password: "a sufficiently long passphrase" },
+      });
+      const oldCookie = old.cookies.find((c) => c.name === "fc_session")!.value;
+      await requestCode(viewer, "password_reset");
+      const code = codeIn(lastMailTo(viewer))!;
+      const reset = (password: string) =>
+        app.inject({
+          method: "POST",
+          url: `${API_PREFIX}/auth/password/reset`,
+          payload: { email: viewer, code, password, remember: true },
+        });
+      // an unacceptable password does not use up the code
+      expect((await reset("short")).statusCode).toBe(422);
+      const ok = await reset("another sufficiently long passphrase");
+      expect(ok.statusCode).toBe(200);
+      expect(ok.cookies.find((c) => c.name === "fc_session")!.expires).toBeDefined();
+      expect(
+        (await app.inject({ url: `${API_PREFIX}/me`, cookies: { fc_session: oldCookie } })).statusCode,
+      ).toBe(401);
+      const relogin = await app.inject({
+        method: "POST",
+        url: `${API_PREFIX}/auth/login`,
+        payload: { email: viewer, password: "another sufficiently long passphrase" },
+      });
+      expect(relogin.statusCode).toBe(200);
     });
   });
 });

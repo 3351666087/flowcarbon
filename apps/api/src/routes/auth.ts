@@ -1,13 +1,15 @@
+import { randomInt } from "node:crypto";
 import { schema } from "@flowcarbon/db";
 import {
   dummyPasswordHash,
   hashPassword,
   needsRehash,
   passwordProblems,
+  safeEqual,
   sha256,
   verifyPassword,
 } from "@flowcarbon/security";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { RouteDeps } from "../app";
@@ -20,6 +22,7 @@ import {
   setSessionCookie,
 } from "../auth/sessions";
 import { HttpError, unauthorized, unprocessable } from "../errors";
+import { codeMessage } from "../mail";
 import { errorResponses, roleSchema, uuid } from "../schemas";
 
 const membership = z.object({
@@ -34,7 +37,14 @@ const me = z.object({
   memberships: z.array(membership),
 });
 
-export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config }) => {
+/** one-time email codes: six digits, ten minutes, five attempts; a new one at most every 45 s */
+const CODE_MINUTES = 10;
+const CODE_ATTEMPTS = 5;
+const CODE_RESEND_MS = 45_000;
+const codePurpose = z.enum(["sign_in", "password_reset"]);
+const sixDigits = z.string().regex(/^\d{6}$/, "Six digits.");
+
+export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, config, mailer }) => {
   async function loadMe(userId: string) {
     const [user] = await db
       .select({
@@ -119,6 +129,183 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
       if (req.principal?.kind === "user") await revokeSession(db, req.principal.sessionId);
       clearSessionCookie(reply, config);
       return reply.status(204).send(null);
+    },
+  );
+
+  // ---- email codes: sign in without a password, or reset it ---------------------------------------------------
+  const codeHash = (userId: string, code: string) => sha256(`${userId}:${code}`);
+  const wrongCode = () => unauthorized("The code is wrong or has expired.");
+
+  /** Checks a code and consumes it; returns the user. Each try counts, before the comparison, so parallel guesses
+   * cannot exceed the limit. */
+  async function consumeCode(email: string, purpose: z.infer<typeof codePurpose>, code: string) {
+    const [row] = await db
+      .select({
+        id: schema.emailCodes.id,
+        userId: schema.emailCodes.userId,
+        codeHash: schema.emailCodes.codeHash,
+        disabledAt: schema.users.disabledAt,
+      })
+      .from(schema.emailCodes)
+      .innerJoin(schema.users, eq(schema.users.id, schema.emailCodes.userId))
+      .where(
+        and(
+          sql`lower(${schema.users.email}) = ${email}`,
+          eq(schema.emailCodes.purpose, purpose),
+          isNull(schema.emailCodes.consumedAt),
+          gt(schema.emailCodes.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(schema.emailCodes.createdAt))
+      .limit(1);
+    if (!row || row.disabledAt) throw wrongCode();
+    const [counted] = await db
+      .update(schema.emailCodes)
+      .set({ attempts: sql`${schema.emailCodes.attempts} + 1` })
+      .where(and(eq(schema.emailCodes.id, row.id), lt(schema.emailCodes.attempts, CODE_ATTEMPTS)))
+      .returning({ id: schema.emailCodes.id });
+    if (!counted || !safeEqual(row.codeHash, codeHash(row.userId, code))) throw wrongCode();
+    const [used] = await db
+      .update(schema.emailCodes)
+      .set({ consumedAt: new Date() })
+      .where(and(eq(schema.emailCodes.id, row.id), isNull(schema.emailCodes.consumedAt)))
+      .returning({ id: schema.emailCodes.id });
+    if (!used) throw wrongCode();
+    // receiving the code proves the address
+    await db
+      .update(schema.users)
+      .set({ emailVerifiedAt: sql`coalesce(${schema.users.emailVerifiedAt}, now())` })
+      .where(eq(schema.users.id, row.userId));
+    return row.userId;
+  }
+
+  app.get(
+    "/auth/methods",
+    {
+      schema: {
+        tags: ["auth"],
+        summary: "How people can sign in here: email codes need outgoing mail to be configured",
+        response: { 200: z.object({ password: z.boolean(), emailCode: z.boolean() }) },
+      },
+    },
+    async () => ({ password: true, emailCode: mailer.enabled }),
+  );
+
+  app.post(
+    "/auth/code",
+    {
+      config: {
+        rateLimit: { max: 5, timeWindow: "15 minutes", keyGenerator: (req) => `${req.ip}|code` },
+      },
+      schema: {
+        tags: ["auth"],
+        summary:
+          "Email a one-time code for signing in or resetting the password. Always 202, whether or not the address has an account.",
+        body: z.object({ email: z.email().max(320), purpose: codePurpose }),
+        response: { 202: z.null(), ...errorResponses },
+      },
+    },
+    async (req, reply) => {
+      if (!mailer.enabled) throw new HttpError(503, "Email is not set up on this server.", "unavailable");
+      const email = req.body.email.trim().toLowerCase();
+      const { purpose } = req.body;
+      const [user] = await db
+        .select({ id: schema.users.id, locale: schema.users.locale, disabledAt: schema.users.disabledAt })
+        .from(schema.users)
+        .where(sql`lower(${schema.users.email}) = ${email}`);
+      if (user && !user.disabledAt) {
+        const [recent] = await db
+          .select({ createdAt: schema.emailCodes.createdAt })
+          .from(schema.emailCodes)
+          .where(and(eq(schema.emailCodes.userId, user.id), eq(schema.emailCodes.purpose, purpose)))
+          .orderBy(desc(schema.emailCodes.createdAt))
+          .limit(1);
+        if (!recent || Date.now() - recent.createdAt.getTime() > CODE_RESEND_MS) {
+          const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+          await db.transaction(async (tx) => {
+            // a new code retires the previous one
+            await tx
+              .update(schema.emailCodes)
+              .set({ consumedAt: new Date() })
+              .where(
+                and(
+                  eq(schema.emailCodes.userId, user.id),
+                  eq(schema.emailCodes.purpose, purpose),
+                  isNull(schema.emailCodes.consumedAt),
+                ),
+              );
+            await tx.insert(schema.emailCodes).values({
+              userId: user.id,
+              purpose,
+              codeHash: codeHash(user.id, code),
+              expiresAt: new Date(Date.now() + CODE_MINUTES * 60_000),
+            });
+          });
+          // sent in the background, so the answer takes as long whether or not the account exists
+          mailer
+            .send(codeMessage(purpose, user.locale, email, code, CODE_MINUTES))
+            .catch((err) => req.log.error({ err, purpose }, "code mail failed"));
+        }
+      }
+      return reply.status(202).send(null);
+    },
+  );
+
+  app.post(
+    "/auth/code/sign-in",
+    {
+      config: {
+        rateLimit: { max: 20, timeWindow: "15 minutes", keyGenerator: (req) => `${req.ip}|code-verify` },
+      },
+      schema: {
+        tags: ["auth"],
+        summary: "Sign in with an emailed code; sets the session cookie",
+        body: z.object({
+          email: z.email().max(320),
+          code: sixDigits,
+          remember: z.boolean().default(false).describe("Keep me signed in, as for sign-in"),
+        }),
+        response: { 200: me, ...errorResponses },
+      },
+    },
+    async (req, reply) => {
+      const userId = await consumeCode(req.body.email.trim().toLowerCase(), "sign_in", req.body.code);
+      setSessionCookie(reply, config, await createSession(db, config, userId, req, req.body.remember));
+      return loadMe(userId);
+    },
+  );
+
+  app.post(
+    "/auth/password/reset",
+    {
+      config: {
+        rateLimit: { max: 20, timeWindow: "15 minutes", keyGenerator: (req) => `${req.ip}|code-verify` },
+      },
+      schema: {
+        tags: ["auth"],
+        summary: "Choose a new password with an emailed code; signs out every session and signs in here",
+        body: z.object({
+          email: z.email().max(320),
+          code: sixDigits,
+          password: z.string().max(256),
+          remember: z.boolean().default(false).describe("Keep me signed in, as for sign-in"),
+        }),
+        response: { 200: me, ...errorResponses },
+      },
+    },
+    async (req, reply) => {
+      const email = req.body.email.trim().toLowerCase();
+      // the policy is checked first, so an unacceptable password does not use up the code
+      const problems = passwordProblems(req.body.password, { email });
+      if (problems.length) throw unprocessable("The password is not acceptable.", problems);
+      const userId = await consumeCode(email, "password_reset", req.body.code);
+      await db
+        .update(schema.users)
+        .set({ passwordHash: await hashPassword(req.body.password), updatedAt: new Date() })
+        .where(eq(schema.users.id, userId));
+      await revokeOtherSessions(db, userId);
+      setSessionCookie(reply, config, await createSession(db, config, userId, req, req.body.remember));
+      return loadMe(userId);
     },
   );
 

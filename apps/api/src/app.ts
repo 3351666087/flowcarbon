@@ -16,6 +16,7 @@ import {
 import { principalPlugin } from "./auth/principal";
 import type { Config } from "./config";
 import { registerErrorHandler } from "./errors";
+import { createMailer, type Mailer } from "./mail";
 import { createMetrics, instrument, type Metrics } from "./metrics";
 import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
@@ -33,16 +34,19 @@ export interface RouteDeps {
   config: Config;
   jobs: JobQueue;
   metrics: Metrics;
+  mailer: Mailer;
 }
 
 export interface AppDeps {
   db: Db;
   config: Config;
   jobs: JobQueue;
+  /** defaults to SMTP from the configuration */
+  mailer?: Mailer;
   logger?: FastifyServerOptions["logger"];
 }
 
-export async function buildApp({ db, config, jobs, logger }: AppDeps) {
+export async function buildApp({ db, config, jobs, mailer, logger }: AppDeps) {
   const app = Fastify({
     logger: logger ?? {
       level: config.LOG_LEVEL,
@@ -137,7 +141,7 @@ export async function buildApp({ db, config, jobs, logger }: AppDeps) {
   }
 
   await app.register(principalPlugin, { db, config });
-  const deps: RouteDeps = { db, config, jobs, metrics };
+  const deps: RouteDeps = { db, config, jobs, metrics, mailer: mailer ?? createMailer(config, app.log) };
   await app.register(opsRoutes, { ...deps, version: API_VERSION });
   await app.register(
     async (api) => {
