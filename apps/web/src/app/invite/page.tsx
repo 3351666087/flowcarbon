@@ -3,7 +3,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
-import { Button, ErrorBox, Field, Input } from "@/components/ui";
+import { AuthStage, FieldGroup, GroupField, groupInput } from "@/components/auth-stage";
+import { Mark } from "@/components/mark";
+import { ErrorBox } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
@@ -17,6 +19,7 @@ export default function InvitePage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [refusals, setRefusals] = useState(0);
   useEffect(() => setToken(window.location.hash.slice(1) || ""), []);
 
   async function submit(e: FormEvent) {
@@ -33,36 +36,53 @@ export default function InvitePage() {
       router.replace("/");
     } catch (err) {
       setError(err);
+      setRefusals((n) => n + 1);
       setBusy(false);
     }
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center px-4">
-      <form
-        onSubmit={submit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-border bg-surface p-5"
-      >
-        <h1 className="text-lg font-semibold">{t.invite.title}</h1>
-        {token === "" ? <ErrorBox error={new Error(t.invite.missing)} /> : null}
-        <Field label={t.invite.name}>
-          <Input required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-        <Field label={t.invite.password}>
-          <Input
+    <AuthStage title={t.invite.title} onSubmit={submit} shake={refusals}>
+      {token === "" ? (
+        <div className="mb-4">
+          <ErrorBox error={new Error(t.invite.missing)} />
+        </div>
+      ) : null}
+      <FieldGroup>
+        <GroupField label={t.invite.name}>
+          <input
+            required
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={groupInput}
+          />
+        </GroupField>
+        <GroupField label={t.invite.password}>
+          <input
             type="password"
             required
             minLength={12}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className={groupInput}
           />
-        </Field>
-        {error ? <ErrorBox error={error} /> : null}
-        <Button type="submit" variant="primary" className="w-full" busy={busy} disabled={!token}>
-          {t.invite.submit}
-        </Button>
-      </form>
-    </main>
+        </GroupField>
+      </FieldGroup>
+      {error ? (
+        <div className="mt-4">
+          <ErrorBox error={error} />
+        </div>
+      ) : null}
+      <button
+        type="submit"
+        disabled={busy || !token}
+        className="fc-prominent fc-press mt-5 flex h-[52px] w-full items-center justify-center gap-2 rounded-full text-[15px] font-semibold disabled:opacity-60"
+      >
+        {busy ? <Mark motion="breathe" className="size-5" /> : null}
+        {t.invite.submit}
+      </button>
+    </AuthStage>
   );
 }

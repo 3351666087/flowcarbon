@@ -130,6 +130,7 @@ Pre-cooling and arrival around the start of the working day are exempt. Threshol
 | `apps/api` | HTTP API. |
 | `apps/worker` | Background jobs and AI explanations. |
 | `apps/web` | Web application. |
+| `apps/android` | Android app: a native shell around the web app ([details](apps/android/README.md)). |
 | `docs/` | [Architecture](docs/architecture.md), [deployment](docs/deployment.md), [decision records](docs/adr/). |
 
 ## Development

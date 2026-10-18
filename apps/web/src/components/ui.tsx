@@ -1,10 +1,11 @@
 "use client";
 
 import { clsx } from "clsx";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { Mark } from "./mark";
 
 export function PageHeader({
   title,
@@ -41,7 +42,10 @@ export function Card({
 }) {
   return (
     // min-w-0: as a grid or flex item a card must not grow to fit a wide table; the table scrolls instead
-    <section className={clsx("min-w-0 rounded-xl border border-border bg-surface", className)}>
+    <section
+      data-spotlight
+      className={clsx("min-w-0 rounded-2xl border border-border bg-surface", className)}
+    >
       {title || actions ? (
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">{title}</h2>
@@ -65,7 +69,7 @@ export function Metric({
   tone?: "waste" | "saving" | "accent";
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div data-spotlight className="rounded-2xl border border-border bg-surface p-4">
       <div className="text-xs font-medium text-muted">{label}</div>
       <div
         className={clsx(
@@ -145,15 +149,15 @@ export function Button({
       {...rest}
       disabled={rest.disabled || busy}
       className={clsx(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-        variant === "primary" && "bg-accent text-on-accent hover:opacity-90",
+        "fc-press inline-flex h-9 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50",
+        variant === "primary" && "fc-prominent hover:brightness-105",
         variant === "secondary" && "border border-border bg-surface hover:bg-surface-2",
         variant === "ghost" && "hover:bg-surface-2",
         variant === "danger" && "border border-border bg-surface text-danger hover:bg-danger-soft",
         className,
       )}
     >
-      {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+      {busy ? <Mark motion="breathe" className="size-4" /> : null}
       {children}
     </button>
   );
@@ -171,7 +175,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 const control =
-  "h-9 w-full min-w-0 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-[var(--ring)]";
+  "h-9 w-full min-w-0 rounded-xl border border-border bg-surface px-3 text-sm outline-none transition-shadow focus:border-accent focus:ring-4 focus:ring-[var(--ring)]";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={clsx(control, props.className)} />;
@@ -181,11 +185,19 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={clsx(control, "pr-8", props.className)} />;
 }
 
-export function Loading() {
+/** The brand loader: the mark's floors light up in turn. `full` centres it on an empty screen. */
+export function Loading({ full = false }: { full?: boolean }) {
   const { t } = useI18n();
-  return (
-    <div className="flex items-center gap-2 py-10 text-sm text-muted" role="status">
-      <Loader2 className="size-4 animate-spin" aria-hidden /> {t.common.loading}
+  return full ? (
+    <div className="grid min-h-dvh place-items-center" role="status">
+      <div className="flex flex-col items-center gap-3 text-sm text-muted">
+        <Mark motion="breathe" className="size-10 text-accent" />
+        {t.common.loading}
+      </div>
+    </div>
+  ) : (
+    <div className="flex items-center gap-2.5 py-10 text-sm text-muted" role="status">
+      <Mark motion="breathe" className="size-5 text-accent" /> {t.common.loading}
     </div>
   );
 }
@@ -198,7 +210,7 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
       ? t.common.forbidden
       : (e?.message ?? (error instanceof Error ? error.message : String(error)));
   return (
-    <div className="rounded-xl border border-border bg-danger-soft p-4 text-sm" role="alert">
+    <div className="fc-rise rounded-2xl border border-border bg-danger-soft p-4 text-sm" role="alert">
       <div className="flex items-center gap-2 font-semibold text-danger">
         <AlertTriangle className="size-4" aria-hidden /> {t.common.errorTitle}
       </div>
@@ -226,7 +238,7 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
 
 export function Empty({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted">
+    <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">
       {children}
     </div>
   );

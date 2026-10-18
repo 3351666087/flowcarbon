@@ -23,6 +23,8 @@ const config: NextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,
   reactStrictMode: true,
+  // the dev badge sits where the phone tab bar floats
+  devIndicators: false,
   async rewrites() {
     return [{ source: "/api/v1/:path*", destination: `${API_ORIGIN}/api/v1/:path*` }];
   },

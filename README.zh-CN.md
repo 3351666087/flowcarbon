@@ -122,6 +122,7 @@ API 文档在 `http://localhost:4000/api/v1/docs`。生产部署见[部署文档
 | `apps/api` | HTTP API。 |
 | `apps/worker` | 后台任务与 AI 解释。 |
 | `apps/web` | 网页端。 |
+| `apps/android` | Android 应用：包住网页版的原生外壳（[说明](apps/android/README.md)）。 |
 | `docs/` | [架构](docs/architecture.md)、[部署](docs/deployment.md)、[架构决策记录](docs/adr/)（英文）。 |
 
 ## 本地开发

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Backdrop } from "@/components/glass";
 import { ErrorBox, Loading } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useBuildings, useMe } from "@/lib/session";
@@ -32,8 +33,9 @@ export default function Home() {
       </div>
     );
   return (
-    <div className="p-6">
-      <Loading />
-    </div>
+    <>
+      <Backdrop />
+      <Loading full />
+    </>
   );
 }

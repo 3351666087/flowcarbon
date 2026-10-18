@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.2 — 2026-10-18
+
+- **Android app** (`apps/android`): a native shell around the web app with no third-party libraries — launch intro
+  on the brand stage, system bars that follow the page's colour, predictive back, an offline screen that reconnects
+  by itself, CSV downloads with the session. CI builds, lints and signs the APK and attaches it to releases.
+- **Web design: Liquid Glass.** Navigation and controls move onto a glass layer after Apple's iOS 26 material,
+  over a slowly drifting backdrop: a floating sidebar on wide screens, and on phones a floating tab bar whose
+  selection stretches from tab to tab, lifts into a magnifying lens while a finger slides along it, and folds its
+  labels away while the page is read downward (a More menu holds pages beyond five). The header becomes a
+  scroll-edge blur with grouped glass controls. On Chromium (including the Android WebView) the glass bends what is
+  behind it at its rim, from a per-element refraction map; other browsers get blur, tint and the rim highlight, which
+  turns toward the pointer or the phone's tilt. Reduced transparency, increased contrast and reduced motion are
+  respected.
+- **Sign-in and invitations** take place on a live stage: an isometric tower whose floors glow with occupancy, turn
+  amber when cooled while empty and get fixed by a teal scan, leaning toward the pointer or the phone's tilt. The
+  form is a glass sheet over it with grouped fields, a password reveal and a refusal shake.
+- **Motion**: spring timing for things that travel and things that are pressed, a press bloom under the finger,
+  pages that settle in on navigation, cards whose edge lights under the mouse, and the mark as the loading indicator.
+- **Web**: the FlowCarbon mark as the site icon, and a web manifest.
+- **Deployment**: the edge proxy serves `infra/download` under `/download/`; the pump profile no longer needs the
+  app profile, and the pump has no HTTP health check.
+
 ## 0.1.1 — 2026-10-18
 
 - **Live demo data**: `npm run pump` / the `pump` compose profile keeps the simulated tower live, simulating the

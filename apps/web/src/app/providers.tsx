@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
+import { MaterialLight } from "@/components/glass";
 import { ApiError } from "@/lib/api";
 import { I18nProvider } from "@/lib/i18n";
 
@@ -21,7 +22,10 @@ export function Providers({ children }: { children: ReactNode }) {
   );
   return (
     <QueryClientProvider client={client}>
-      <I18nProvider>{children}</I18nProvider>
+      <I18nProvider>
+        <MaterialLight />
+        {children}
+      </I18nProvider>
     </QueryClientProvider>
   );
 }

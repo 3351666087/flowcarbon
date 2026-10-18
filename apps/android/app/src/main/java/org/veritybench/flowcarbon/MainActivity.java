@@ -23,6 +23,7 @@ import android.os.Environment;
 import android.os.SystemClock;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -55,6 +56,8 @@ import java.util.regex.Pattern;
 public final class MainActivity extends Activity {
     /** the intro is never cut shorter than its choreography */
     private static final long MIN_INTRO_MS = 1150;
+    /** nor held longer than this once the page has loaded, even if it never reports ready */
+    private static final long MAX_READY_WAIT_MS = 5000;
     private static final int REQUEST_STORAGE = 7;
     private static final Pattern RGB = Pattern.compile("rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)");
     /** reports the page background now and whenever the theme changes */
@@ -65,6 +68,17 @@ public final class MainActivity extends Activity {
             + "{attributes:true,attributeFilter:['data-theme','class','style']});"
             + "try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){setTimeout(report,60);});}catch(e){}}"
             + "report();})();";
+    /**
+     * Reports ready once the page shows real content — the sign-in form or the app's navigation — rather than the
+     * loading state a client-rendered page passes through first; two frames later, so that content has painted.
+     */
+    private static final String READY_PROBE = "(function(){"
+            + "var S='main form, nav[aria-label=\"Main\"]';"
+            + "function done(){requestAnimationFrame(function(){requestAnimationFrame(function(){"
+            + "try{window.FlowCarbonShell.ready();}catch(e){}});});}"
+            + "if(document.querySelector(S)){done();return;}"
+            + "var o=new MutationObserver(function(){if(document.querySelector(S)){o.disconnect();done();}});"
+            + "o.observe(document.documentElement,{childList:true,subtree:true});})();";
 
     private FrameLayout root;
     private WebView web;
@@ -277,7 +291,11 @@ public final class MainActivity extends Activity {
             bar.finish();
             view.evaluateJavascript(THEME_PROBE, null);
             updateBack();
-            if (!mainFrameFailed && stage.isUp() && !stage.isOffline()) revealSoon();
+            if (!mainFrameFailed && stage.isUp() && !stage.isOffline()) {
+                view.evaluateJavascript(READY_PROBE, null);
+                root.removeCallbacks(revealAnyway);
+                root.postDelayed(revealAnyway, MAX_READY_WAIT_MS);
+            }
         }
 
         @Override
@@ -310,14 +328,34 @@ public final class MainActivity extends Activity {
         }
     }
 
-    /** Called by the page (THEME_PROBE). */
+    /** Called by the page: THEME_PROBE, READY_PROBE, and the web app's own controls. */
     private final class Bridge {
         @JavascriptInterface
         public void theme(String css) {
             int color = parseColor(css);
             if (color != 0) runOnUiThread(() -> setPageColor(color));
         }
+
+        @JavascriptInterface
+        public void ready() {
+            runOnUiThread(() -> {
+                root.removeCallbacks(revealAnyway);
+                if (!mainFrameFailed && stage.isUp() && !stage.isOffline()) revealSoon();
+            });
+        }
+
+        /** a light tick, e.g. as a finger slides across the tab bar */
+        @JavascriptInterface
+        public void haptic() {
+            runOnUiThread(() -> {
+                if (web != null) web.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+            });
+        }
     }
+
+    private final Runnable revealAnyway = () -> {
+        if (!mainFrameFailed && stage.isUp() && !stage.isOffline()) revealSoon();
+    };
 
     private static int parseColor(String css) {
         if (css == null) return 0;
@@ -493,6 +531,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        root.removeCallbacks(revealAnyway);
         if (connectivity != null && networkCallback != null) connectivity.unregisterNetworkCallback(networkCallback);
         if (web != null) {
             root.removeView(web);

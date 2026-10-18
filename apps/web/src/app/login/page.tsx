@@ -1,22 +1,25 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Layers } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useState } from "react";
-import { Button, ErrorBox, Field, Input } from "@/components/ui";
-import { api, unwrap } from "@/lib/api";
+import { AuthStage, FieldGroup, GroupField, groupInput } from "@/components/auth-stage";
+import { Mark } from "@/components/mark";
+import { ApiError, api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 function LoginForm() {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [reveal, setReveal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [refusals, setRefusals] = useState(0);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -30,57 +33,78 @@ function LoginForm() {
       router.replace(next?.startsWith("/") && !next.startsWith("//") ? next : "/");
     } catch (err) {
       setError(err);
+      setRefusals((n) => n + 1);
       setBusy(false);
     }
   }
 
+  const message =
+    error instanceof ApiError && error.status === 401
+      ? t.login.failed
+      : error instanceof Error
+        ? error.message
+        : error
+          ? String(error)
+          : null;
+
   return (
-    <main className="grid min-h-dvh place-items-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="grid size-9 place-items-center rounded-xl bg-accent text-on-accent">
-            <Layers className="size-5" aria-hidden />
-          </span>
-          <div>
-            <div className="font-semibold">{t.appName}</div>
-            <div className="text-xs text-muted">{t.tagline}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setLocale(locale === "en" ? "zh" : "en")}
-            className="ml-auto text-sm text-muted hover:text-text"
-          >
-            {t.common.language}
-          </button>
-        </div>
-        <form onSubmit={submit} className="space-y-4 rounded-xl border border-border bg-surface p-5">
-          <h1 className="text-lg font-semibold">{t.login.title}</h1>
-          <Field label={t.login.email}>
-            <Input
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </Field>
-          <Field label={t.login.password}>
-            <Input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-          {error ? <ErrorBox error={error} /> : null}
-          <Button type="submit" variant="primary" className="w-full" busy={busy}>
-            {t.login.submit}
-          </Button>
-          <p className="text-xs text-muted">{t.login.demo}</p>
-        </form>
-      </div>
-    </main>
+    <AuthStage title={t.login.title} subtitle={t.login.subtitle} onSubmit={submit} shake={refusals}>
+      <FieldGroup>
+        <GroupField label={t.login.email}>
+          <input
+            type="email"
+            autoComplete="username"
+            inputMode="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={groupInput}
+          />
+        </GroupField>
+        <GroupField
+          label={t.login.password}
+          trailing={
+            <button
+              type="button"
+              aria-label={reveal ? t.login.hidePassword : t.login.showPassword}
+              aria-pressed={reveal}
+              onClick={() => setReveal((r) => !r)}
+              className="fc-press -mr-2 grid size-9 shrink-0 place-items-center rounded-full text-muted hover:text-text"
+            >
+              {reveal ? (
+                <EyeOff className="size-[18px]" aria-hidden />
+              ) : (
+                <Eye className="size-[18px]" aria-hidden />
+              )}
+            </button>
+          }
+        >
+          <input
+            type={reveal ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={groupInput}
+          />
+        </GroupField>
+      </FieldGroup>
+      {message ? (
+        <p role="alert" className="fc-rise mt-3 px-1 text-sm text-danger">
+          {message}
+        </p>
+      ) : null}
+      <button
+        type="submit"
+        disabled={busy}
+        className="fc-prominent fc-press mt-5 flex h-[52px] w-full items-center justify-center gap-2 rounded-full text-[15px] font-semibold disabled:opacity-80"
+      >
+        {busy ? <Mark motion="breathe" className="size-5" /> : null}
+        {t.login.submit}
+        {busy ? null : <ArrowRight className="size-[18px]" aria-hidden />}
+      </button>
+      <p className="mt-4 px-1 text-center text-xs text-muted">{t.login.demo}</p>
+    </AuthStage>
   );
 }
 
