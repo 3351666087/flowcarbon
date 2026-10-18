@@ -153,6 +153,12 @@ npm run lint
 `postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres`. Each run creates and drops its own database and
 exercises the pipeline as the non-privileged application role, so row-level security is tested for real.
 
+`npm run snapshot -- --out snapshot.json` seeds a throw-away database for the README window, runs the whole
+pipeline and writes one self-contained JSON file (floors, daily roll-ups, findings with evidence, forecasts,
+strategies and EPC, the report with both Scope 2 methods, factors, devices). With `ANTHROPIC_API_KEY` set it also
+stores AI explanations for the largest finding of each rule, in English and Chinese. Static prototypes and reviews
+use it instead of running the stack.
+
 The README animation is generated with `node scripts/hero/build-hero.mjs` (copy in `scripts/hero/strings.mjs`), the
 repository's social preview with `node scripts/hero/build-poster.mjs`.
 

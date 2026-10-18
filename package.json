@@ -22,6 +22,7 @@
     "db:generate": "npm run generate -w @flowcarbon/db",
     "db:migrate": "npm run migrate -w @flowcarbon/db && npm run install-schema -w @flowcarbon/jobs",
     "seed": "npm run seed -w @flowcarbon/demo --",
+    "snapshot": "tsx scripts/export-snapshot.ts",
     "db:up": "docker compose -f infra/docker-compose.yml up -d db",
     "db:down": "docker compose -f infra/docker-compose.yml down",
     "dev:api": "npm run dev -w @flowcarbon/api",

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `npm run snapshot` exports the demo building as one JSON file, computed by the real pipeline in a throw-away
+  database, with optional AI explanations from the worker. Static prototypes load it instead of running the stack.
+- Building reports and strategy estimates read their rows in a fixed order, so floating-point totals are identical
+  every time the same data is reported.
+
 ## 0.1.0 — 2026-10-16
 
 First release. All bundled data is simulated.

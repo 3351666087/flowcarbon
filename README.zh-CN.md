@@ -144,6 +144,10 @@ npm run lint
 `TEST_DATABASE_URL` 需指向数据库服务的所有者账号，例如 `postgres://flowcarbon:flowcarbon-dev@localhost:5432/postgres`。
 每次测试都会新建并删除自己的数据库，并以无特权的应用账号运行，行级安全是真实测试过的。
 
+`npm run snapshot -- --out snapshot.json` 会为 README 用的时间窗口建一个临时数据库，跑完整条流水线，导出一个自包含的
+JSON 文件（楼层、每日汇总、带证据的机会点、预测、策略与合同能源管理、两种口径的范围二报告、排放因子、设备）。设置了
+`ANTHROPIC_API_KEY` 时，还会为每条规则里电量最大的机会点生成中英文 AI 解释。静态原型和评审用它，不必跑整套服务。
+
 README 顶部的动画由 `node scripts/hero/build-hero.mjs` 生成（文案在 `scripts/hero/strings.mjs`），仓库的社交分享封面由 `node scripts/hero/build-poster.mjs` 生成。
 
 ## 参与贡献与安全
