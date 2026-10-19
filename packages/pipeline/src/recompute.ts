@@ -504,7 +504,10 @@ export async function detectAndStore(
       days.set(day, (days.get(day) ?? 0) + kwh);
     }
     // no stored intervals under it (should not happen): the day it started on carries it
-    if (energy <= 0) days.set(localDate(ctx.building, start), (energy = 1));
+    if (energy <= 0) {
+      energy = 1;
+      days.set(localDate(ctx.building, start), 1);
+    }
     for (const [day, kwh] of days) {
       if (day < localDate(ctx.building, from) || day > localDate(ctx.building, to - 1)) continue;
       const key = `${f.floorId}|${day}`;
