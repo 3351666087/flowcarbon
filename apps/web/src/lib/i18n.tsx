@@ -626,6 +626,10 @@ const en = {
     failed: "Failed",
     items: "Items",
     healthy: "All devices reported in the last 2 hours.",
+    imported: "{n} from imports",
+    importOnly: "This building's data comes from imports, so no device reports live.",
+    lastIn: "Last received",
+    fromImport: "import",
   },
   domain: {
     /** empty: the API's English names are used */
@@ -1260,6 +1264,10 @@ const zh: Dict = {
     failed: "失败",
     items: "条数",
     healthy: "所有设备在 2 小时内都有上报。",
+    imported: "其中 {n} 个来自导入",
+    importOnly: "这栋楼的数据来自导入，没有实时上报的设备。",
+    lastIn: "最近收到",
+    fromImport: "导入",
   },
   domain: {
     ruleNames: {

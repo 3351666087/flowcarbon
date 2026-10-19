@@ -173,6 +173,7 @@ export const telemetryRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         response: {
           200: z.object({
             devices: z.number(),
+            importedDevices: z.number().describe("Devices made by a data import; they never report live"),
             silentDevices: z.array(
               z.object({
                 id: uuid,
@@ -204,10 +205,13 @@ export const telemetryRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           })
           .from(schema.ingestionBatches)
           .where(eq(schema.ingestionBatches.buildingId, ctx.building.id));
+        // devices made by an import (IMPORT-…) only ever carry imported data, so their silence is no alarm
+        const imported = (d: (typeof devices)[number]) => d.externalId.startsWith("IMPORT-");
         return {
           devices: devices.length,
+          importedDevices: devices.filter(imported).length,
           silentDevices: devices
-            .filter((d) => !d.lastSeenAt || d.lastSeenAt.getTime() < cutoff)
+            .filter((d) => !imported(d) && (!d.lastSeenAt || d.lastSeenAt.getTime() < cutoff))
             .map((d) => ({
               id: d.id,
               externalId: d.externalId,

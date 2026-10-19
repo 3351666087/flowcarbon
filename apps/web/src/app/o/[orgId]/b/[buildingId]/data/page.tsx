@@ -7,7 +7,7 @@ import { DataImport } from "@/components/data-import";
 import { Badge, Card, ErrorBox, Loading, Metric, PageHeader, Table } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { dateTime, num } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
+import { fill, useI18n } from "@/lib/i18n";
 import { can, useBuilding, useFloors, useIds, useMembership } from "@/lib/session";
 
 export default function DataPage() {
@@ -57,19 +57,22 @@ export default function DataPage() {
         </div>
       ) : null}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label={t.data.devices} value={h.devices} />
+        <Metric
+          label={t.data.devices}
+          value={h.devices}
+          sub={h.importedDevices ? fill(t.data.imported, { n: h.importedDevices }) : undefined}
+        />
         <Metric
           label={t.data.silent}
           value={h.silentDevices.length}
           tone={h.silentDevices.length ? "waste" : "saving"}
         />
-        <Metric label={t.data.pending} value={h.pendingBatches} />
         <Metric
-          label={t.data.failed}
-          value={h.failedBatches}
-          tone={h.failedBatches ? "waste" : undefined}
-          sub={h.lastReceivedAt ? `${t.data.received} ${dateTime(h.lastReceivedAt, locale, tz)}` : undefined}
+          label={t.data.pending}
+          value={h.pendingBatches}
+          sub={h.lastReceivedAt ? `${t.data.lastIn} ${dateTime(h.lastReceivedAt, locale, tz)}` : undefined}
         />
+        <Metric label={t.data.failed} value={h.failedBatches} tone={h.failedBatches ? "waste" : undefined} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -89,7 +92,9 @@ export default function DataPage() {
                     </td>
                     <td>{d.floorId ? floorLabel.get(d.floorId) : "–"}</td>
                     <td className="whitespace-nowrap text-xs">
-                      {silent ? (
+                      {d.externalId.startsWith("IMPORT-") ? (
+                        <Badge tone="neutral">{t.data.fromImport}</Badge>
+                      ) : silent ? (
                         <Badge tone="waste">{dateTime(d.lastSeenAt, locale, tz)}</Badge>
                       ) : (
                         dateTime(d.lastSeenAt, locale, tz)
@@ -100,7 +105,9 @@ export default function DataPage() {
               })}
             </Table>
           )}
-          {h.silentDevices.length === 0 ? (
+          {h.devices > 0 && h.importedDevices === h.devices ? (
+            <p className="mt-3 text-sm text-muted">{t.data.importOnly}</p>
+          ) : h.silentDevices.length === 0 ? (
             <p className="mt-3 flex items-center gap-2 text-sm text-saving">
               <CheckCircle2 className="size-4" aria-hidden /> {t.data.healthy}
             </p>

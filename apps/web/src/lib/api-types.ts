@@ -8600,6 +8600,8 @@ export interface paths {
                     content: {
                         "application/json": {
                             devices: number;
+                            /** @description Devices made by a data import; they never report live */
+                            importedDevices: number;
                             silentDevices: {
                                 /** Format: uuid */
                                 id: string;
