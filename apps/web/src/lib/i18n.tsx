@@ -155,7 +155,9 @@ const en = {
     deleteTitle: "Delete “{name}”?",
     deleteBody:
       "This permanently deletes its {buildings} with all their data, findings and measures, and every member loses access. It cannot be undone.",
-    buildings: "{n} building(s)",
+    buildings: "{n} buildings",
+    oneBuilding: "1 building",
+    deleteEmpty: "It has no buildings yet. Every member loses access, and it cannot be undone.",
     holdToDelete: "Hold to delete",
     deleted: "“{name}” deleted.",
     leaveTitle: "Leave “{name}”?",
@@ -848,6 +850,8 @@ const zh: Dict = {
     deleteBody:
       "这会永久删除它的{buildings}以及所有数据、机会点和措施，所有成员都会失去访问。删除后无法恢复。",
     buildings: " {n} 栋楼",
+    oneBuilding: " 1 栋楼",
+    deleteEmpty: "它还没有楼宇。删除后所有成员都会失去访问，无法恢复。",
     holdToDelete: "按住删除",
     deleted: "已删除「{name}」。",
     leaveTitle: "离开「{name}」？",

@@ -103,7 +103,7 @@ export default function SetupPage() {
 
   if (me.data && !canBuild)
     return (
-      <AuthStage>
+      <AuthStage account={<AccountMenu variant="avatar" />}>
         <StepHeader
           title={t.setup.title}
           subtitle={t.setup.noAccess.replace("{org}", membership?.orgName ?? "")}
@@ -113,7 +113,7 @@ export default function SetupPage() {
     );
 
   return (
-    <AuthStage shake={refusals}>
+    <AuthStage shake={refusals} account={<AccountMenu variant="avatar" />}>
       <form onSubmit={create}>
         <StepHeader title={t.setup.title} subtitle={t.setup.sub} />
         <FieldGroup>
@@ -211,7 +211,7 @@ function DemoPreparing({ orgId }: { orgId: string }) {
     return () => clearTimeout(id);
   }, []);
   return (
-    <AuthStage>
+    <AuthStage account={<AccountMenu variant="avatar" />}>
       <div className="flex flex-col items-center py-6 text-center">
         <Mark motion="breathe" className="size-14" />
         <h1 className="mt-6 text-[22px] leading-tight font-semibold tracking-tight">{t.demo.preparing}</h1>

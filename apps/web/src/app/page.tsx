@@ -1,12 +1,15 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useEffect, useState } from "react";
+import { AccountMenu } from "@/components/account-sheet";
+import { AuthStage, FieldGroup, GroupField, groupInput, StepHeader } from "@/components/auth-stage";
 import { useOwnDemo } from "@/components/demo-banner";
 import { Backdrop } from "@/components/glass";
-import { Button, ErrorBox, Loading } from "@/components/ui";
+import { Mark } from "@/components/mark";
+import { ErrorBox, Loading } from "@/components/ui";
 import { ApiError, api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PAGES, useBuildings, useMe } from "@/lib/session";
@@ -77,7 +80,7 @@ function Home() {
 
 /**
  * For an account in no organisation (new, or after leaving or deleting the last one): make one for a real building,
- * or open a demo building of one's own.
+ * or open a demo building of one's own. The account menu stays at hand to switch accounts or sign out.
  */
 function NoOrganisation() {
   const { t } = useI18n();
@@ -86,7 +89,18 @@ function NoOrganisation() {
   const demo = useOwnDemo();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refusals, setRefusals] = useState(0);
+  const fail = (err: unknown) => {
+    setError(
+      err instanceof ApiError && err.problems.length
+        ? `${err.message} ${err.problems.join(" ")}`
+        : err instanceof Error
+          ? err.message
+          : String(err),
+    );
+    setRefusals((n) => n + 1);
+  };
   const create = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -94,59 +108,67 @@ function NoOrganisation() {
     try {
       const org = await unwrap(api.POST("/api/v1/orgs", { body: { name } }));
       await qc.invalidateQueries({ queryKey: ["me"] });
-      router.push(`/?org=${org.id}`);
+      router.replace(`/o/${org.id}/setup`);
     } catch (err) {
-      setError(err);
-    } finally {
+      fail(err);
       setBusy(false);
     }
   };
-  const signOut = async () => {
-    const res = await unwrap(api.POST("/api/v1/auth/logout", { body: { everyone: false } }));
-    qc.clear();
-    router.replace(res.next ? "/" : "/login");
-  };
   return (
-    <>
-      <Backdrop />
-      <main className="relative mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-5 px-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t.account.noOrgTitle}</h1>
-          <p className="mt-2 text-[15px] text-muted">{t.account.noOrgBody}</p>
-        </div>
-        <form onSubmit={create} className="flex gap-2">
-          <input
-            required
-            minLength={2}
-            maxLength={120}
-            aria-label={t.account.orgName}
-            placeholder={t.account.orgName}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="fc-field h-11 min-w-0 flex-1 rounded-xl px-3 text-[15px] outline-none focus-visible:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="fc-prominent fc-press h-11 shrink-0 rounded-full px-5 text-[15px] font-semibold disabled:opacity-50"
-          >
-            {t.account.create}
-          </button>
-        </form>
-        <Button
-          variant="secondary"
-          className="justify-center"
-          busy={demo.busy}
-          onClick={() => demo.start().catch(setError)}
+    <AuthStage shake={refusals} account={<AccountMenu variant="avatar" />}>
+      <form onSubmit={create}>
+        <StepHeader title={t.account.noOrgTitle} subtitle={t.account.noOrgBody} />
+        <FieldGroup>
+          <GroupField label={t.account.orgName}>
+            <input
+              required
+              minLength={2}
+              maxLength={120}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={groupInput}
+            />
+          </GroupField>
+        </FieldGroup>
+        {error ? (
+          <p role="alert" className="fc-rise mt-3 px-1 text-sm text-danger">
+            {error}
+          </p>
+        ) : null}
+        <button
+          type="submit"
+          disabled={busy}
+          className="fc-prominent fc-press mt-5 flex h-[52px] w-full items-center justify-center gap-2 rounded-full text-[15px] font-semibold disabled:opacity-80"
         >
-          <Sparkles className="size-4" aria-hidden /> {t.account.joinDemo}
-        </Button>
-        {error ? <ErrorBox error={error} /> : null}
-        <button type="button" onClick={() => signOut().catch(setError)} className="text-sm text-muted">
-          {t.account.signOut}
+          {busy ? <Mark motion="breathe" className="size-5" /> : null}
+          {t.account.newOrg}
+          {busy ? null : <ArrowRight className="size-[18px]" aria-hidden />}
         </button>
-      </main>
-    </>
+      </form>
+      <div className="mt-3">
+        <FieldGroup>
+          <button
+            type="button"
+            disabled={demo.busy}
+            onClick={() => demo.start().catch(fail)}
+            className="fc-press flex w-full items-center gap-3 px-3.5 py-3 text-left disabled:opacity-60"
+          >
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--glass-field)] text-accent shadow-[inset_0_0_0_1px_var(--glass-hairline)]">
+              {demo.busy ? (
+                <Mark motion="breathe" className="size-5" />
+              ) : (
+                <Sparkles className="size-5" aria-hidden />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-medium">{t.account.joinDemo}</span>
+              <span className="block text-xs text-muted">{t.account.joinDemoNote}</span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />
+          </button>
+        </FieldGroup>
+      </div>
+    </AuthStage>
   );
 }
 

@@ -167,14 +167,18 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
     return list;
   };
   /** after the current organisation is gone, the start page picks another (or offers to make one) */
-  const gone = async (orgGone: string, note: string) => {
-    await qc.invalidateQueries({ queryKey: ["me"] });
+  // the organisation leaves the cached session at once, so no screen tries to open it while the session reloads
+  const gone = (orgGone: string, note: string) => {
+    qc.setQueryData(["me"], (old: typeof me.data) =>
+      old ? { ...old, memberships: old.memberships.filter((m) => m.orgId !== orgGone) } : old,
+    );
     toast(note);
     setEditing(null);
     if (orgGone === orgId) {
       onClose();
-      router.push("/");
+      router.replace("/");
     }
+    qc.invalidateQueries({ queryKey: ["me"] });
   };
 
   async function act(task: () => Promise<void>) {
@@ -687,7 +691,11 @@ function RemoveOrg({
     >
       <p>
         {mode === "delete"
-          ? fill(t.account.deleteBody, { buildings: fill(t.account.buildings, { n: n ?? "…" }) })
+          ? n === 0
+            ? t.account.deleteEmpty
+            : fill(t.account.deleteBody, {
+                buildings: n === 1 ? t.account.oneBuilding : fill(t.account.buildings, { n: n ?? "…" }),
+              })
           : t.account.leaveBody}
       </p>
       {error ? <p className="mt-2 text-danger">{error}</p> : null}

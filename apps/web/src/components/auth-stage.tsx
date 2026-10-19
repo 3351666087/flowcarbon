@@ -14,7 +14,16 @@ import { TowerScene } from "./tower-scene";
  * (and to the keyboard), and only a sheet taller than the screen scrolls inside itself. `shake` replays a refusal
  * shake each time it changes.
  */
-export function AuthStage({ children, shake = 0 }: { children: ReactNode; shake?: number }) {
+export function AuthStage({
+  children,
+  shake = 0,
+  account,
+}: {
+  children: ReactNode;
+  shake?: number;
+  /** for signed-in screens: the account menu, at the end of the top bar */
+  account?: ReactNode;
+}) {
   const { t } = useI18n();
   const sheet = useLens<HTMLDivElement>({ bezel: 36, depth: 34 });
   const wobble = useRef<HTMLDivElement>(null);
@@ -48,6 +57,7 @@ export function AuthStage({ children, shake = 0 }: { children: ReactNode; shake?
           <div className="truncate text-xs text-muted">{t.tagline}</div>
         </div>
         <LanguageSwitch className="ml-auto shrink-0" />
+        {account}
       </div>
       <section className="relative flex min-h-0 flex-1 flex-col lg:min-h-dvh">
         <div className="fc-rise relative z-10 mt-auto hidden pb-16 [animation-delay:200ms] lg:block">
