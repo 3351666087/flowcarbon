@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/web",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "FlowCarbon web application.",
   "license": "Apache-2.0",
