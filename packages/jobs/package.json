@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/jobs",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "description": "Background job queues (pg-boss) shared by the API and the worker.",
   "license": "Apache-2.0",

@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/api",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "description": "FlowCarbon HTTP API.",
   "license": "Apache-2.0",

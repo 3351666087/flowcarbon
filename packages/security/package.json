@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/security",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "description": "Password hashing, opaque tokens and API keys.",
   "license": "Apache-2.0",
