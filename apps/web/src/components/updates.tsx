@@ -7,6 +7,7 @@ import { Sheet } from "@/components/sheet";
 import { toast } from "@/components/toast";
 import { Button } from "@/components/ui";
 import { fill, useI18n } from "@/lib/i18n";
+import { newer, onShell, type ShellMessage, shell, shellReports, shellVersion } from "@/lib/shell";
 
 /** the release this page was loaded from */
 const LOADED = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
@@ -15,31 +16,68 @@ const AWAY_MS = 30_000;
 const CHECK_MS = 15 * 60_000;
 const SNOOZE_MS = 3 * 86_400_000;
 const SNOOZE_KEY = "fc-app-update-snoozed";
+/** an older app reports nothing back: after this long without a sign of the download, offer the browser instead */
+const STALL_MS = 8_000;
 
-const newer = (a: string, b: string) => {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
-  return false;
-};
-
-/** the Android app's own version, which it puts in its user agent */
-const shellVersion = () => /FlowCarbonAndroid\/(\d+\.\d+\.\d+)/.exec(navigator.userAgent)?.[1] ?? null;
-
-interface Shell {
-  install?: (url: string) => void;
-}
+type Phase =
+  | { kind: "offer" }
+  | { kind: "starting" }
+  | { kind: "permission" }
+  | { kind: "denied" }
+  | { kind: "downloading"; progress: number }
+  | { kind: "confirm" }
+  | { kind: "cancelled" }
+  | { kind: "failed"; detail?: string }
+  | { kind: "stalled" };
 
 /**
  * Keeps people on the current release. A page left open across a deploy reloads itself when it comes back into view
- * (or offers to, if it stayed in view); inside the Android app, an app older than the published APK offers the update
- * and installs it in place where the app can (from 0.1.8), or downloads it otherwise.
+ * (or offers to, if it stayed in view). Inside the Android app, an app older than the published APK offers the update:
+ * from 0.1.17 the app asks Android for the permission it needs, fetches the APK itself and reports each step here;
+ * older apps get the download link for the browser if nothing happens. Files the app saves to Downloads are announced
+ * here too, since some Android builds hide the app's own toasts.
  */
 export function Updates() {
   const { t } = useI18n();
   const hiddenAt = useRef<number | null>(null);
   const offered = useRef(false);
   const [apk, setApk] = useState<{ version: string; mb?: string } | null>(null);
+  const [phase, setPhase] = useState<Phase>({ kind: "offer" });
+  const stall = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // what the app reports: the update's steps, and files saved to Downloads
+  useEffect(
+    () =>
+      onShell((m: ShellMessage) => {
+        if (m.type === "update") {
+          if (stall.current) clearTimeout(stall.current);
+          stall.current = null;
+          if (m.state === "downloading") setPhase({ kind: "downloading", progress: m.progress ?? 0 });
+          else if (m.state === "failed") setPhase({ kind: "failed", detail: m.detail });
+          else setPhase({ kind: m.state });
+          if (m.state === "failed" || m.state === "denied") feel("reject");
+          return;
+        }
+        const u = t.update;
+        const name = m.name ?? "";
+        if (m.state === "started") toast(fill(u.saveStarted, { name }));
+        else if (m.state === "saved")
+          toast(
+            fill(u.saved, { name }),
+            m.canOpen ? { label: u.open, run: () => shell()?.openDownload?.() } : undefined,
+          );
+        else if (m.state === "failed") toast(fill(u.saveFailed, { name }));
+        else if (m.state === "noapp") toast(u.noApp);
+        else if (m.state === "denied") toast(u.storageDenied);
+      }),
+    [t],
+  );
+  useEffect(
+    () => () => {
+      if (stall.current) clearTimeout(stall.current);
+    },
+    [],
+  );
 
   // a newer web release
   useEffect(() => {
@@ -105,9 +143,44 @@ export function Updates() {
   }, []);
 
   if (!apk) return null;
-  const close = () => setApk(null);
+  const u = t.update;
+  const url = `${typeof location === "undefined" ? "" : location.origin}/download/FlowCarbon-${apk.version}.apk`;
+  const close = () => {
+    setApk(null);
+    setPhase({ kind: "offer" });
+  };
+  const install = () => {
+    feel("press");
+    const app = shell();
+    if (!app?.install) {
+      // not inside the app (or one from before 0.1.8): the download lands in Downloads
+      location.href = url;
+      toast(u.downloading);
+      close();
+      return;
+    }
+    setPhase({ kind: "starting" });
+    app.install(url);
+    if (!shellReports())
+      stall.current = setTimeout(
+        () => setPhase((p) => (p.kind === "starting" ? { kind: "stalled" } : p)),
+        STALL_MS,
+      );
+  };
+  const browser = () => {
+    const app = shell();
+    if (app?.openExternal) app.openExternal(url);
+    else
+      navigator.clipboard?.writeText(url).then(
+        () => toast(t.common.copied),
+        () => {},
+      );
+  };
+  const busy = phase.kind === "starting" || phase.kind === "downloading" || phase.kind === "confirm";
+  const percent = phase.kind === "downloading" ? Math.round(phase.progress * 100) : 0;
+
   return (
-    <Sheet title={t.update.appTitle} onClose={close}>
+    <Sheet title={phase.kind === "permission" ? u.permissionTitle : u.appTitle} onClose={close}>
       {(dismiss) => (
         <>
           <div className="flex items-center gap-3">
@@ -117,45 +190,90 @@ export function Updates() {
             <div>
               <p className="font-semibold">FlowCarbon {apk.version}</p>
               <p className="text-sm text-muted">
-                {fill(t.update.appFrom, { installed: shellVersion() ?? "" })}
+                {fill(u.appFrom, { installed: shellVersion() ?? "" })}
                 {apk.mb ? ` · ${apk.mb} MB` : ""}
               </p>
             </div>
           </div>
-          <p className="mt-4 text-sm text-muted">{t.update.appHint}</p>
+
+          <div className="mt-4 text-sm" aria-live="polite">
+            {phase.kind === "offer" ? <p className="text-muted">{u.appHint}</p> : null}
+            {phase.kind === "starting" || phase.kind === "downloading" ? (
+              <>
+                <p>{fill(u.fetching, { percent: phase.kind === "downloading" ? `${percent} %` : "" })}</p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className={
+                      phase.kind === "starting"
+                        ? "fc-skel h-full w-full"
+                        : "h-full bg-accent transition-[width]"
+                    }
+                    style={phase.kind === "downloading" ? { width: `${Math.max(4, percent)}%` } : undefined}
+                  />
+                </div>
+              </>
+            ) : null}
+            {phase.kind === "permission" ? <p>{u.permissionBody}</p> : null}
+            {phase.kind === "denied" ? <p className="text-danger">{u.denied}</p> : null}
+            {phase.kind === "confirm" ? <p>{u.confirm}</p> : null}
+            {phase.kind === "cancelled" ? <p className="text-muted">{u.cancelled}</p> : null}
+            {phase.kind === "failed" ? (
+              <p className="text-danger">
+                {u.failed}
+                {phase.detail ? <span className="mt-1 block text-xs text-muted">{phase.detail}</span> : null}
+              </p>
+            ) : null}
+            {phase.kind === "stalled" ? (
+              <>
+                <p>{u.stalled}</p>
+                <p className="mt-2 rounded-xl bg-surface-2 px-3 py-2 font-mono text-xs break-all select-all">
+                  {url}
+                </p>
+              </>
+            ) : null}
+          </div>
+
           <div className="mt-5 flex flex-col gap-2">
-            <Button
-              variant="primary"
-              className="w-full justify-center"
-              onClick={() => {
-                feel("press");
-                const url = `${location.origin}/download/FlowCarbon-${apk.version}.apk`;
-                const shell = (window as unknown as { FlowCarbonShell?: Shell }).FlowCarbonShell;
-                if (shell?.install) shell.install(url);
-                else {
-                  // older apps: the download lands in Downloads, and its notification installs it
-                  location.href = url;
-                  toast(t.update.downloading);
-                }
-                dismiss();
-              }}
-            >
-              {t.update.install}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-center"
-              onClick={() => {
-                try {
-                  localStorage.setItem(SNOOZE_KEY, JSON.stringify({ version: apk.version, at: Date.now() }));
-                } catch {
-                  // storage unavailable
-                }
-                dismiss();
-              }}
-            >
-              {t.update.later}
-            </Button>
+            {phase.kind === "offer" ? (
+              <Button variant="primary" className="w-full justify-center" onClick={install}>
+                {u.install}
+              </Button>
+            ) : null}
+            {phase.kind === "denied" || phase.kind === "cancelled" || phase.kind === "failed" ? (
+              <>
+                <Button variant="primary" className="w-full justify-center" onClick={install}>
+                  {t.common.retry}
+                </Button>
+                <Button variant="secondary" className="w-full justify-center" onClick={browser}>
+                  {u.browser}
+                </Button>
+              </>
+            ) : null}
+            {phase.kind === "stalled" ? (
+              <Button variant="primary" className="w-full justify-center" onClick={browser}>
+                {u.copyLink}
+              </Button>
+            ) : null}
+            {!busy ? (
+              <Button
+                variant="ghost"
+                className="w-full justify-center"
+                onClick={() => {
+                  if (phase.kind === "offer")
+                    try {
+                      localStorage.setItem(
+                        SNOOZE_KEY,
+                        JSON.stringify({ version: apk.version, at: Date.now() }),
+                      );
+                    } catch {
+                      // storage unavailable
+                    }
+                  dismiss();
+                }}
+              >
+                {phase.kind === "offer" ? u.later : t.common.close}
+              </Button>
+            ) : null}
           </div>
         </>
       )}

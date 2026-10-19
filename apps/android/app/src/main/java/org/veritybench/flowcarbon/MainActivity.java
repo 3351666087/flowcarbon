@@ -4,7 +4,6 @@ import android.Manifest;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -19,7 +18,6 @@ import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.SystemClock;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -33,7 +31,6 @@ import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
-import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -47,6 +44,8 @@ import android.widget.Toast;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 import java.util.regex.Matcher;
+import org.json.JSONException;
+import org.json.JSONObject;
 import java.util.regex.Pattern;
 
 /**
@@ -102,8 +101,9 @@ public final class MainActivity extends Activity {
     private boolean backRegistered;
     /** sheets, dialogs and menus open on the page, as it reports them; back closes those first */
     private int pageOverlays;
-    private DownloadManager.Request pendingDownload;
-    private String pendingName;
+    /** a download waiting for the storage permission (Android 8–9 only) */
+    private Runnable pendingDownload;
+    private Downloads downloads;
     private Updater updater;
     /** the page's file input waiting for the system picker (a picture, a CSV to import) */
     private ValueCallback<Uri[]> filePicked;
@@ -114,7 +114,18 @@ public final class MainActivity extends Activity {
         appUrl = getString(R.string.app_url);
         appHost = Uri.parse(appUrl).getHost();
         appScheme = Uri.parse(appUrl).getScheme();
-        updater = new Updater(this, appScheme, appHost);
+        updater = new Updater(this, appScheme, appHost, (state, progress, detail) -> {
+            JSONObject m = message("update", state);
+            put(m, "progress", progress);
+            put(m, "detail", detail);
+            toPage(m, state.equals("failed") ? R.string.update_failed : 0);
+        });
+        downloads = new Downloads(this, (state, name, canOpen) -> {
+            JSONObject m = message("download", state);
+            put(m, "name", name);
+            put(m, "canOpen", canOpen);
+            toPage(m, state.equals("failed") ? R.string.download_failed : 0);
+        });
         pageColor = getColor(isNight() ? R.color.fc_page_dark : R.color.fc_page_light);
         edgeToEdge();
 
@@ -394,6 +405,21 @@ public final class MainActivity extends Activity {
             runOnUiThread(() -> updater.start(url));
         }
 
+        /** opens the file saved last (see Downloads) */
+        @JavascriptInterface
+        public void openDownload() {
+            runOnUiThread(() -> downloads.openLast());
+        }
+
+        /** opens an APK link of this app's site in the phone's browser, the way out when installing here fails */
+        @JavascriptInterface
+        public void openExternal(String url) {
+            Uri u = Uri.parse(url);
+            String path = u.getPath() == null ? "" : u.getPath();
+            if (appScheme.equals(u.getScheme()) && appHost.equalsIgnoreCase(u.getHost()) && path.startsWith("/download/"))
+                runOnUiThread(() -> openElsewhere(u));
+        }
+
         @JavascriptInterface
         public void haptic() {
             feel("tick");
@@ -574,32 +600,48 @@ public final class MainActivity extends Activity {
     // ---- downloads ------------------------------------------------------------------------------------------------
 
     private void download(String url, String userAgent, String contentDisposition, String mimeType, long length) {
-        String name = URLUtil.guessFileName(url, contentDisposition, mimeType);
-        DownloadManager.Request r = new DownloadManager.Request(Uri.parse(url));
-        String cookie = CookieManager.getInstance().getCookie(url);
-        if (cookie != null) r.addRequestHeader("Cookie", cookie); // CSV exports need the session
-        r.addRequestHeader("User-Agent", userAgent);
-        r.setMimeType(mimeType);
-        r.setTitle(name);
-        r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-        r.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name);
+        Runnable save = () -> downloads.save(url, userAgent, contentDisposition, mimeType);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
                 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            pendingDownload = r;
-            pendingName = name;
+            pendingDownload = save;
             requestPermissions(new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_STORAGE);
             return;
         }
-        enqueue(r, name);
+        save.run();
     }
 
-    private void enqueue(DownloadManager.Request r, String name) {
+    // ---- messages to the page ----------------------------------------------------------------------------------------
+
+    private static JSONObject message(String type, String state) {
+        JSONObject m = new JSONObject();
+        put(m, "type", type);
+        put(m, "state", state);
+        return m;
+    }
+
+    private static void put(JSONObject m, String key, Object value) {
         try {
-            getSystemService(DownloadManager.class).enqueue(r);
-            Toast.makeText(this, getString(R.string.downloading, name), Toast.LENGTH_SHORT).show();
-        } catch (RuntimeException e) {
-            Toast.makeText(this, R.string.download_failed, Toast.LENGTH_SHORT).show();
+            m.put(key, value);
+        } catch (JSONException ignored) {
+            // only NaN or infinite numbers are refused, and none are sent
         }
+    }
+
+    /**
+     * Tells the page (window.fcShell) what the app did, so it can show it in its own interface: some Android builds
+     * hide toasts. If no page is there to listen, a failure still gets a toast.
+     */
+    private void toPage(JSONObject m, int fallback) {
+        runOnUiThread(() -> {
+            if (web == null) {
+                if (fallback != 0) Toast.makeText(this, fallback, Toast.LENGTH_LONG).show();
+                return;
+            }
+            web.evaluateJavascript("(function(m){if(!window.fcShell)return false;window.fcShell(m);return true})(" + m + ")",
+                    heard -> {
+                        if (!"true".equals(heard) && fallback != 0) Toast.makeText(this, fallback, Toast.LENGTH_LONG).show();
+                    });
+        });
     }
 
     /**
@@ -638,8 +680,8 @@ public final class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode != REQUEST_STORAGE || pendingDownload == null) return;
-        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) enqueue(pendingDownload, pendingName);
-        else Toast.makeText(this, R.string.download_failed, Toast.LENGTH_SHORT).show();
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) pendingDownload.run();
+        else toPage(message("download", "denied"), R.string.download_failed);
         pendingDownload = null;
     }
 
@@ -649,6 +691,8 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (web != null) web.onResume();
+        // back from the "install unknown apps" setting (or anywhere): an update waiting for it carries on
+        updater.resumed();
     }
 
     @Override
@@ -666,7 +710,6 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        updater.release();
         root.removeCallbacks(revealAnyway);
         if (connectivity != null && networkCallback != null) connectivity.unregisterNetworkCallback(networkCallback);
         if (web != null) {
