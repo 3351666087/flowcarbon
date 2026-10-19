@@ -102,9 +102,12 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     addEventListener("keydown", onKey);
-    panel.current?.focus();
     return () => removeEventListener("keydown", onKey);
   });
+  // focus the sheet once when it opens; doing it on every render pulled focus out of its text fields after each key
+  useEffect(() => {
+    panel.current?.focus();
+  }, []);
 
   const user = me.data?.user;
   const memberships = me.data?.memberships ?? [];

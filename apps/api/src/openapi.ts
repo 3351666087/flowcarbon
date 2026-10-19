@@ -11,7 +11,12 @@ const config = loadConfig({
 const app = await buildApp({
   db: {} as Db,
   config,
-  jobs: { recompute: async () => null, explain: async () => null, demo: async () => null },
+  jobs: {
+    recompute: async () => null,
+    explain: async () => null,
+    demo: async () => null,
+    brief: async () => null,
+  },
   logger: false,
 });
 await app.ready();

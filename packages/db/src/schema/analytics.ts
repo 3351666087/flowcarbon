@@ -80,6 +80,36 @@ export const findings = pgTable(
 );
 
 /**
+ * The AI assistant's look at a whole building: which groups of open findings to act on first and with which
+ * strategy. Streams like an explanation (`draft` while pending); the output only names groups that were in its input.
+ */
+export const aiBriefs = pgTable(
+  "ai_briefs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "cascade" }),
+    status: aiStatusEnum("status").notNull().default("pending"),
+    model: text("model"),
+    promptVersion: text("prompt_version").notNull(),
+    input: jsonb("input").$type<Record<string, unknown>>().notNull(),
+    output: jsonb("output").$type<Record<string, unknown>>(),
+    draft: text("draft"),
+    error: text("error"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    requestedBy: uuid("requested_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    completedAt: ts("completed_at"),
+  },
+  (t) => [index("ai_briefs_building_idx").on(t.buildingId, t.createdAt)],
+);
+
+/**
  * What the team decided to do about a kind of finding on a floor: a control strategy (or an on-site check), agreed
  * from a finding, often on the AI assistant's recommendation, then put into effect. Findings of the kinds it covers
  * on that floor are linked to it; after it takes effect the data shows whether they stopped.

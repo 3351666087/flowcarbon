@@ -18,10 +18,11 @@ import { buildingReport, floorsNow, latestDataDay, strategySummary } from "@flow
 import { and, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { assertAiQuota } from "../ai-quota";
 import type { RouteDeps } from "../app";
 import { audit } from "../audit";
 import { visibleFloorIds } from "../auth/access";
-import { badRequest, HttpError, notFound, unprocessable } from "../errors";
+import { badRequest, notFound, unprocessable } from "../errors";
 import { activityOf, activityOut, coveredBy, measureJson, measureOut, userNames } from "../measures";
 import { buildingParams, dateKey, decodeCursor, encodeCursor, errorResponses, iso, uuid } from "../schemas";
 import { addDaysKey, dateRange, inBuilding, todayIn, withBuildingContext } from "./helpers";
@@ -321,7 +322,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
     {
       schema: {
         tags: ["analytics"],
-        summary: "Findings, newest first, with keyset pagination",
+        summary: "Findings, newest first (or by floor, or by avoidable energy), with cursor pagination",
         params: buildingParams,
         querystring: z.object({
           status: z.enum(["open", "acknowledged", "fixed", "dismissed"]).optional(),
@@ -329,6 +330,8 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           ruleId: z.string().max(64).optional(),
           from: dateKey.optional(),
           to: dateKey.optional(),
+          /** time: newest first; floor: lowest floor first, then newest; kwh: most avoidable energy first */
+          sort: z.enum(["time", "floor", "kwh"]).default("time"),
           limit: z.coerce.number().int().min(1).max(200).default(50),
           cursor: z.string().max(200).optional(),
         }),
@@ -343,13 +346,39 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         const q = req.query;
         const tz = ctx.building.timezone;
         const cursor = decodeCursor(q.cursor);
-        const conditions = [
+        const filters = [
           eq(schema.findings.buildingId, ctx.building.id),
           q.status ? eq(schema.findings.status, q.status) : undefined,
           q.floorId ? eq(schema.findings.floorId, q.floorId) : undefined,
           q.ruleId ? eq(schema.findings.ruleId, q.ruleId) : undefined,
           q.from ? gte(schema.findings.startAt, new Date(zonedTime(q.from, 0, tz))) : undefined,
           q.to ? lt(schema.findings.startAt, new Date(zonedTime(q.to, 0, tz))) : undefined,
+        ];
+        if (q.sort !== "time") {
+          // other orders page by position: the list is short-lived and nobody pages far
+          const offset = cursor && typeof cursor[0] === "number" ? cursor[0] : 0;
+          const rows = await tx
+            .select({ f: schema.findings })
+            .from(schema.findings)
+            .innerJoin(schema.floors, eq(schema.floors.id, schema.findings.floorId))
+            .where(and(...filters))
+            .orderBy(
+              ...(q.sort === "floor"
+                ? [schema.floors.level, desc(schema.findings.startAt)]
+                : [desc(schema.findings.avoidableKwh), desc(schema.findings.startAt)]),
+              desc(schema.findings.id),
+            )
+            .limit(q.limit + 1)
+            .offset(offset);
+          const page = rows.slice(0, q.limit).map((r) => r.f);
+          const refs = await measureRefs(tx, page);
+          return {
+            items: page.map((f) => findingJson(f, refs)),
+            nextCursor: rows.length > q.limit ? encodeCursor([offset + q.limit]) : null,
+          };
+        }
+        const conditions = [
+          ...filters,
           cursor && typeof cursor[0] === "string" && typeof cursor[1] === "string"
             ? or(
                 lt(schema.findings.startAt, new Date(cursor[0])),
@@ -603,23 +632,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
               and(eq(schema.aiExplanations.findingId, f.id), eq(schema.aiExplanations.status, "pending")),
             );
           if (pending) return pending.id;
-          // demo organisations are open to anyone who signs up, so their AI use is capped per day
-          const [org] = await tx
-            .select({ plan: schema.organizations.plan })
-            .from(schema.organizations)
-            .where(eq(schema.organizations.id, access.orgId));
-          if (org?.plan === "demo") {
-            const [used] = await tx
-              .select({ n: sql<number>`count(*)::int` })
-              .from(schema.aiExplanations)
-              .where(gte(schema.aiExplanations.createdAt, new Date(Date.now() - 86_400_000)));
-            if ((used?.n ?? 0) >= config.DEMO_AI_PER_DAY)
-              throw new HttpError(
-                429,
-                `A demo building gets ${config.DEMO_AI_PER_DAY} AI explanations a day. Try again tomorrow.`,
-                "rate_limited",
-              );
-          }
+          await assertAiQuota(tx, access.orgId, config.DEMO_AI_PER_DAY);
           const [e] = await tx
             .insert(schema.aiExplanations)
             .values({

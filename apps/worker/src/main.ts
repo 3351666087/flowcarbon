@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import Anthropic from "@anthropic-ai/sdk";
 import { createDb, schema, withOrg } from "@flowcarbon/db";
 import {
+  briefPayload,
   createBoss,
   demoPayload,
   explainPayload,
@@ -12,6 +13,7 @@ import {
 import { eq } from "drizzle-orm";
 import { pino } from "pino";
 import { Counter, collectDefaultMetrics, Histogram, Registry } from "prom-client";
+import { runBrief } from "./brief";
 import { loadWorkerConfig } from "./config";
 import { runDemoWorkspace } from "./demo";
 import { runExplain } from "./explain";
@@ -109,6 +111,24 @@ await boss.work(
   },
 );
 
+await boss.work(QUEUES.brief.name, { localConcurrency: 2, batchSize: 1 }, async ([job]) => {
+  if (!job) return;
+  const payload = briefPayload.parse(job.data);
+  const r = await timed("brief", () =>
+    runBrief(
+      {
+        db,
+        client: anthropic,
+        model: config.AI_MODEL,
+        effort: config.AI_EFFORT,
+        log: (o, m) => log.info(o, m),
+      },
+      payload,
+    ),
+  );
+  log.info({ jobId: job.id, ...payload, result: r }, "brief done");
+});
+
 // one at a time: building a demo tower simulates three weeks of a 12-floor building
 await boss.work(QUEUES.demo.name, { localConcurrency: 1, batchSize: 1 }, async ([job]) => {
   if (!job) return;
@@ -145,6 +165,22 @@ await boss.work(QUEUES.deadLetter.name, { batchSize: 10 }, async (dead) => {
           .where(eq(schema.aiExplanations.id, explain.data.explanationId)),
       );
       log.error({ jobId: job.id, ...explain.data }, "explanation gave up");
+      continue;
+    }
+    const brief = briefPayload.safeParse(job.data);
+    if (brief.success) {
+      await withOrg(db, brief.data.orgId, (tx) =>
+        tx
+          .update(schema.aiBriefs)
+          .set({
+            status: "failed",
+            draft: null,
+            error: "The AI service was unavailable; try again later.",
+            completedAt: new Date(),
+          })
+          .where(eq(schema.aiBriefs.id, brief.data.briefId)),
+      );
+      log.error({ jobId: job.id, ...brief.data }, "brief gave up");
       continue;
     }
     if (demoPayload.safeParse(job.data).success) {

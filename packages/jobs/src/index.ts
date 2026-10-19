@@ -33,6 +33,16 @@ export const QUEUES = {
     deleteAfterSeconds: 7 * 86_400,
     deadLetter: DEAD_LETTER,
   },
+  brief: {
+    name: "ai-brief",
+    policy: "standard",
+    retryLimit: 3,
+    retryDelay: 20,
+    retryBackoff: true,
+    expireInSeconds: 5 * 60,
+    deleteAfterSeconds: 7 * 86_400,
+    deadLetter: DEAD_LETTER,
+  },
   demo: {
     name: "demo-workspace",
     policy: "standard",
@@ -57,6 +67,9 @@ export const QUEUES = {
 
 export const recomputePayload = z.object({ orgId: z.uuid(), buildingId: z.uuid() });
 export const explainPayload = z.object({ orgId: z.uuid(), explanationId: z.uuid() });
+/** the AI assistant's look at a whole building */
+export const briefPayload = z.object({ orgId: z.uuid(), briefId: z.uuid() });
+export type BriefPayload = z.infer<typeof briefPayload>;
 /** builds the simulated tower in a person's new demo organisation */
 export const demoPayload = z.object({ orgId: z.uuid() });
 export type RecomputePayload = z.infer<typeof recomputePayload>;
@@ -68,6 +81,7 @@ export interface JobQueue {
   recompute(payload: RecomputePayload): Promise<string | null>;
   explain(payload: ExplainPayload): Promise<string | null>;
   demo(payload: DemoPayload): Promise<string | null>;
+  brief(payload: BriefPayload): Promise<string | null>;
 }
 
 export class PgBossJobQueue implements JobQueue {
@@ -77,6 +91,9 @@ export class PgBossJobQueue implements JobQueue {
   }
   explain(payload: ExplainPayload) {
     return this.boss.send(QUEUES.explain.name, payload);
+  }
+  brief(payload: BriefPayload) {
+    return this.boss.send(QUEUES.brief.name, payload);
   }
   demo(payload: DemoPayload) {
     return this.boss.send(QUEUES.demo.name, payload, { singletonKey: payload.orgId });
@@ -120,7 +137,14 @@ export async function installJobSchema(ownerUrl: string, appRole = APP_ROLE): Pr
   await boss.start();
   try {
     // the dead-letter queue must exist before queues that reference it
-    const ordered = [QUEUES.deadLetter, QUEUES.recompute, QUEUES.explain, QUEUES.demo, QUEUES.nightly];
+    const ordered = [
+      QUEUES.deadLetter,
+      QUEUES.recompute,
+      QUEUES.explain,
+      QUEUES.brief,
+      QUEUES.demo,
+      QUEUES.nightly,
+    ];
     for (const { name, ...options } of ordered) {
       if (await boss.getQueue(name)) {
         const { policy: _policy, ...updatable } = options;

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { ChevronRight, Lightbulb, Snowflake, Users } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { DailyEnergyChart } from "@/components/charts";
 import { tick } from "@/components/glass";
 import { TowerScene } from "@/components/tower-scene";
@@ -21,6 +21,16 @@ export default function FloorsPage() {
   const role = useMembership()?.role;
   const tenants = useTenants();
   const [picked, setPicked] = useState<number | null>(null);
+  // on a phone the floor card lies over the bottom of the scene, so the tower moves up to stay clear of it
+  const narrow = useSyncExternalStore(
+    (change) => {
+      const q = matchMedia("(max-width: 639px)");
+      q.addEventListener("change", change);
+      return () => q.removeEventListener("change", change);
+    },
+    () => matchMedia("(max-width: 639px)").matches,
+    () => false,
+  );
   const hero = useRef<HTMLDivElement>(null);
   const overview = useQuery({
     queryKey: ["overview", orgId, buildingId],
@@ -96,6 +106,7 @@ export default function FloorsPage() {
             live={live}
             picked={picked}
             onPick={pick}
+            reserveBottom={chosen && narrow ? 88 : 0}
           />
           <div className="pointer-events-none absolute top-4 left-4">
             <div className="text-xs text-muted">

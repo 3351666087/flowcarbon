@@ -3,7 +3,7 @@ import { addDays, localParts, zonedTime } from "@flowcarbon/core";
 import { createDb, type DbHandle, schema } from "@flowcarbon/db";
 import { type SeedResult, seedDemo } from "@flowcarbon/demo";
 import { createTestDatabase, type TestDatabase } from "@flowcarbon/demo/testing";
-import type { DemoPayload, ExplainPayload, JobQueue, RecomputePayload } from "@flowcarbon/jobs";
+import type { BriefPayload, DemoPayload, ExplainPayload, JobQueue, RecomputePayload } from "@flowcarbon/jobs";
 import { sha256 } from "@flowcarbon/security";
 import { eq } from "drizzle-orm";
 import type { InjectOptions } from "fastify";
@@ -21,11 +21,12 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
   let handle: DbHandle;
   let seeded: SeedResult;
   let app: Awaited<ReturnType<typeof buildApp>>;
-  const sent: { recompute: RecomputePayload[]; explain: ExplainPayload[]; demo: DemoPayload[] } = {
-    recompute: [],
-    explain: [],
-    demo: [],
-  };
+  const sent: {
+    recompute: RecomputePayload[];
+    explain: ExplainPayload[];
+    demo: DemoPayload[];
+    brief: BriefPayload[];
+  } = { recompute: [], explain: [], demo: [], brief: [] };
   const jobs: JobQueue = {
     recompute: async (p) => {
       sent.recompute.push(p);
@@ -37,6 +38,10 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
     },
     demo: async (p) => {
       sent.demo.push(p);
+      return "job";
+    },
+    brief: async (p) => {
+      sent.brief.push(p);
       return "job";
     },
   };
@@ -446,6 +451,111 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       });
       expect((await as(manager, { method: "PATCH", url: m, payload: { note: "again" } })).statusCode).toBe(
         422,
+      );
+    });
+  });
+
+  describe("briefs, sorting and imports", () => {
+    it("asks for one building brief at a time", async () => {
+      const first = await as(analyst, { method: "POST", url: `${bld()}/briefs` });
+      expect(first.statusCode).toBe(202);
+      const { briefId } = first.json();
+      expect(sent.brief.at(-1)).toEqual({ orgId: seeded.orgId, briefId });
+      // while it is being written, asking again returns the same one
+      expect((await as(analyst, { method: "POST", url: `${bld()}/briefs` })).json().briefId).toBe(briefId);
+      const latest = (await as(manager, { url: `${bld()}/briefs/latest` })).json();
+      expect(latest.brief).toMatchObject({ id: briefId, status: "pending", output: null });
+      expect((await as(tenant, { method: "POST", url: `${bld()}/briefs` })).statusCode).toBe(403);
+    });
+
+    it("orders findings by floor and by energy", async () => {
+      const levels = new Map(
+        ((await as(manager, { url: `${bld()}/floors` })).json() as { id: string; level: number }[]).map(
+          (f) => [f.id, f.level],
+        ),
+      );
+      const byFloor = (await as(manager, { url: `${bld()}/findings?sort=floor&limit=60` })).json();
+      const seenLevels = byFloor.items.map((f: { floorId: string }) => levels.get(f.floorId)!);
+      expect(seenLevels).toEqual([...seenLevels].sort((a, b) => a - b));
+      const next = (
+        await as(manager, { url: `${bld()}/findings?sort=floor&limit=60&cursor=${byFloor.nextCursor}` })
+      ).json();
+      expect(levels.get(next.items[0].floorId)).toBeGreaterThanOrEqual(seenLevels.at(-1));
+      const byKwh = (await as(manager, { url: `${bld()}/findings?sort=kwh&limit=20` })).json();
+      const kwh = byKwh.items.map((f: { avoidableKwh: number }) => f.avoidableKwh);
+      expect(kwh).toEqual([...kwh].sort((a, b) => b - a));
+    });
+
+    it("imports a table next to the live feed, and not into a demo building", async () => {
+      const row = { time: "2026-10-01 18:00", floor: "F5", people: 3 };
+      const demo = await as(manager, {
+        method: "POST",
+        url: `${bld()}/imports`,
+        payload: { rows: [row], key: "demo-import-1" },
+      });
+      expect(demo.statusCode).toBe(422);
+
+      const org = (
+        await as(ownerEmail, { method: "POST", url: `${API_PREFIX}/orgs`, payload: { name: "Case Co" } })
+      ).json();
+      const base = `${API_PREFIX}/orgs/${org.id}`;
+      const b = (
+        await as(ownerEmail, {
+          method: "POST",
+          url: `${base}/buildings`,
+          payload: {
+            name: "Case building",
+            timezone: "Asia/Shanghai",
+            gridRegion: "CN-East",
+            tariff: { kind: "flat", rate: 0.85 },
+          },
+        })
+      ).json();
+      for (const level of [1, 2])
+        await as(ownerEmail, {
+          method: "POST",
+          url: `${base}/buildings/${b.id}/floors`,
+          payload: { label: `F${level}`, level, areaM2: 1200, ratedHvacKw: 84, ratedLightingKw: 10.8 },
+        });
+      const rows: Record<string, unknown>[] = [];
+      for (let k = 0; k < 8; k++)
+        rows.push({
+          time: `2026-10-12 ${18 + Math.floor(k / 4)}:${String((k % 4) * 15).padStart(2, "0")}`,
+          floor: "F1",
+          people: Math.max(0, 6 - 2 * k),
+          hvacKwh: 5,
+          hvac: "full",
+          lights: 100,
+        });
+      rows.push(
+        { time: "2026-10-12 18:00", floor: "F9", people: 1 },
+        { time: "yesterday", floor: "F2", people: 1 },
+      );
+      const payload = { rows, key: "case-import-0001", source: "case.csv" };
+      const before = sent.recompute.length;
+      const r = await as(ownerEmail, { method: "POST", url: `${base}/buildings/${b.id}/imports`, payload });
+      expect(r.statusCode).toBe(200);
+      expect(r.json()).toMatchObject({
+        rows: 8,
+        skipped: { unknownFloor: 1, badTime: 1, unknownFloors: ["F9"] },
+        counts: { readings: 8, doorCounts: 8, hvacEvents: 1, lightingEvents: 1 },
+        carry: { F1: { people: 0, hvac: "full", lights: 1 } },
+      });
+      expect(sent.recompute.slice(before)).toEqual([{ orgId: org.id, buildingId: b.id }]);
+      // the same part sent again is recognised and not processed twice
+      expect(
+        (await as(ownerEmail, { method: "POST", url: `${base}/buildings/${b.id}/imports`, payload }))
+          .statusCode,
+      ).toBe(200);
+      expect(sent.recompute.length).toBe(before + 1);
+      const devices = (await as(ownerEmail, { url: `${base}/buildings/${b.id}/devices` })).json() as {
+        externalId: string;
+      }[];
+      expect(devices.map((d) => d.externalId)).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/^IMPORT-\w{8}-F1-DOOR$/),
+          expect.stringMatching(/-F1-M-HVAC$/),
+        ]),
       );
     });
   });

@@ -5,7 +5,7 @@ import { clsx } from "clsx";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AiExplanation, type Explanation } from "@/components/ai-explanation";
 import { useAuthMethods } from "@/components/auth-code";
 import { IntervalChart } from "@/components/charts";
@@ -88,14 +88,24 @@ export default function FindingPage() {
 
   const latest = f?.explanations[0] as Explanation | undefined;
   const done = latest?.status === "done" ? (latest.output as { recommendedAction?: Recommendation }) : null;
+  // "edit, then adopt" from the building overview arrives as ?adopt=<strategy>&why=<reason>
+  const [fromBrief, setFromBrief] = useState<Recommendation | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const adopt = q.get("adopt");
+    if (!adopt) return;
+    setFromBrief({ strategyId: adopt, reason: q.get("why") ?? "" });
+    history.replaceState(null, "", location.pathname);
+  }, []);
   const rec: Recommendation | null =
-    done?.recommendedAction && latest
+    fromBrief ??
+    (done?.recommendedAction && latest
       ? {
           strategyId: done.recommendedAction.strategyId,
           reason: done.recommendedAction.reason,
           explanationId: latest.id,
         }
-      : null;
+      : null);
   const floorLabel = floors.data?.find((x) => x.id === f?.floorId)?.label ?? "";
   const ctx = f ? { f, path, floorLabel, currency: building!.currency, timeZone: tz } : null;
   const plan = usePlan(
@@ -103,6 +113,12 @@ export default function FindingPage() {
       ({ f: {} as FindingDetail, path, floorLabel, currency: building!.currency, timeZone: tz } as never),
     rec,
   );
+
+  const opensFromBrief = !!fromBrief && !!f && f.status === "open" && !f.measureDetail;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: opens the sheet once, when the finding has loaded
+  useEffect(() => {
+    if (opensFromBrief) plan.open({ kind: "plan", mode: "edit" });
+  }, [opensFromBrief]);
 
   if (finding.isPending) return <Loading page />;
   // reprocessing (new thresholds, late data) can take away an open finding someone is looking at

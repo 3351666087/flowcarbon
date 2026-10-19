@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { MaterialLight } from "@/components/glass";
+import { Toaster } from "@/components/toast";
+import { Updates } from "@/components/updates";
 import { ApiError } from "@/lib/api";
 import type { Locale } from "@/lib/format";
 import { I18nProvider } from "@/lib/i18n";
@@ -26,6 +28,8 @@ export function Providers({ locale, children }: { locale: Locale; children: Reac
       <I18nProvider initial={locale}>
         <MaterialLight />
         {children}
+        <Updates />
+        <Toaster />
       </I18nProvider>
     </QueryClientProvider>
   );

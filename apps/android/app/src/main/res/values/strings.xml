@@ -12,4 +12,7 @@
     <string name="shortcut_findings">Opportunities</string>
     <string name="shortcut_floors">Floors</string>
     <string name="shortcut_requests">Overtime request</string>
+    <string name="update_title">FlowCarbon update</string>
+    <string name="update_downloading">Downloading the update. Android will ask you to install it.</string>
+    <string name="update_failed">The update could not be installed</string>
 </resources>

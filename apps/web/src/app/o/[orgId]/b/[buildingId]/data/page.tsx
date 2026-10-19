@@ -2,17 +2,24 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
+import { useAuthMethods } from "@/components/auth-code";
+import { DataImport } from "@/components/data-import";
 import { Badge, Card, ErrorBox, Loading, Metric, PageHeader, Table } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { dateTime, num } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
-import { useBuilding, useFloors, useIds } from "@/lib/session";
+import { can, useBuilding, useFloors, useIds, useMembership } from "@/lib/session";
 
 export default function DataPage() {
   const { t, locale } = useI18n();
   const { orgId, buildingId } = useIds();
   const { building } = useBuilding();
   const floors = useFloors();
+  const membership = useMembership();
+  const methods = useAuthMethods();
+  const demo =
+    !!membership &&
+    (membership.orgSlug.startsWith("demo-") || membership.orgSlug === methods.data?.demo?.slug);
   const path = { orgId, buildingId };
   const tz = building!.timezone;
   const health = useQuery({
@@ -44,6 +51,11 @@ export default function DataPage() {
   return (
     <>
       <PageHeader title={t.data.title} subtitle={t.data.subtitle} />
+      {can.editBuilding(membership?.role) ? (
+        <div className="mb-6">
+          <DataImport demo={demo} />
+        </div>
+      ) : null}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label={t.data.devices} value={h.devices} />
         <Metric

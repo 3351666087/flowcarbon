@@ -20,7 +20,9 @@ import { createMailer, type Mailer } from "./mail";
 import { createMetrics, instrument, type Metrics } from "./metrics";
 import { analyticsRoutes } from "./routes/analytics";
 import { authRoutes } from "./routes/auth";
+import { briefRoutes } from "./routes/briefs";
 import { buildingRoutes } from "./routes/buildings";
+import { importRoutes } from "./routes/imports";
 import { measureRoutes } from "./routes/measures";
 import { opsRoutes } from "./routes/ops";
 import { orgRoutes } from "./routes/org";
@@ -152,6 +154,8 @@ export async function buildApp({ db, config, jobs, mailer, logger }: AppDeps) {
       await api.register(telemetryRoutes, deps);
       await api.register(analyticsRoutes, deps);
       await api.register(measureRoutes, deps);
+      await api.register(briefRoutes, deps);
+      await api.register(importRoutes, deps);
       await api.register(overtimeRoutes, deps);
     },
     { prefix: API_PREFIX },

@@ -59,7 +59,7 @@ const LAG_S = 0.7;
 const TICK_CHARS = { en: 8, zh: 3 } as const;
 const TICK_MS = 120;
 /** how often the page asks for the text written so far */
-const POLL_MS = 450;
+export const POLL_MS = 450;
 
 /**
  * The AI assistant's explanation of a finding. While it is being written it streams in: the worker saves the text
@@ -241,7 +241,7 @@ export function AiExplanation({
  * toward `total` (which grows as text arrives), never slower than the base rate and fast enough to stay within
  * LAG_S of the text; each few characters a light haptic tick lands, and a confirming one when it is all out.
  */
-function useTypewriter(total: number, streams: boolean, done: boolean, lang: "en" | "zh") {
+export function useTypewriter(total: number, streams: boolean, done: boolean, lang: "en" | "zh") {
   const [shown, setShown] = useState(0);
   const count = useRef(0);
   const target = useRef(total);

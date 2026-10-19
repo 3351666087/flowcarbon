@@ -12,4 +12,7 @@
     <string name="shortcut_findings">节能机会</string>
     <string name="shortcut_floors">楼层总览</string>
     <string name="shortcut_requests">加班申请</string>
+    <string name="update_title">FlowCarbon 更新</string>
+    <string name="update_downloading">正在下载更新，下载好后安卓会请你确认安装。</string>
+    <string name="update_failed">更新没能安装</string>
 </resources>

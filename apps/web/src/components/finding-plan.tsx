@@ -22,7 +22,8 @@ type Dict = ReturnType<typeof useI18n>["t"];
 export interface Recommendation {
   strategyId: string;
   reason: string;
-  explanationId: string;
+  /** the explanation it came from; none when it came from the building overview */
+  explanationId?: string;
 }
 
 export const strategyName = (t: Dict, id: string) => t.domain.strategies[id]?.name ?? id;
@@ -116,7 +117,7 @@ export function usePlan(ctx: Ctx, rec: Recommendation | null) {
       unwrap(
         api.POST("/api/v1/orgs/{orgId}/buildings/{buildingId}/findings/{findingId}/measure", {
           params: { path },
-          body: { ...body, explanationId: rec?.explanationId } as never,
+          body: { ...body, explanationId: rec?.explanationId || undefined } as never,
         }),
       ),
     onSuccess: (r) => {

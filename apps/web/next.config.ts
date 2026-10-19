@@ -1,5 +1,11 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
+
+// the release this build belongs to, so an open page can tell when a newer one has been deployed
+const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
+  version: string;
+};
 
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://localhost:4000";
 const dev = process.env.NODE_ENV !== "production";
@@ -19,6 +25,7 @@ const csp = [
 
 const config: NextConfig = {
   output: "standalone",
+  env: { NEXT_PUBLIC_APP_VERSION: version },
   // trace dependencies from the monorepo root so the standalone server finds hoisted packages
   outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,

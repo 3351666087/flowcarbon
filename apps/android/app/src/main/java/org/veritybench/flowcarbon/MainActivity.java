@@ -100,6 +100,7 @@ public final class MainActivity extends Activity {
     private boolean backRegistered;
     private DownloadManager.Request pendingDownload;
     private String pendingName;
+    private Updater updater;
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -107,6 +108,7 @@ public final class MainActivity extends Activity {
         appUrl = getString(R.string.app_url);
         appHost = Uri.parse(appUrl).getHost();
         appScheme = Uri.parse(appUrl).getScheme();
+        updater = new Updater(this, appScheme, appHost);
         pageColor = getColor(isNight() ? R.color.fc_page_dark : R.color.fc_page_light);
         edgeToEdge();
 
@@ -356,6 +358,12 @@ public final class MainActivity extends Activity {
         }
 
         /** a light tick, e.g. as a finger slides across the tab bar */
+        /** installs a newer APK in place (see Updater); the page decides when to offer it */
+        @JavascriptInterface
+        public void install(String url) {
+            runOnUiThread(() -> updater.start(url));
+        }
+
         @JavascriptInterface
         public void haptic() {
             feel("tick");
@@ -409,6 +417,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (updater.handle(intent)) return;
         setIntent(intent);
         String link = linkFrom(intent);
         if (link != null && web != null && !stage.isOffline()) web.loadUrl(link);
@@ -579,6 +588,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        updater.release();
         root.removeCallbacks(revealAnyway);
         if (connectivity != null && networkCallback != null) connectivity.unregisterNetworkCallback(networkCallback);
         if (web != null) {

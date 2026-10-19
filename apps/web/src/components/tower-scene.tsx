@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 /**
  * The sign-in scene: a twelve-floor office tower in isometric view, alive the way FlowCarbon sees a building.
  * Floors stack in from the ground, their windows glow with the people on them, and now and then one floor glows
- * amber — cooled while empty, leaking energy — until a teal scan sweeps across and fixes it. The tower leans
- * toward the pointer (or the phone's tilt), opens up while touched, and a tap sends a pulse of light up the floors.
+ * amber — cooled while empty, leaking energy — until a teal scan sweeps across and fixes it. The tower itself
+ * stands still: the mouse wheel steps a highlight up and down its floors, and a tap sends a pulse of light up them.
  * Canvas 2D only, paused off screen, one still frame for reduced motion. Where the tower stands in the canvas and
  * how large it is come from CSS (--tower-x, --tower-y as fractions, --tower-scale), so layouts can place it per
  * breakpoint — for instance with its lower floors running on behind a glass sheet.
@@ -65,18 +65,21 @@ export interface LiveFloor {
 /**
  * Without `live` the tower tells FlowCarbon's story by itself (the sign-in stage). With `live` (floors bottom to top)
  * it is the building as it is now: each floor glows with its people and turns amber while it wastes, and tapping a
- * floor calls `onPick` with its index; `picked` lifts that floor.
+ * floor (or turning the mouse wheel over the tower) calls `onPick` with its index; `picked` lifts that floor.
+ * `reserveBottom` (px) keeps the tower clear of something laid over the bottom of the scene, such as a floor card.
  */
 export function TowerScene({
   className,
   live,
   onPick,
   picked = null,
+  reserveBottom = 0,
 }: {
   className?: string;
   live?: LiveFloor[];
   onPick?: (index: number) => void;
   picked?: number | null;
+  reserveBottom?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const liveRef = useRef(live);
@@ -85,6 +88,8 @@ export function TowerScene({
   pickRef.current = onPick;
   const pickedRef = useRef(picked);
   pickedRef.current = picked;
+  const reserveRef = useRef(reserveBottom);
+  reserveRef.current = reserveBottom;
   const count = live?.length || FLOORS;
 
   useEffect(() => {
@@ -105,10 +110,11 @@ export function TowerScene({
       pulseAt: -1,
     }));
     const particles: Particle[] = [];
-    const tilt = { x: 0, y: 0 };
-    const aim = { x: 0, y: 0 };
-    let spread = 0;
-    let spreadAim = 0;
+    // room kept free under the tower, eased so the tower glides up when a card appears
+    let reserve = reserveRef.current;
+    // the floor the wheel has reached on the sign-in stage, where there is nothing to pick
+    let storyFocus: number | null = null;
+    let wheel = 0;
     let wasteFloor = -1;
     let nextWasteAt = 2600;
     let wasteStartedAt = 0;
@@ -133,23 +139,22 @@ export function TowerScene({
       if (reduced) draw(performance.now());
     };
 
-    // geometry of floor i at time t: top-face corners plus slab thickness
+    // geometry of floor i: top-face corners plus slab thickness, in the room above `reserve`
     const geometry = (i: number) => {
-      const a = Math.min(width * 0.3, height * 0.34) * place.scale;
-      const b = a * 0.5 * (1 + tilt.y * 0.18);
+      const room = Math.max(height * 0.45, height - reserve);
+      const a = Math.min(width * 0.3, room * 0.34) * place.scale;
+      const b = a * 0.5;
       // taller buildings stack tighter, so any number of floors fits the same frame
       const fit = Math.min(1, 12 / count);
-      const gap = a * 0.165 * fit * (1 + spread * 0.55);
+      const gap = a * 0.165 * fit;
       const thick = a * 0.065 * Math.sqrt(fit);
       const total = (count - 1) * gap + thick;
-      const cx = width * place.x + tilt.x * a * 0.08;
-      const baseY = height * place.y + total / 2 + b * 0.4;
+      const cx = width * place.x;
+      const baseY = room * place.y + total / 2 + b * 0.4;
       const y = baseY - i * gap - thick;
-      const lean = (i - count / 2) * gap * tilt.x * 0.22;
-      const left = a * (1 - tilt.x * 0.14);
-      const right = a * (1 + tilt.x * 0.14);
-      return { x: cx + lean, y, left, right, b, thick };
+      return { x: cx, y, left: a, right: a, b, thick };
     };
+    const focused = () => (pickRef.current ? pickedRef.current : storyFocus);
 
     const draw = (now: number) => {
       const t = reduced ? 1e6 : now - t0;
@@ -162,7 +167,7 @@ export function TowerScene({
         if (arrive <= 0) continue;
         const g = geometry(i);
         const drop = (1 - arrive) * -26;
-        const chosen = pickedRef.current === i;
+        const chosen = focused() === i;
         const x = g.x;
         const y = g.y + drop - (chosen ? Math.min(8, g.b * 0.3) : 0);
         const L = [x - g.left, y] as const;
@@ -258,9 +263,7 @@ export function TowerScene({
 
     const step = (now: number) => {
       const t = now - t0;
-      tilt.x += (aim.x - tilt.x) * 0.06;
-      tilt.y += (aim.y - tilt.y) * 0.06;
-      spread += (spreadAim - spread) * 0.08;
+      reserve += (reserveRef.current - reserve) * 0.14;
 
       const data = liveRef.current;
       if (data) {
@@ -361,14 +364,6 @@ export function TowerScene({
       cancelAnimationFrame(raf);
     };
 
-    const onPointerMove = (e: PointerEvent) => {
-      aim.x = (e.clientX / window.innerWidth - 0.5) * 2;
-      aim.y = (e.clientY / window.innerHeight - 0.5) * 2;
-      const r = canvas.getBoundingClientRect();
-      const inside =
-        e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-      if (e.pointerType === "mouse") spreadAim = inside ? 1 : 0;
-    };
     const onPointerDown = (e: PointerEvent) => {
       const r = canvas.getBoundingClientRect();
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
@@ -395,18 +390,27 @@ export function TowerScene({
         }
         return;
       }
-      spreadAim = 1;
       floors.forEach((f, i) => {
         f.pulseAt = now + i * 45;
       });
     };
-    const onPointerUp = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") spreadAim = 0;
-    };
-    const onTilt = (e: DeviceOrientationEvent) => {
-      if (e.gamma == null || e.beta == null) return;
-      aim.x = Math.max(-1, Math.min(1, e.gamma / 30));
-      aim.y = Math.max(-1, Math.min(1, (e.beta - 45) / 40));
+    // the wheel over the tower walks the highlight from floor to floor; past the top or bottom floor the page
+    // scrolls as usual
+    const onWheel = (e: WheelEvent) => {
+      const current = focused();
+      const down = e.deltaY > 0;
+      const next = current === null ? (down ? count - 1 : 0) : current + (down ? -1 : 1);
+      if (current !== null && (next < 0 || next >= count)) return;
+      e.preventDefault();
+      wheel += e.deltaY;
+      // a mouse notch moves one floor at once; a trackpad has to travel a little first
+      if (current !== null && Math.abs(wheel) < 40 && Math.abs(e.deltaY) < 40) return;
+      wheel = 0;
+      floors[next]!.pulseAt = performance.now();
+      const pick = pickRef.current;
+      if (pick) pick(next);
+      else storyFocus = next;
+      if (reduced) draw(performance.now());
     };
     const onVisibility = () => (document.hidden ? stop() : start());
     const onTheme = () => {
@@ -429,10 +433,8 @@ export function TowerScene({
     });
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     scheme.addEventListener("change", onTheme);
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
     window.addEventListener("pointerdown", onPointerDown, { passive: true });
-    window.addEventListener("pointerup", onPointerUp, { passive: true });
-    window.addEventListener("deviceorientation", onTilt, { passive: true });
+    canvas.addEventListener("wheel", onWheel, { passive: false });
     document.addEventListener("visibilitychange", onVisibility);
     resize();
     start();
@@ -443,10 +445,8 @@ export function TowerScene({
       intersection.disconnect();
       themeObserver.disconnect();
       scheme.removeEventListener("change", onTheme);
-      window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("deviceorientation", onTilt);
+      canvas.removeEventListener("wheel", onWheel);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [count]);

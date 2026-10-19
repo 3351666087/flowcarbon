@@ -6,6 +6,7 @@ import type { JobQueue, RecomputePayload } from "@flowcarbon/jobs";
 import { ingestTelemetry, loadBuildingContext } from "@flowcarbon/pipeline";
 import { eq, isNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { briefInput, runBrief } from "../src/brief";
 import { type ExplainDeps, PROMPT_VERSION, runExplain } from "../src/explain";
 import { runNightly } from "../src/nightly";
 import { runRecompute } from "../src/recompute";
@@ -188,6 +189,93 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
       ).toBe("skipped");
     });
 
+    describe("building briefs", () => {
+      // the seeded window ends on 13 October; look at the two weeks before it
+      const now = Date.parse("2026-10-13T04:00:00Z");
+      const pendingBrief = () =>
+        inOrg(async (tx) => {
+          const [b] = await tx
+            .insert(schema.aiBriefs)
+            .values({
+              orgId: seeded.orgId,
+              buildingId: seeded.buildingId,
+              promptVersion: "pending",
+              input: {},
+            })
+            .returning();
+          return b!.id;
+        });
+
+      it("ranks groups of open findings and keeps only groups it was given", async () => {
+        const id = await pendingBrief();
+        const data = await briefInput(h.db, seeded.orgId, id, now);
+        const [top] = data!.groups;
+        expect(top!.count).toBeGreaterThan(0);
+        const output = {
+          headline: "One floor wastes most.",
+          priorities: [
+            {
+              floor: top!.floor,
+              ruleId: top!.ruleId,
+              strategyId: "investigate_on_site",
+              why: "Largest group.",
+            },
+            {
+              floor: "F99",
+              ruleId: "hvac_empty_floor",
+              strategyId: "auto_lights_off",
+              why: "No such floor.",
+            },
+            { floor: top!.floor, ruleId: top!.ruleId, strategyId: "no_action", why: "Said twice." },
+          ],
+          watch: ["Nothing in effect yet."],
+        };
+        const seen: unknown[] = [];
+        const r = await runBrief(
+          {
+            db: h.db,
+            client: fakeClient({ stop_reason: "end_turn", text: JSON.stringify(output) }, seen),
+            model: "claude-opus-5-5",
+            effort: "medium",
+          },
+          { orgId: seeded.orgId, briefId: id },
+          now,
+        );
+        expect(r).toBe("done");
+        const [row] = await inOrg((tx) =>
+          tx.select().from(schema.aiBriefs).where(eq(schema.aiBriefs.id, id)),
+        );
+        const out = row!.output as { priorities: Record<string, unknown>[]; watch: string[] };
+        expect(out.priorities).toEqual([
+          expect.objectContaining({
+            floor: top!.floor,
+            ruleId: top!.ruleId,
+            strategyId: "investigate_on_site",
+            floorId: top!.floorId,
+            findings: top!.count,
+            findingId: top!.latest.id,
+          }),
+        ]);
+        expect(out.watch).toEqual(["Nothing in effect yet."]);
+        expect(row).toMatchObject({ status: "done", draft: null, inputTokens: 1200 });
+        expect(seen).toHaveLength(1);
+      });
+
+      it("answers without the model when nothing is open", async () => {
+        const id = await pendingBrief();
+        const r = await runBrief(
+          { db: h.db, client: null, model: "m", effort: "medium" },
+          { orgId: seeded.orgId, briefId: id },
+          Date.parse("2030-01-01T00:00:00Z"),
+        );
+        expect(r).toBe("done");
+        const [row] = await inOrg((tx) =>
+          tx.select().from(schema.aiBriefs).where(eq(schema.aiBriefs.id, id)),
+        );
+        expect((row!.output as { priorities: unknown[] }).priorities).toEqual([]);
+      });
+    });
+
     it("records refusals and missing configuration as failures", async () => {
       const refused = await pendingExplanation();
       expect(
@@ -242,6 +330,7 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
       },
       explain: async () => null,
       demo: async () => null,
+      brief: async () => null,
     };
     // 03:10 local in Shanghai: not due
     expect(

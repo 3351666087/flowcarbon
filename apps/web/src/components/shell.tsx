@@ -27,7 +27,6 @@ import { useLiquid } from "./liquid";
 import { MarkTile } from "./mark";
 import { PullToRefresh } from "./pull-refresh";
 import { TabBar } from "./tab-bar";
-import { Toaster } from "./toast";
 import { ErrorBox, Loading, ShellTitle } from "./ui";
 
 const NAV = [
@@ -209,7 +208,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             {building ? children : <Loading page />}
           </ShellTitle.Provider>
         </main>
-        <Toaster />
         <PullToRefresh />
         <TabBar
           tabs={items.map(({ key, icon }) => ({ key, icon, href: `${base}/${key}`, label: t.navShort[key] }))}

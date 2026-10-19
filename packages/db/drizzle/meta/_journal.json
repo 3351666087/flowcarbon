@@ -64,6 +64,13 @@
       "when": 1792345234776,
       "tag": "0008_measures",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792391009978,
+      "tag": "0009_ai_briefs",
+      "breakpoints": true
     }
   ]
 }
