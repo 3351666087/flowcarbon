@@ -81,7 +81,15 @@ export function DataImport({ demo }: { demo: boolean }) {
     setResult(null);
     setError(null);
     setProblem(null);
-    const table = parseCsv(await file.text());
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      // a file the phone could not hand over (moved, or still downloading) says so instead of doing nothing
+      feel("reject");
+      return setProblem(d.unreadable);
+    }
+    const table = parseCsv(text);
     const [header, ...body] = table;
     if (!header || !body.length) return setProblem(d.empty);
     const index = new Map<Field, number>();

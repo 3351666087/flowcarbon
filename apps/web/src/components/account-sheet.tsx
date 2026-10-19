@@ -526,7 +526,7 @@ function Group({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <section className="mb-3">
       {title ? <h3 className="px-3 pb-1.5 text-xs font-medium text-muted">{title}</h3> : null}
-      <div className="fc-field divide-y divide-[var(--glass-hairline)] overflow-hidden rounded-[20px]">
+      <div className="fc-field fc-still divide-y divide-[var(--glass-hairline)] overflow-hidden rounded-[20px]">
         {children}
       </div>
     </section>
