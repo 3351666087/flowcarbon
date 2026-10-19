@@ -180,6 +180,44 @@ describe.skipIf(!adminUrl)("database integration", () => {
     expect(after.kwh).toBeCloseTo(before.kwh, 6);
   });
 
+  it("builds nothing where the floors stopped reporting", async () => {
+    // the seed ends on 2026-10-12; the days after it have no telemetry at all
+    const result = await ctxA(async (tx) =>
+      processDays(
+        tx,
+        await loadBuildingContext(tx, seeded.orgId, seeded.buildingId),
+        "2026-10-14",
+        "2026-10-16",
+        Date.parse("2026-10-20T00:00:00Z"),
+      ),
+    );
+    expect(result.intervals).toBe(0);
+    const after = await ctxA(async (tx) => ({
+      days: await tx
+        .select({ day: schema.floorDaily.day })
+        .from(schema.floorDaily)
+        .where(sql`${schema.floorDaily.day} >= '2026-10-14'`),
+      intervals: (
+        await tx
+          .select({ n: sql<number>`count(*)::int` })
+          .from(schema.floorIntervals)
+          .where(sql`${schema.floorIntervals.startAt} >= '2026-10-14T00:00:00+08:00'`)
+      )[0]!.n,
+    }));
+    expect(after.days).toEqual([]);
+    expect(after.intervals).toBe(0);
+  });
+
+  it("never puts more avoidable energy on a day than the floor used that day", async () => {
+    const over = await ctxA((tx) =>
+      tx
+        .select({ day: schema.floorDaily.day })
+        .from(schema.floorDaily)
+        .where(sql`${schema.floorDaily.avoidableKwh} > ${schema.floorDaily.kwhTotal} + 0.05`),
+    );
+    expect(over).toEqual([]);
+  });
+
   it("keeps reviewed findings when late data removes them", async () => {
     await ctxA(async (tx) => {
       const [f] = await tx.select().from(schema.findings).limit(1);

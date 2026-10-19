@@ -7,6 +7,7 @@ import {
   detectFindings,
   type FloorInterval,
   floorDayStats,
+  HOUR,
   type HvacMode,
   localParts,
   MINUTE,
@@ -41,7 +42,14 @@ async function insertChunks<T>(rows: T[], fn: (chunk: T[]) => Promise<unknown>):
 }
 
 /**
- * Rebuilds floor intervals and daily roll-ups for [from, to) from raw telemetry.
+ * How far from a floor's nearest telemetry an interval may still be built. Beyond it the floor is not reporting
+ * (a gateway down, or an imported dataset that has ended), and carrying the last known state forward would invent
+ * hours or whole days of use. Matches the data page's "silent for 2 hours".
+ */
+const REPORTING_GAP = 2 * HOUR;
+
+/**
+ * Rebuilds floor intervals and daily roll-ups for [from, to) from raw telemetry, only where the floor reported.
  * Idempotent: running it twice over the same window yields the same rows.
  */
 export async function recomputeIntervals(
@@ -113,14 +121,45 @@ export async function recomputeIntervals(
   // state in force at `from`: the last event before the window, per floor
   const initialHvac = new Map<string, HvacMode>();
   const initialLight = new Map<string, number>();
-  const priorHvac = await tx.execute<{ floor_id: string; mode: HvacMode }>(sql`
-    select distinct on (floor_id) floor_id, mode from ${schema.hvacEvents}
+  const priorHvac = await tx.execute<{ floor_id: string; mode: HvacMode; at: string }>(sql`
+    select distinct on (floor_id) floor_id, mode, at from ${schema.hvacEvents}
     where floor_id in ${floorIds} and at < ${new Date(from).toISOString()}::timestamptz order by floor_id, at desc`);
   for (const r of priorHvac) initialHvac.set(r.floor_id, r.mode);
-  const priorLight = await tx.execute<{ floor_id: string; level: number }>(sql`
-    select distinct on (floor_id) floor_id, level from ${schema.lightingEvents}
+  const priorLight = await tx.execute<{ floor_id: string; level: number; at: string }>(sql`
+    select distinct on (floor_id) floor_id, level, at from ${schema.lightingEvents}
     where floor_id in ${floorIds} and at < ${new Date(from).toISOString()}::timestamptz order by floor_id, at desc`);
   for (const r of priorLight) initialLight.set(r.floor_id, r.level);
+
+  // when each floor reported anything at all, to keep intervals to the time it was reporting
+  const reported = new Map<string, number[]>();
+  const saw = (floorId: string | null | undefined, ts: number) => {
+    if (!floorId) return;
+    const list = reported.get(floorId) ?? [];
+    list.push(ts);
+    reported.set(floorId, list);
+  };
+  for (const d of doors) saw(d.floorId, d.startAt.getTime());
+  for (const r of readings) {
+    saw(deviceFloor.get(r.deviceId), r.startAt.getTime());
+    saw(deviceFloor.get(r.deviceId), r.endAt.getTime());
+  }
+  for (const e of hvac) saw(e.floorId, e.at.getTime());
+  for (const e of lights) saw(e.floorId, e.at.getTime());
+  for (const r of [...priorHvac, ...priorLight]) saw(r.floor_id, new Date(r.at).getTime());
+  for (const list of reported.values()) list.sort((a, b) => a - b);
+  const wasReporting = (floorId: string, start: number, end: number) => {
+    const list = reported.get(floorId);
+    if (!list) return false;
+    // the first report at or after start - gap; the interval counts if it is no later than end + gap
+    let lo = 0;
+    let hi = list.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (list[mid]! < start - REPORTING_GAP) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo < list.length && list[lo]! <= end + REPORTING_GAP;
+  };
 
   const occ = occupancyFromDoorCounts(
     doors.map((d) => ({
@@ -162,7 +201,27 @@ export async function recomputeIntervals(
     hvacEvents,
     lightingEvents,
     occupancy,
-  });
+  }).filter((i) => wasReporting(i.floorId, i.start, i.start + i.minutes * MINUTE));
+
+  // the window is rebuilt from scratch, so time that no longer has data (or never had) leaves no rows behind
+  await tx
+    .delete(schema.floorIntervals)
+    .where(
+      and(
+        eq(schema.floorIntervals.buildingId, ctx.building.id),
+        gte(schema.floorIntervals.startAt, new Date(from)),
+        lt(schema.floorIntervals.startAt, new Date(to)),
+      ),
+    );
+  await tx
+    .delete(schema.floorDaily)
+    .where(
+      and(
+        eq(schema.floorDaily.buildingId, ctx.building.id),
+        gte(schema.floorDaily.day, localDate(ctx.building, from)),
+        lte(schema.floorDaily.day, localDate(ctx.building, to - 1)),
+      ),
+    );
 
   const rows = intervals.map((i) => ({
     orgId: ctx.orgId,
@@ -402,12 +461,38 @@ export async function detectAndStore(
     .map((e) => e.id);
   if (stale.length) await tx.delete(schema.findings).where(inArray(schema.findings.id, stale));
 
-  // avoidable energy per floor and day into the roll-up
+  // avoidable energy per floor and day into the roll-up. A finding that runs past midnight counts on each day for
+  // the part of it that fell there (by time), so a day never shows more avoidable energy than it used; findings
+  // that began before the window still add their share to the days in it.
   const cal = new Calendar(ctx.building.calendar);
   const perDay = new Map<string, number>();
-  for (const f of found) {
-    const key = `${f.floorId}|${localDate(ctx.building, f.start)}`;
-    perDay.set(key, (perDay.get(key) ?? 0) + f.avoidableKwh);
+  const overlapping = await tx
+    .select({
+      floorId: schema.findings.floorId,
+      startAt: schema.findings.startAt,
+      endAt: schema.findings.endAt,
+      avoidableKwh: schema.findings.avoidableKwh,
+    })
+    .from(schema.findings)
+    .where(
+      and(
+        eq(schema.findings.buildingId, ctx.building.id),
+        lt(schema.findings.startAt, new Date(to)),
+        gt(schema.findings.endAt, new Date(from)),
+      ),
+    );
+  for (const f of overlapping) {
+    const start = f.startAt.getTime();
+    const end = Math.max(f.endAt.getTime(), start + 1);
+    let at = Math.max(start, from);
+    const stop = Math.min(end, to);
+    while (at < stop) {
+      const day = localDate(ctx.building, at);
+      const next = Math.min(stop, dayWindow(ctx.building, day, addDays(day, 1)).to);
+      const key = `${f.floorId}|${day}`;
+      perDay.set(key, (perDay.get(key) ?? 0) + (f.avoidableKwh * (next - at)) / (end - start));
+      at = next;
+    }
   }
   const firstDay = localDate(ctx.building, from);
   const lastDay = localDate(ctx.building, to - 1);
