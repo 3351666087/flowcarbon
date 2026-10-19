@@ -461,9 +461,10 @@ export async function detectAndStore(
     .map((e) => e.id);
   if (stale.length) await tx.delete(schema.findings).where(inArray(schema.findings.id, stale));
 
-  // avoidable energy per floor and day into the roll-up. A finding that runs past midnight counts on each day for
-  // the part of it that fell there (by time), so a day never shows more avoidable energy than it used; findings
-  // that began before the window still add their share to the days in it.
+  // avoidable energy per floor and day into the roll-up. A finding that runs past midnight counts on each day in
+  // proportion to the energy its floor used in that part of it; since a finding's avoidable energy never exceeds the
+  // energy of its own intervals, no day shows more avoidable energy than it used. Findings that began before the
+  // window still add their share to the days in it.
   const cal = new Calendar(ctx.building.calendar);
   const perDay = new Map<string, number>();
   const overlapping = await tx
@@ -481,17 +482,33 @@ export async function detectAndStore(
         gt(schema.findings.endAt, new Date(from)),
       ),
     );
+  const spanFrom = Math.min(from, ...overlapping.map((f) => f.startAt.getTime()));
+  const spanTo = Math.max(to, ...overlapping.map((f) => f.endAt.getTime()));
+  const used = await loadIntervals(tx, ctx, spanFrom, spanTo);
+  const byFloor = new Map<string, FloorInterval[]>();
+  for (const iv of used) {
+    const list = byFloor.get(iv.floorId);
+    if (list) list.push(iv);
+    else byFloor.set(iv.floorId, [iv]);
+  }
   for (const f of overlapping) {
     const start = f.startAt.getTime();
     const end = Math.max(f.endAt.getTime(), start + 1);
-    let at = Math.max(start, from);
-    const stop = Math.min(end, to);
-    while (at < stop) {
-      const day = localDate(ctx.building, at);
-      const next = Math.min(stop, dayWindow(ctx.building, day, addDays(day, 1)).to);
+    const days = new Map<string, number>();
+    let energy = 0;
+    for (const iv of byFloor.get(f.floorId) ?? []) {
+      if (iv.start < start || iv.start >= end) continue;
+      const kwh = totalKwh(iv);
+      energy += kwh;
+      const day = localDate(ctx.building, iv.start);
+      days.set(day, (days.get(day) ?? 0) + kwh);
+    }
+    // no stored intervals under it (should not happen): the day it started on carries it
+    if (energy <= 0) days.set(localDate(ctx.building, start), (energy = 1));
+    for (const [day, kwh] of days) {
+      if (day < localDate(ctx.building, from) || day > localDate(ctx.building, to - 1)) continue;
       const key = `${f.floorId}|${day}`;
-      perDay.set(key, (perDay.get(key) ?? 0) + (f.avoidableKwh * (next - at)) / (end - start));
-      at = next;
+      perDay.set(key, (perDay.get(key) ?? 0) + (f.avoidableKwh * kwh) / energy);
     }
   }
   const firstDay = localDate(ctx.building, from);
