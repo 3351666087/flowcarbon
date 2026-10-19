@@ -266,7 +266,8 @@ describe.skipIf(!adminUrl)("worker jobs", () => {
         const r = await runBrief(
           { db: h.db, client: null, model: "m", effort: "medium" },
           { orgId: seeded.orgId, briefId: id },
-          Date.parse("2030-01-01T00:00:00Z"),
+          // before the seeded data begins
+          Date.parse("2026-08-01T00:00:00Z"),
         );
         expect(r).toBe("done");
         const [row] = await inOrg((tx) =>

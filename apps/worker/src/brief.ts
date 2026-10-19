@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { RULES, STRATEGIES } from "@flowcarbon/core";
+import { RULES, STRATEGIES, zonedTime } from "@flowcarbon/core";
 import { type Db, schema, withOrg } from "@flowcarbon/db";
-import { loadBuildingContext, localDateOf } from "@flowcarbon/pipeline";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { latestDataDay, loadBuildingContext, localDateOf } from "@flowcarbon/pipeline";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { ExplainDeps } from "./explain";
 
@@ -59,7 +59,11 @@ export async function briefInput(db: Db, orgId: string, briefId: string, now = D
     const [brief] = await tx.select().from(schema.aiBriefs).where(eq(schema.aiBriefs.id, briefId));
     if (!brief) return null;
     const ctx = await loadBuildingContext(tx, orgId, brief.buildingId);
-    const since = new Date(now - WINDOW_DAYS * 86_400_000);
+    // a building whose data stopped (an imported case dataset) is looked at over its own last two weeks
+    const lastDay = await latestDataDay(tx, ctx);
+    const dataEnd = lastDay ? zonedTime(lastDay, 0, ctx.building.timezone) + 86_400_000 : now;
+    const end = Math.min(now, dataEnd);
+    const since = new Date(end - WINDOW_DAYS * 86_400_000);
     const open = await tx
       .select()
       .from(schema.findings)
@@ -68,6 +72,7 @@ export async function briefInput(db: Db, orgId: string, briefId: string, now = D
           eq(schema.findings.buildingId, brief.buildingId),
           eq(schema.findings.status, "open"),
           gte(schema.findings.startAt, since),
+          lt(schema.findings.startAt, new Date(end)),
         ),
       );
     const label = new Map(ctx.floors.map((f) => [f.id, f.label]));
@@ -142,7 +147,7 @@ export async function briefInput(db: Db, orgId: string, briefId: string, now = D
         window: {
           days: WINDOW_DAYS,
           from: localDateOf(ctx, since.getTime()),
-          to: localDateOf(ctx, now),
+          to: localDateOf(ctx, end - 1),
         },
         groups: top.map((g) => ({
           floor: g.floor,

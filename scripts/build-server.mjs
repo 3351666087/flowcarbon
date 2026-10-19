@@ -24,6 +24,7 @@ await build({
     migrate: "scripts/migrate-all.ts",
     seed: "packages/demo/src/cli.ts",
     pump: "packages/demo/src/pump-cli.ts",
+    case: "packages/demo/src/case-cli.ts",
   },
   outdir: out,
   outExtension: { ".js": ".mjs" },
