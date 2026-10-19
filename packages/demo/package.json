@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/demo",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "private": true,
   "description": "Seeds a demonstration organisation from the simulator. Development, tests and demos only.",
   "license": "Apache-2.0",
