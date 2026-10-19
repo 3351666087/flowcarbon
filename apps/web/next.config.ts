@@ -26,6 +26,11 @@ const csp = [
 const config: NextConfig = {
   output: "standalone",
   env: { NEXT_PUBLIC_APP_VERSION: version },
+  experimental: {
+    // pages render on the client and fetch their own data, so a page visited or prefetched in the last few minutes
+    // can be shown again at once instead of asking the server first (which can take a second from a phone in China)
+    staleTimes: { dynamic: 300, static: 600 },
+  },
   // trace dependencies from the monorepo root so the standalone server finds hoisted packages
   outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,

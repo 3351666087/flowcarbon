@@ -122,6 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link
                   key={key}
                   href={`${base}/${key}`}
+                  prefetch
                   data-liquid-key={key}
                   className={clsx(
                     "fc-press relative flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium",

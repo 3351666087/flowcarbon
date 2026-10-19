@@ -187,6 +187,8 @@ export function TabBar({
       <Link
         key={key}
         href={href}
+        // the tabs are always on screen: fetch their pages ahead, so a tap never waits on the network
+        prefetch
         data-liquid-key={key}
         aria-current={on ? "page" : undefined}
         className={cls}
@@ -229,6 +231,7 @@ export function TabBar({
               <Link
                 key={key}
                 href={href}
+                prefetch
                 role="menuitem"
                 aria-current={active === key ? "page" : undefined}
                 onClick={() => setMenu(false)}
