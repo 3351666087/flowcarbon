@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ApiError, api, unwrap } from "@/lib/api";
+import { useBackClose } from "@/lib/back";
 import { fill, useI18n } from "@/lib/i18n";
 import { can, useIds, useMe } from "@/lib/session";
 import { applyTheme, readTheme, type ThemeChoice } from "@/lib/theme";
@@ -116,11 +117,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
     setLeaving(true);
     setTimeout(onClose, 260);
   };
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
-  });
+  useBackClose(close);
   // focus the sheet once when it opens; doing it on every render pulled focus out of its text fields after each key
   useEffect(() => {
     panel.current?.focus();
@@ -134,6 +131,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
 
   // an organisation row slid open, and the dialog or sheet opened from it (or for the picture)
   const [swiped, setSwiped] = useState<string | null>(null);
+  useBackClose(() => setSwiped(null), swiped !== null);
   const [editing, setEditing] = useState<
     { kind: "avatar" } | { kind: "rename" | "delete" | "leave"; m: (typeof memberships)[number] } | null
   >(null);

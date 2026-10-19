@@ -4,6 +4,7 @@ import { clsx } from "clsx";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { feel } from "@/components/glass";
+import { useBackClose } from "@/lib/back";
 import { useI18n } from "@/lib/i18n";
 
 /**
@@ -36,12 +37,12 @@ export function Dialog({
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (!mounted) return;
-    card.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
-  }, [mounted, onClose]);
+    if (mounted) card.current?.focus();
+  }, [mounted]);
+  // while it is working, back stays here rather than leaving mid-way
+  useBackClose(() => {
+    if (!busy) onClose();
+  });
 
   const begin = () => {
     if (busy) return;

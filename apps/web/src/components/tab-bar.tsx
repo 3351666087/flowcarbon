@@ -5,6 +5,7 @@ import { Ellipsis, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
+import { useBackClose } from "@/lib/back";
 import { tick, useLens } from "./glass";
 import { useLiquid } from "./liquid";
 
@@ -90,12 +91,7 @@ export function TabBar({
     setMenu(false);
     setPending(null);
   }, [active]);
-  useEffect(() => {
-    if (!menu) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(false);
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
-  }, [menu]);
+  useBackClose(() => setMenu(false), menu);
 
   const keyAt = (clientX: number) => {
     const items = row?.querySelectorAll<HTMLElement>("[data-liquid-key]") ?? [];

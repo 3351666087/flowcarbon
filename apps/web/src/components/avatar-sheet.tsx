@@ -9,6 +9,7 @@ import { Sheet } from "@/components/sheet";
 import { toast } from "@/components/toast";
 import { Button, ErrorBox } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
+import { useBackClose } from "@/lib/back";
 import { useI18n } from "@/lib/i18n";
 
 /** the cropping window, and the size the picture is saved at */
@@ -49,6 +50,8 @@ export function AvatarSheet({
     },
     [picked],
   );
+
+  useBackClose(() => setPicked(null), !!picked);
 
   const choose = (file: File) => {
     setError(null);

@@ -100,6 +100,8 @@ public final class MainActivity extends Activity {
     private ConnectivityManager.NetworkCallback networkCallback;
     private OnBackInvokedCallback backCallback;
     private boolean backRegistered;
+    /** sheets, dialogs and menus open on the page, as it reports them; back closes those first */
+    private int pageOverlays;
     private DownloadManager.Request pendingDownload;
     private String pendingName;
     private Updater updater;
@@ -308,6 +310,7 @@ public final class MainActivity extends Activity {
 
         @Override
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            pageOverlays = 0;
             if (revealed && !stage.isUp()) bar.begin();
         }
 
@@ -365,6 +368,15 @@ public final class MainActivity extends Activity {
         public void theme(String css) {
             int color = parseColor(css);
             if (color != 0) runOnUiThread(() -> setPageColor(color));
+        }
+
+        /** the page has this many layers open (see apps/web/src/lib/back.ts) */
+        @JavascriptInterface
+        public void overlays(int n) {
+            runOnUiThread(() -> {
+                pageOverlays = Math.max(0, n);
+                updateBack();
+            });
         }
 
         @JavascriptInterface
@@ -507,20 +519,36 @@ public final class MainActivity extends Activity {
 
     private void setUpBack() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            backCallback = () -> {
-                if (web != null && web.canGoBack()) web.goBack();
-                updateBack();
-            };
+            backCallback = this::back;
         }
     }
 
+    /** Back closes the page's topmost sheet or dialog first; with none open it goes back in the page. */
+    private void back() {
+        if (web == null) return;
+        if (pageOverlays > 0) {
+            web.evaluateJavascript("window.fcBack ? window.fcBack() : false", handled -> {
+                if (!"true".equals(handled) && web.canGoBack()) web.goBack();
+                updateBack();
+            });
+            return;
+        }
+        if (web.canGoBack()) web.goBack();
+        updateBack();
+    }
+
+    /** Whether back stays in the app: something is open on the page, or the page has history to go back to. */
+    private boolean pageTakesBack() {
+        return web != null && !stage.isOffline() && (pageOverlays > 0 || web.canGoBack());
+    }
+
     /**
-     * Android 13+: while the page has history, back goes back in the page; otherwise the callback is unregistered,
-     * so the system can show its predictive back-to-home animation.
+     * Android 13+: while the page takes back, the callback is registered; otherwise it is unregistered, so the system
+     * can show its predictive back-to-home animation.
      */
     private void updateBack() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || web == null) return;
-        boolean want = web.canGoBack() && !stage.isOffline();
+        boolean want = pageTakesBack();
         OnBackInvokedDispatcher d = getOnBackInvokedDispatcher();
         if (want && !backRegistered) {
             d.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, backCallback);
@@ -539,7 +567,7 @@ public final class MainActivity extends Activity {
     @SuppressWarnings("deprecation")
     @SuppressLint("GestureBackNavigation")
     public void onBackPressed() {
-        if (web != null && web.canGoBack() && !stage.isOffline()) web.goBack();
+        if (pageTakesBack()) back();
         else super.onBackPressed();
     }
 

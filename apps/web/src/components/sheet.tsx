@@ -5,10 +5,11 @@ import { X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLens } from "@/components/glass";
+import { useBackClose } from "@/lib/back";
 import { useI18n } from "@/lib/i18n";
 
 /**
- * A sheet that rises from the bottom on a phone (drag the handle down, tap outside or press Escape to put it away)
+ * A sheet that rises from the bottom on a phone (drag the handle down, tap outside, press back or Escape to put it away)
  * and opens as a centred panel on a wide screen. Render it while it is open; `children` gets a `close` that plays
  * the exit before `onClose`, for closing after a successful action.
  */
@@ -36,11 +37,7 @@ export function Sheet({
     setTimeout(onClose, 260);
   };
   useEffect(() => setMounted(true), []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
-  });
+  useBackClose(close);
   useEffect(() => {
     if (mounted) panel.current?.focus();
   }, [mounted]);
