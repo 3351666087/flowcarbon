@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/core",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "FlowCarbon domain logic: occupancy, rules, forecasting, strategies, carbon accounting. No I/O.",
   "license": "Apache-2.0",
