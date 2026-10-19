@@ -1,4 +1,5 @@
 import { schema, withOrg } from "@flowcarbon/db";
+import { deleteOrganization } from "@flowcarbon/pipeline";
 import { API_KEY_SCOPES, newApiKey, randomToken, sha256 } from "@flowcarbon/security";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
@@ -226,6 +227,120 @@ export const orgRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, con
         role: access.role,
         tenantId: access.tenantId,
       };
+    },
+  );
+
+  app.patch(
+    "/orgs/:orgId",
+    {
+      schema: {
+        tags: ["organisation"],
+        summary: "Rename the organisation (owners and administrators)",
+        params: orgParams,
+        body: z.object({ name: z.string().trim().min(2).max(120) }),
+        response: { 200: created, ...errorResponses },
+      },
+    },
+    async (req) => {
+      const access = await requireOrg(db, req, req.params.orgId, "org:manage");
+      return withOrg(db, req.params.orgId, async (tx) => {
+        const [before] = await tx
+          .select({ name: schema.organizations.name })
+          .from(schema.organizations)
+          .where(eq(schema.organizations.id, req.params.orgId));
+        const [org] = await tx
+          .update(schema.organizations)
+          .set({ name: req.body.name, updatedAt: new Date() })
+          .where(eq(schema.organizations.id, req.params.orgId))
+          .returning({
+            id: schema.organizations.id,
+            slug: schema.organizations.slug,
+            name: schema.organizations.name,
+          });
+        if (!org) throw notFound("Organisation");
+        await audit(tx, req, access, {
+          action: "organisation.rename",
+          entityType: "organisation",
+          entityId: org.id,
+          data: { from: before?.name ?? null, to: org.name },
+        });
+        return org;
+      });
+    },
+  );
+
+  app.delete(
+    "/orgs/:orgId",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+      schema: {
+        tags: ["organisation"],
+        summary:
+          "Delete the organisation with its buildings, data, findings and memberships (owners only; cannot be undone)",
+        params: orgParams,
+        response: { 204: z.null(), ...errorResponses },
+      },
+    },
+    async (req, reply) => {
+      await requireOrg(db, req, req.params.orgId, "org:delete");
+      const [org] = await db
+        .select({ slug: schema.organizations.slug, name: schema.organizations.name })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, req.params.orgId));
+      if (!org) throw notFound("Organisation");
+      if (config.DEMO_ORG_SLUG && org.slug === config.DEMO_ORG_SLUG)
+        throw conflict("The shared demonstration cannot be deleted. Leave it instead.");
+      await deleteOrganization(db, req.params.orgId);
+      // its audit log goes with it, so the deletion is recorded in the service log
+      req.log.info(
+        { orgId: req.params.orgId, slug: org.slug, by: requireUser(req).userId },
+        "organisation deleted",
+      );
+      return reply.status(204).send(null);
+    },
+  );
+
+  app.delete(
+    "/orgs/:orgId/membership",
+    {
+      schema: {
+        tags: ["organisation"],
+        summary:
+          "Leave the organisation (an only owner has to delete it or make someone else an owner first)",
+        params: orgParams,
+        response: { 204: z.null(), ...errorResponses },
+      },
+    },
+    async (req, reply) => {
+      const u = requireUser(req);
+      const [current] = await db
+        .select({ role: schema.memberships.role })
+        .from(schema.memberships)
+        .where(and(eq(schema.memberships.orgId, req.params.orgId), eq(schema.memberships.userId, u.userId)));
+      if (!current) throw notFound("Membership");
+      if (current.role === "owner" && (await ownerCount(req.params.orgId)) <= 1)
+        throw conflict(
+          "You are its only owner. Delete the organisation, or make someone else an owner first.",
+        );
+      await withOrg(db, req.params.orgId, async (tx) => {
+        await tx
+          .delete(schema.memberships)
+          .where(
+            and(eq(schema.memberships.orgId, req.params.orgId), eq(schema.memberships.userId, u.userId)),
+          );
+        await audit(
+          tx,
+          req,
+          { orgId: req.params.orgId, actor: { type: "user", id: u.userId } },
+          {
+            action: "member.leave",
+            entityType: "membership",
+            entityId: u.userId,
+            data: { role: current.role },
+          },
+        );
+      });
+      return reply.status(204).send(null);
     },
   );
 

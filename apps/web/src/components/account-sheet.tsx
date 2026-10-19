@@ -2,19 +2,36 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { Check, ChevronDown, KeyRound, LogOut, Plus, Smartphone, Sparkles, UserPlus } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  DoorOpen,
+  KeyRound,
+  LogOut,
+  Pencil,
+  Plus,
+  Smartphone,
+  Sparkles,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ApiError, api, unwrap } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
-import { useIds, useMe } from "@/lib/session";
+import { fill, useI18n } from "@/lib/i18n";
+import { can, useIds, useMe } from "@/lib/session";
 import { applyTheme, readTheme, type ThemeChoice } from "@/lib/theme";
 import { Segmented, useAuthMethods } from "./auth-code";
 import { Avatar } from "./auth-flow";
+import { AvatarBadge, AvatarSheet } from "./avatar-sheet";
+import { Dialog } from "./dialog";
 import { tick, useLens } from "./glass";
 import { LanguageSwitch } from "./language-switch";
 import { Mark } from "./mark";
+import { Sheet } from "./sheet";
+import { type SwipeAction, SwipeRow } from "./swipe-row";
+import { toast } from "./toast";
 
 /**
  * The account menu, shaped like the ones in large suites: who you are, which organisation you are in (and the
@@ -43,7 +60,7 @@ export function AccountMenu({ variant }: { variant: "avatar" | "row" }) {
           }}
           className="fc-glass fc-press grid size-10 shrink-0 place-items-center rounded-full"
         >
-          <Avatar name={user.name} email={user.email} size={32} />
+          <Avatar name={user.name} email={user.email} src={user.avatarUrl} size={32} />
         </button>
       ) : (
         <button
@@ -53,7 +70,7 @@ export function AccountMenu({ variant }: { variant: "avatar" | "row" }) {
           onClick={() => setOpen(true)}
           className="fc-press flex w-full items-center gap-3 rounded-[22px] p-2 text-left hover:bg-[var(--glass-field)]"
         >
-          <Avatar name={user.name} email={user.email} size={36} />
+          <Avatar name={user.name} email={user.email} src={user.avatarUrl} size={36} />
           <span className="min-w-0 flex-1 leading-tight">
             <span className="block truncate text-sm font-medium">{user.name}</span>
             <span className="block truncate text-xs text-muted">
@@ -114,6 +131,51 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
   const others = (device.data?.accounts ?? []).filter((a) => !a.active);
   // a demo building of one's own (the shared demonstration is read-only)
   const inDemo = memberships.some((m) => m.orgSlug.startsWith("demo-"));
+
+  // an organisation row slid open, and the dialog or sheet opened from it (or for the picture)
+  const [swiped, setSwiped] = useState<string | null>(null);
+  const [editing, setEditing] = useState<
+    { kind: "avatar" } | { kind: "rename" | "delete" | "leave"; m: (typeof memberships)[number] } | null
+  >(null);
+  const shared = (m: (typeof memberships)[number]) => m.orgSlug === methods.data?.demo?.slug;
+  const orgActions = (m: (typeof memberships)[number]): SwipeAction[] => {
+    const list: SwipeAction[] = [];
+    if (!shared(m) && can.manageOrg(m.role))
+      list.push({
+        key: "rename",
+        label: t.account.rename,
+        tone: "accent",
+        icon: <Pencil className="size-4" aria-hidden />,
+        run: () => setEditing({ kind: "rename", m }),
+      });
+    if (!shared(m) && m.role === "owner")
+      list.push({
+        key: "delete",
+        label: t.account.delete,
+        tone: "danger",
+        icon: <Trash2 className="size-4" aria-hidden />,
+        run: () => setEditing({ kind: "delete", m }),
+      });
+    else
+      list.push({
+        key: "leave",
+        label: t.account.leave,
+        tone: "danger",
+        icon: <DoorOpen className="size-4" aria-hidden />,
+        run: () => setEditing({ kind: "leave", m }),
+      });
+    return list;
+  };
+  /** after the current organisation is gone, the start page picks another (or offers to make one) */
+  const gone = async (orgGone: string, note: string) => {
+    await qc.invalidateQueries({ queryKey: ["me"] });
+    toast(note);
+    setEditing(null);
+    if (orgGone === orgId) {
+      onClose();
+      router.push("/");
+    }
+  };
 
   async function act(task: () => Promise<void>) {
     setBusy(true);
@@ -229,7 +291,18 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
 
         <div className="min-h-0 overflow-y-auto overscroll-contain px-3 pt-2 pb-3 lg:pt-3">
           <div className="flex items-center gap-3 px-2 pb-4">
-            <Avatar name={user.name} email={user.email} size={48} />
+            <button
+              type="button"
+              aria-label={t.account.changeAvatar}
+              onClick={() => {
+                tick();
+                setEditing({ kind: "avatar" });
+              }}
+              className="fc-press relative shrink-0 rounded-full"
+            >
+              <Avatar name={user.name} email={user.email} src={user.avatarUrl} size={48} />
+              <AvatarBadge />
+            </button>
             <div className="min-w-0 leading-tight">
               <div className="truncate text-[17px] font-semibold">{user.name}</div>
               <div className="truncate text-sm text-muted">{user.email}</div>
@@ -238,14 +311,21 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
 
           <Group title={t.account.organisations}>
             {memberships.map((m) => (
-              <Row
+              <SwipeRow
                 key={m.orgId}
-                onClick={() => (m.orgId === orgId ? close() : openOrg(m.orgId))}
-                icon={<OrgBadge name={m.orgName} />}
-                title={m.orgName}
-                note={t.settings.roles[m.role]}
-                trailing={m.orgId === orgId ? <Check className="size-4 text-accent" aria-hidden /> : null}
-              />
+                actions={orgActions(m)}
+                open={swiped === m.orgId}
+                onOpenChange={(open) => setSwiped(open ? m.orgId : null)}
+                label={fill(t.account.actionsFor, { org: m.orgName })}
+              >
+                <Row
+                  onClick={() => (m.orgId === orgId ? close() : openOrg(m.orgId))}
+                  icon={<OrgBadge name={m.orgName} />}
+                  title={m.orgName}
+                  note={t.settings.roles[m.role]}
+                  trailing={m.orgId === orgId ? <Check className="size-4 text-accent" aria-hidden /> : null}
+                />
+              </SwipeRow>
             ))}
             {methods.data?.demo && !inDemo ? (
               <Row
@@ -289,7 +369,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
               <Row
                 key={a.userId}
                 onClick={() => switchTo(a.userId)}
-                icon={<Avatar name={a.name} email={a.email} size={30} />}
+                icon={<Avatar name={a.name} email={a.email} src={a.avatarUrl} size={30} />}
                 title={a.name}
                 note={a.email}
               />
@@ -408,6 +488,33 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
           </Group>
         </div>
       </div>
+      {editing?.kind === "avatar" ? <AvatarSheet user={user} onClose={() => setEditing(null)} /> : null}
+      {editing?.kind === "rename" ? (
+        <RenameOrg
+          org={editing.m}
+          onClose={() => setEditing(null)}
+          onDone={async () => {
+            await qc.invalidateQueries({ queryKey: ["me"] });
+            toast(t.account.renamed);
+          }}
+        />
+      ) : null}
+      {editing?.kind === "delete" ? (
+        <RemoveOrg
+          org={editing.m}
+          mode="delete"
+          onClose={() => setEditing(null)}
+          onDone={() => gone(editing.m.orgId, fill(t.account.deleted, { name: editing.m.orgName }))}
+        />
+      ) : null}
+      {editing?.kind === "leave" ? (
+        <RemoveOrg
+          org={editing.m}
+          mode="leave"
+          onClose={() => setEditing(null)}
+          onDone={() => gone(editing.m.orgId, fill(t.account.left, { name: editing.m.orgName }))}
+        />
+      ) : null}
     </div>,
     document.body,
   );
@@ -464,5 +571,126 @@ function OrgBadge({ name }: { name: string }) {
     <span className="grid size-[30px] place-items-center rounded-[9px] bg-accent-soft text-[13px] font-semibold text-accent">
       {[...name.trim()][0]?.toUpperCase() ?? "·"}
     </span>
+  );
+}
+
+interface OrgRef {
+  orgId: string;
+  orgName: string;
+}
+
+/** A new name for an organisation. */
+function RenameOrg({
+  org,
+  onClose,
+  onDone,
+}: {
+  org: OrgRef;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [name, setName] = useState(org.orgName);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async (close: () => void) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.PATCH("/api/v1/orgs/{orgId}", { params: { path: { orgId: org.orgId } }, body: { name } }),
+      );
+      await onDone();
+      close();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet
+      title={t.account.renameTitle}
+      onClose={onClose}
+      footer={(close) => (
+        <button
+          type="button"
+          disabled={busy || name.trim().length < 2 || name.trim() === org.orgName}
+          onClick={() => save(close)}
+          className="fc-prominent fc-press h-11 w-full rounded-full text-[15px] font-semibold disabled:opacity-50"
+        >
+          {t.account.save}
+        </button>
+      )}
+    >
+      <input
+        // biome-ignore lint/a11y/noAutofocus: the sheet opens to type the name
+        autoFocus
+        value={name}
+        maxLength={120}
+        aria-label={t.account.orgName}
+        onChange={(e) => setName(e.target.value)}
+        className="fc-field h-12 w-full rounded-2xl px-4 text-[15px] outline-none focus-visible:outline-none"
+      />
+      {error ? <p className="mt-2 text-sm text-danger">{error}</p> : null}
+    </Sheet>
+  );
+}
+
+/** Deleting an organisation (owners; held down, it cannot be undone) or leaving it. */
+function RemoveOrg({
+  org,
+  mode,
+  onClose,
+  onDone,
+}: {
+  org: OrgRef;
+  mode: "delete" | "leave";
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const buildings = useQuery({
+    queryKey: ["buildings", org.orgId],
+    enabled: mode === "delete",
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/orgs/{orgId}/buildings", { params: { path: { orgId: org.orgId } } })),
+  });
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (mode === "delete")
+        await unwrap(api.DELETE("/api/v1/orgs/{orgId}", { params: { path: { orgId: org.orgId } } }));
+      else
+        await unwrap(
+          api.DELETE("/api/v1/orgs/{orgId}/membership", { params: { path: { orgId: org.orgId } } }),
+        );
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  };
+  const n = buildings.data?.length;
+  return (
+    <Dialog
+      title={fill(mode === "delete" ? t.account.deleteTitle : t.account.leaveTitle, { name: org.orgName })}
+      confirm={mode === "delete" ? t.account.holdToDelete : t.account.leave}
+      tone="danger"
+      hold={mode === "delete"}
+      busy={busy}
+      onConfirm={run}
+      onClose={onClose}
+    >
+      <p>
+        {mode === "delete"
+          ? fill(t.account.deleteBody, { buildings: fill(t.account.buildings, { n: n ?? "…" }) })
+          : t.account.leaveBody}
+      </p>
+      {error ? <p className="mt-2 text-danger">{error}</p> : null}
+    </Dialog>
   );
 }

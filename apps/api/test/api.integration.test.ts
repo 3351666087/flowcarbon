@@ -560,6 +560,72 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
     });
   });
 
+  describe("organisations and pictures", () => {
+    it("renames, leaves and deletes organisations by role", async () => {
+      // the shared demo: managers may not rename it, and nobody may delete it
+      expect(
+        (await as(manager, { method: "PATCH", url: org(), payload: { name: "Renamed" } })).statusCode,
+      ).toBe(403);
+      expect((await as(ownerEmail, { method: "DELETE", url: org() })).statusCode).toBe(409);
+
+      const own = (
+        await as(ownerEmail, {
+          method: "POST",
+          url: `${API_PREFIX}/orgs`,
+          payload: { name: "Short-lived Co" },
+        })
+      ).json();
+      const url = `${API_PREFIX}/orgs/${own.id}`;
+      const renamed = await as(ownerEmail, { method: "PATCH", url, payload: { name: "Renamed Co" } });
+      expect(renamed.json()).toMatchObject({ id: own.id, name: "Renamed Co" });
+      // its only owner cannot leave it
+      expect((await as(ownerEmail, { method: "DELETE", url: `${url}/membership` })).statusCode).toBe(409);
+      // someone else can
+      const [analystUser] = await handle.db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.email, analyst));
+      await handle.db
+        .insert(schema.memberships)
+        .values({ orgId: own.id, userId: analystUser!.id, role: "viewer" });
+      expect((await as(analyst, { method: "DELETE", url })).statusCode).toBe(403);
+      expect((await as(analyst, { method: "DELETE", url: `${url}/membership` })).statusCode).toBe(204);
+      expect(
+        (await as(analyst, { url: `${API_PREFIX}/me` }))
+          .json()
+          .memberships.some((m: { orgId: string }) => m.orgId === own.id),
+      ).toBe(false);
+
+      expect((await as(ownerEmail, { method: "DELETE", url })).statusCode).toBe(204);
+      expect([403, 404]).toContain((await as(ownerEmail, { url })).statusCode);
+    });
+
+    it("keeps a picture per person, only real images", async () => {
+      const png =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const fake = `data:image/png;base64,${Buffer.from("<svg onload=alert(1)>").toString("base64")}`;
+      expect(
+        (await as(manager, { method: "PUT", url: `${API_PREFIX}/me/avatar`, payload: { image: fake } }))
+          .statusCode,
+      ).toBe(422);
+      const set = await as(manager, {
+        method: "PUT",
+        url: `${API_PREFIX}/me/avatar`,
+        payload: { image: png },
+      });
+      expect(set.statusCode).toBe(200);
+      const { avatarUrl } = set.json();
+      expect((await as(manager, { url: `${API_PREFIX}/me` })).json().user.avatarUrl).toBe(avatarUrl);
+      const picture = await as(analyst, { url: avatarUrl });
+      expect(picture.statusCode).toBe(200);
+      expect(picture.headers["content-type"]).toBe("image/png");
+      expect(picture.headers["cache-control"]).toContain("immutable");
+      expect((await app.inject({ url: avatarUrl })).statusCode).toBe(401);
+      expect((await as(manager, { method: "DELETE", url: `${API_PREFIX}/me/avatar` })).statusCode).toBe(204);
+      expect((await as(manager, { url: `${API_PREFIX}/me` })).json().user.avatarUrl).toBeNull();
+    });
+  });
+
   describe("analytics", () => {
     it("serves the report as JSON and CSV", async () => {
       const r = (await as(analyst, { url: `${bld()}/report?from=2026-09-15&to=2026-10-13` })).json();

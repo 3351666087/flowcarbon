@@ -71,6 +71,13 @@
       "when": 1792391009978,
       "tag": "0009_ai_briefs",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792394274385,
+      "tag": "0010_avatars",
+      "breakpoints": true
     }
   ]
 }

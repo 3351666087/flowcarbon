@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
+  customType,
   index,
   inet,
   integer,
@@ -16,6 +17,7 @@ import {
 import { actorTypeEnum, roleEnum } from "./enums";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -37,11 +39,23 @@ export const users = pgTable(
     locale: text("locale").notNull().default("en"),
     emailVerifiedAt: ts("email_verified_at"),
     disabledAt: ts("disabled_at"),
+    /** when the person last set a picture (see userAvatars); null shows their initials */
+    avatarAt: ts("avatar_at"),
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("users_email_lower_uq").on(sql`lower(${t.email})`)],
 );
+
+/** A person's picture, small (resized to 256 px in the browser), kept apart from the users table it would bloat. */
+export const userAvatars = pgTable("user_avatars", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  mime: text("mime").notNull(),
+  data: bytea("data").notNull(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
 
 export const memberships = pgTable(
   "memberships",

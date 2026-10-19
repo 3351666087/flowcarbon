@@ -18,6 +18,7 @@ import type { RouteDeps } from "../app";
 import { deviceAccounts, signIn, signOut, switchTo } from "../auth/device";
 import { assertSameSite, requireUser } from "../auth/principal";
 import { clearSessionCookie, revokeOtherSessions } from "../auth/sessions";
+import { avatarUrl } from "../avatars";
 import { createPersonalDemo } from "../demo";
 import { HttpError, unauthorized, unprocessable } from "../errors";
 import { codeMessage } from "../mail";
@@ -37,6 +38,8 @@ const me = z.object({
     name: z.string(),
     locale: z.string(),
     hasPassword: z.boolean(),
+    /** the person's picture, or null to show their initials */
+    avatarUrl: z.string().nullable(),
   }),
   memberships: z.array(membership),
 });
@@ -73,6 +76,7 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
         name: schema.users.name,
         locale: schema.users.locale,
         hasPassword: sql<boolean>`${schema.users.passwordHash} is not null`,
+        avatarAt: schema.users.avatarAt,
       })
       .from(schema.users)
       .where(eq(schema.users.id, userId));
@@ -88,7 +92,8 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
       .innerJoin(schema.organizations, eq(schema.organizations.id, schema.memberships.orgId))
       .where(eq(schema.memberships.userId, userId))
       .orderBy(schema.organizations.name);
-    return { user: user!, memberships };
+    const { avatarAt, ...rest } = user!;
+    return { user: { ...rest, avatarUrl: avatarUrl(rest.id, avatarAt) }, memberships };
   }
 
   app.post(
@@ -490,7 +495,13 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
 
   // ---- accounts on this device ---------------------------------------------------------------------------------
 
-  const account = z.object({ userId: uuid, name: z.string(), email: z.string(), active: z.boolean() });
+  const account = z.object({
+    userId: uuid,
+    name: z.string(),
+    email: z.string(),
+    avatarUrl: z.string().nullable(),
+    active: z.boolean(),
+  });
 
   app.get(
     "/auth/accounts",
@@ -508,7 +519,13 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
         accounts: [
           ...(active ? [{ ...active, active: true }] : []),
           ...others.map((s) => ({ ...s, active: false })),
-        ].map(({ userId, name, email, active: a }) => ({ userId, name, email, active: a })),
+        ].map(({ userId, name, email, avatarAt, active: a }) => ({
+          userId,
+          name,
+          email,
+          avatarUrl: avatarUrl(userId, avatarAt),
+          active: a,
+        })),
       };
     },
   );

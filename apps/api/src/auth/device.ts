@@ -21,6 +21,7 @@ export interface DeviceSession extends IssuedSession {
   userId: string;
   name: string;
   email: string;
+  avatarAt: Date | null;
 }
 
 function readJar(req: FastifyRequest, config: Config): string[] {
@@ -52,6 +53,7 @@ async function resolve(db: Db, tokens: string[]): Promise<DeviceSession[]> {
       userId: schema.users.id,
       name: schema.users.name,
       email: schema.users.email,
+      avatarAt: schema.users.avatarAt,
     })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
@@ -76,6 +78,7 @@ async function resolve(db: Db, tokens: string[]): Promise<DeviceSession[]> {
       userId: r.userId,
       name: r.name,
       email: r.email,
+      avatarAt: r.avatarAt,
     });
   }
   return out;

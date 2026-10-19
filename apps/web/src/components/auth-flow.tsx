@@ -284,7 +284,7 @@ export function AuthFlow() {
               onClick={() => switchTo(a.userId)}
               className="fc-press flex w-full items-center gap-3 px-3.5 py-3 text-left"
             >
-              <Avatar name={a.name} email={a.email} />
+              <Avatar name={a.name} email={a.email} src={a.avatarUrl} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[15px] font-medium">{a.name}</span>
                 <span className="block truncate text-xs text-muted">{a.email}</span>
@@ -601,7 +601,32 @@ function Choice({
 }
 
 /** Initials on a colour drawn from the address, so the same person always looks the same. */
-export function Avatar({ name, email, size = 40 }: { name: string; email: string; size?: number }) {
+/** A person's picture, or their initials on a colour picked from their email when they have none. */
+export function Avatar({
+  name,
+  email,
+  size = 40,
+  src,
+}: {
+  name: string;
+  email: string;
+  size?: number;
+  src?: string | null;
+}) {
+  const [broken, setBroken] = useState(false);
+  if (src && !broken)
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        width={size}
+        height={size}
+        onError={() => setBroken(true)}
+        className="shrink-0 rounded-full object-cover shadow-[inset_0_1px_0_rgb(255_255_255/0.35)]"
+        style={{ width: size, height: size }}
+      />
+    );
   let hash = 0;
   for (const c of email) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
   const hue = [168, 196, 222, 262, 32, 340][hash % 6];

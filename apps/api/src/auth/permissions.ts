@@ -19,6 +19,10 @@ const ADMINS: Role[] = ["owner", "admin"];
  */
 export const PERMISSIONS = {
   "org:read": ALL,
+  /** rename the organisation */
+  "org:manage": ADMINS,
+  /** delete it, with everything in it */
+  "org:delete": ["owner"],
   "members:manage": ADMINS,
   "apikeys:manage": ADMINS,
   "audit:read": ADMINS,

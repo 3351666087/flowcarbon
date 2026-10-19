@@ -34,6 +34,7 @@ import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.URLUtil;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -59,6 +60,7 @@ public final class MainActivity extends Activity {
     /** nor held longer than this once the page has loaded, even if it never reports ready */
     private static final long MAX_READY_WAIT_MS = 5000;
     private static final int REQUEST_STORAGE = 7;
+    private static final int REQUEST_FILE = 8;
     private static final Pattern RGB = Pattern.compile("rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)");
     /** reports the page background now and whenever the theme changes */
     private static final String THEME_PROBE = "(function(){"
@@ -101,6 +103,8 @@ public final class MainActivity extends Activity {
     private DownloadManager.Request pendingDownload;
     private String pendingName;
     private Updater updater;
+    /** the page's file input waiting for the system picker (a picture, a CSV to import) */
+    private ValueCallback<Uri[]> filePicked;
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -272,6 +276,20 @@ public final class MainActivity extends Activity {
             @Override
             public void onProgressChanged(WebView view, int progress) {
                 if (revealed) bar.report(progress);
+            }
+
+            /** a file input opens the system picker for the types it accepts */
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (filePicked != null) filePicked.onReceiveValue(null);
+                filePicked = callback;
+                try {
+                    startActivityForResult(pickerFor(params), REQUEST_FILE);
+                    return true;
+                } catch (ActivityNotFoundException e) {
+                    filePicked = null;
+                    return false;
+                }
             }
         });
         w.setDownloadListener(this::download);
@@ -554,6 +572,38 @@ public final class MainActivity extends Activity {
         } catch (RuntimeException e) {
             Toast.makeText(this, R.string.download_failed, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * The system picker for a page's file input. WebView's own intent uses the first accept entry as the file type, and
+     * ".csv" is not a type, so nothing matched and tapping the button did nothing. Pictures are filtered to images;
+     * anything else is offered unfiltered and the page checks what it gets.
+     */
+    private static Intent pickerFor(WebChromeClient.FileChooserParams params) {
+        boolean any = false;
+        boolean images = true;
+        for (String entry : params.getAcceptTypes()) {
+            for (String type : entry.split(",")) {
+                String t = type.trim();
+                if (t.isEmpty()) continue;
+                any = true;
+                if (!t.startsWith("image/")) images = false;
+            }
+        }
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(any && images ? "image/*" : "*/*");
+        if (params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE)
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        return intent;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_FILE || filePicked == null) return;
+        filePicked.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+        filePicked = null;
     }
 
     @Override
