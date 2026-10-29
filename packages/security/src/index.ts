@@ -7,32 +7,13 @@ import { hash, verify } from "@node-rs/argon2";
  */
 export const PASSWORD_PARAMS = { algorithm: 2, memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
 
-export const PASSWORD_MIN_LENGTH = 12;
-export const PASSWORD_MAX_LENGTH = 256;
-
-// a short deny-list of passwords that pass the length rule but appear at the top of breach corpora
-const COMMON = new Set([
-  "password1234",
-  "123456789012",
-  "qwertyuiop12",
-  "passwordpassword",
-  "iloveyou1234",
-  "administrator",
-  "flowcarbon123",
-]);
-
-/** Returns the problems with a proposed password; empty when acceptable (NIST SP 800-63B style: length, no composition rules). */
-export function passwordProblems(password: string, context: { email?: string } = {}): string[] {
-  const problems: string[] = [];
-  if (password.length < PASSWORD_MIN_LENGTH) problems.push(`Use at least ${PASSWORD_MIN_LENGTH} characters.`);
-  if (password.length > PASSWORD_MAX_LENGTH) problems.push(`Use at most ${PASSWORD_MAX_LENGTH} characters.`);
-  const lower = password.toLowerCase();
-  if (COMMON.has(lower)) problems.push("This password is too common.");
-  const local = context.email?.split("@")[0]?.toLowerCase();
-  if (local && local.length >= 4 && lower.includes(local))
-    problems.push("Do not include your email name in the password.");
-  return problems;
-}
+export {
+  checkPassword,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  type PasswordCheck,
+  passwordProblems,
+} from "./password-rules";
 
 export function hashPassword(password: string): Promise<string> {
   return hash(password, PASSWORD_PARAMS);

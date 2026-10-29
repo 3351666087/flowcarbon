@@ -87,6 +87,14 @@ const en = {
     codeWrong: "The code is wrong or has expired.",
     mailOff: "Email codes are not available on this server.",
   },
+  passwordRules: {
+    title: "Your password needs",
+    length: "At least 12 characters",
+    common: "Not a commonly used password",
+    emailName: "Not your email name",
+    met: "done",
+    unmet: "not yet",
+  },
   auth: {
     welcome: "Welcome to FlowCarbon",
     welcomeSub: "Sign in or create an account with your work email.",
@@ -804,6 +812,14 @@ const zh: Dict = {
     sendCode: "发送验证码",
     codeWrong: "验证码错误或已过期。",
     mailOff: "此服务器未开通邮件验证码。",
+  },
+  passwordRules: {
+    title: "密码需要满足",
+    length: "至少 12 个字符",
+    common: "不是常见密码",
+    emailName: "不包含邮箱名",
+    met: "已满足",
+    unmet: "未满足",
   },
   auth: {
     welcome: "欢迎使用 FlowCarbon",

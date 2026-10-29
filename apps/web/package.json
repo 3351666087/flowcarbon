@@ -13,6 +13,7 @@
     "api-types": "npm run -s openapi -w @flowcarbon/api > openapi.json && openapi-typescript openapi.json -o src/lib/api-types.ts && rm openapi.json"
   },
   "dependencies": {
+    "@flowcarbon/security": "*",
     "@tanstack/react-query": "5.104.0",
     "clsx": "2.1.1",
     "lucide-react": "1.49.0",

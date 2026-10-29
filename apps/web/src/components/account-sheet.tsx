@@ -30,6 +30,7 @@ import { Dialog } from "./dialog";
 import { tick, useLens } from "./glass";
 import { LanguageSwitch } from "./language-switch";
 import { Mark } from "./mark";
+import { PasswordRules } from "./password-rules";
 import { Sheet } from "./sheet";
 import { type SwipeAction, SwipeRow } from "./swipe-row";
 import { toast } from "./toast";
@@ -458,6 +459,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
                     {t.account.save}
                   </button>
                 </div>
+                <PasswordRules password={next} email={user.email} className="mt-0 pb-1" />
               </form>
             ) : null}
           </Group>

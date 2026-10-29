@@ -6,7 +6,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./password-rules": "./src/password-rules.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

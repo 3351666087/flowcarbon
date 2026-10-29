@@ -25,6 +25,8 @@ const csp = [
 
 const config: NextConfig = {
   output: "standalone",
+  // the password rules are shared with the API as TypeScript source
+  transpilePackages: ["@flowcarbon/security"],
   env: { NEXT_PUBLIC_APP_VERSION: version },
   experimental: {
     // pages render on the client and fetch their own data, so a page visited or prefetched in the last few minutes

@@ -34,6 +34,7 @@ import {
 import { tick } from "./glass";
 import { Mark } from "./mark";
 import { OtpInput } from "./otp-input";
+import { PasswordRules } from "./password-rules";
 
 type Step = "choose" | "email" | "code" | "password" | "profile";
 type Me = { user: { email: string } };
@@ -468,6 +469,7 @@ export function AuthFlow() {
             />
           </GroupField>
         </FieldGroup>
+        <PasswordRules password={password} email={email} />
         {/* password managers save the new password under this address */}
         <input type="email" autoComplete="username" value={email} readOnly hidden />
         <div className="mt-5 mb-2 px-1 text-sm font-medium">{t.auth.startQuestion}</div>

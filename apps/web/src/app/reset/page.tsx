@@ -17,6 +17,7 @@ import {
   useRemember,
 } from "@/components/auth-stage";
 import { Mark } from "@/components/mark";
+import { PasswordRules } from "@/components/password-rules";
 import { ApiError, api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
@@ -168,6 +169,7 @@ export default function ResetPage() {
               </>
             )}
           </FieldGroup>
+          {step === "code" ? <PasswordRules password={password} email={email} /> : null}
           {step === "code" && !inApp ? (
             <RememberRow
               label={t.auth.remember}

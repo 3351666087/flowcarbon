@@ -13,6 +13,7 @@ import {
   useRemember,
 } from "@/components/auth-stage";
 import { Mark } from "@/components/mark";
+import { PasswordRules } from "@/components/password-rules";
 import { ErrorBox } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -81,6 +82,7 @@ export default function InvitePage() {
             />
           </GroupField>
         </FieldGroup>
+        <PasswordRules password={password} />
         {inApp ? null : (
           <RememberRow
             label={t.login.remember}
