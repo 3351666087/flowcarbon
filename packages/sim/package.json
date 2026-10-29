@@ -1,6 +1,6 @@
 {
   "name": "@flowcarbon/sim",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "description": "Deterministic telemetry simulator for development, tests and demos. Never used for real buildings.",
   "license": "Apache-2.0",
