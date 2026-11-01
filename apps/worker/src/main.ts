@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import Anthropic from "@anthropic-ai/sdk";
 import { createDb, schema, withOrg } from "@flowcarbon/db";
 import {
+  assistantPayload,
   briefPayload,
   createBoss,
   demoPayload,
@@ -13,6 +14,7 @@ import {
 import { eq } from "drizzle-orm";
 import { pino } from "pino";
 import { Counter, collectDefaultMetrics, Histogram, Registry } from "prom-client";
+import { giveUpOnTurn, runAssistant } from "./assistant";
 import { runBrief } from "./brief";
 import { loadWorkerConfig } from "./config";
 import { runDemoWorkspace } from "./demo";
@@ -43,7 +45,10 @@ const anthropic = config.ANTHROPIC_API_KEY
         : undefined,
     })
   : null;
-if (!anthropic) log.warn("ANTHROPIC_API_KEY is not set: explanation requests will be marked failed");
+if (!anthropic)
+  log.warn(
+    "ANTHROPIC_API_KEY is not set: explanation requests will be marked failed, and the assistant answers from templates",
+  );
 
 const registry = new Registry();
 collectDefaultMetrics({ register: registry, prefix: "flowcarbon_worker_" });
@@ -129,6 +134,24 @@ await boss.work(QUEUES.brief.name, { localConcurrency: 2, batchSize: 1 }, async 
   log.info({ jobId: job.id, ...payload, result: r }, "brief done");
 });
 
+await boss.work(QUEUES.assistant.name, { localConcurrency: 2, batchSize: 1 }, async ([job]) => {
+  if (!job) return;
+  const payload = assistantPayload.parse(job.data);
+  const r = await timed("assistant", () =>
+    runAssistant(
+      {
+        db,
+        client: anthropic,
+        model: config.AI_MODEL,
+        effort: config.AI_EFFORT,
+        log: (o, m) => log.info(o, m),
+      },
+      payload,
+    ),
+  );
+  log.info({ jobId: job.id, ...payload, result: r }, "assistant done");
+});
+
 // one at a time: building a demo tower simulates three weeks of a 12-floor building
 await boss.work(QUEUES.demo.name, { localConcurrency: 1, batchSize: 1 }, async ([job]) => {
   if (!job) return;
@@ -181,6 +204,22 @@ await boss.work(QUEUES.deadLetter.name, { batchSize: 10 }, async (dead) => {
           .where(eq(schema.aiBriefs.id, brief.data.briefId)),
       );
       log.error({ jobId: job.id, ...brief.data }, "brief gave up");
+      continue;
+    }
+    // before the demo payload, which is only an organisation and so matches this one too
+    const assistant = assistantPayload.safeParse(job.data);
+    if (assistant.success) {
+      const outcome = await giveUpOnTurn(
+        {
+          db,
+          client: null,
+          model: config.AI_MODEL,
+          effort: config.AI_EFFORT,
+          log: (o, m) => log.error(o, m),
+        },
+        assistant.data,
+      );
+      log.error({ jobId: job.id, ...assistant.data, outcome }, "assistant gave up");
       continue;
     }
     if (demoPayload.safeParse(job.data).success) {

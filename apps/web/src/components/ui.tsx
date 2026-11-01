@@ -17,7 +17,7 @@ import {
   useRef,
 } from "react";
 import { ApiError } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { type Dict, fill, useI18n } from "@/lib/i18n";
 import { Mark } from "./mark";
 
 /**
@@ -190,7 +190,7 @@ export function Button({
       {...rest}
       disabled={rest.disabled || busy}
       className={clsx(
-        "fc-press inline-flex h-9 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50",
+        "fc-press inline-flex h-9 min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0",
         variant === "primary" && "fc-prominent hover:brightness-105",
         variant === "secondary" && "border border-border bg-surface hover:bg-surface-2",
         variant === "ghost" && "hover:bg-surface-2",
@@ -216,7 +216,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 const control =
-  "h-9 w-full min-w-0 rounded-xl border border-border bg-surface px-3 text-sm outline-none transition-shadow focus:border-accent focus:ring-4 focus:ring-[var(--ring)]";
+  "h-9 min-h-11 w-full min-w-0 rounded-xl border border-border bg-surface px-3 text-sm outline-none transition-shadow focus:border-accent focus:ring-4 focus:ring-[var(--ring)] sm:min-h-0";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={clsx(control, props.className)} />;
@@ -263,13 +263,19 @@ export function Loading({ full = false, page = false }: { full?: boolean; page?:
   );
 }
 
+/** What went wrong, in the reader's language wherever the API gives a reason this app has words for. */
+export function errorText(error: unknown, t: Dict) {
+  const e = error instanceof ApiError ? error : null;
+  const known = e ? t.errors[e.code] : undefined;
+  if (known) return fill(known, (e?.details ?? {}) as Record<string, string | number>);
+  if (e?.status === 403) return t.common.forbidden;
+  return e?.message ?? (error instanceof Error ? error.message : String(error));
+}
+
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const { t } = useI18n();
   const e = error instanceof ApiError ? error : null;
-  const message =
-    e?.status === 403
-      ? t.common.forbidden
-      : (e?.message ?? (error instanceof Error ? error.message : String(error)));
+  const message = errorText(error, t);
   return (
     <div className="fc-rise rounded-2xl border border-border bg-danger-soft p-4 text-sm" role="alert">
       <div className="flex items-center gap-2 font-semibold text-danger">

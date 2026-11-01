@@ -337,7 +337,7 @@ export async function floorsNow(tx: Tx, ctx: BuildingContext, today: string): Pr
     .where(
       and(
         eq(schema.floorDaily.buildingId, ctx.building.id),
-        gte(schema.floorDaily.day, addDays(today, -28)),
+        gte(schema.floorDaily.day, addDays(today, -27)),
         lt(schema.floorDaily.day, addDays(today, 1)),
       ),
     )

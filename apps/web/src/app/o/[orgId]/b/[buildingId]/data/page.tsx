@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
 import { useAuthMethods } from "@/components/auth-code";
 import { DataImport } from "@/components/data-import";
+import { FloorsDetail } from "@/components/floors-detail";
 import { Badge, Card, ErrorBox, Loading, Metric, PageHeader, Table } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { dateTime, num } from "@/lib/format";
@@ -51,6 +52,7 @@ export default function DataPage() {
   return (
     <>
       <PageHeader title={t.data.title} subtitle={t.data.subtitle} />
+      <FloorsDetail />
       {can.editBuilding(membership?.role) ? (
         <div className="mb-6">
           <DataImport demo={demo} />

@@ -60,7 +60,7 @@ export function AccountMenu({ variant }: { variant: "avatar" | "row" }) {
             tick();
             setOpen(true);
           }}
-          className="fc-glass fc-press grid size-10 shrink-0 place-items-center rounded-full"
+          className="fc-glass fc-press grid size-11 shrink-0 place-items-center rounded-full"
         >
           <Avatar name={user.name} email={user.email} src={user.avatarUrl} size={32} />
         </button>

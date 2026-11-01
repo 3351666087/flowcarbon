@@ -44,3 +44,10 @@ export const batchStatusEnum = pgEnum("ingest_status", ["accepted", "processed",
 export const measureStatusEnum = pgEnum("measure_status", ["planned", "in_effect", "cancelled"]);
 /** whether the measure is the AI assistant's recommendation as it stood, an edited one, or the team's own */
 export const measureSourceEnum = pgEnum("measure_source", ["ai", "ai_edited", "manual"]);
+/** how a published strategy was put together: one of the planner's options, or a mix of the building's own */
+export const communityOptionKindEnum = pgEnum("community_option_kind", [
+  "weekends",
+  "weekdays",
+  "balanced",
+  "custom",
+]);

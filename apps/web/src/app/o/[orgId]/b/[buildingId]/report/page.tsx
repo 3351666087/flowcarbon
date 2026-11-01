@@ -17,7 +17,7 @@ import {
 } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { addDays, co2, dateTime, kwh, money, num, pct } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
+import { fill, useI18n } from "@/lib/i18n";
 import { can, useBuilding, useIds, useMembership } from "@/lib/session";
 
 export default function ReportPage() {
@@ -66,15 +66,31 @@ export default function ReportPage() {
   if (report.isPending) return <Loading page />;
   if (report.error || !r) return <ErrorBox error={report.error} onRetry={() => report.refetch()} />;
   const csvHref = `/api/v1/orgs/${orgId}/buildings/${buildingId}/report?format=csv&from=${periodFrom}&to=${periodTo}`;
+  const verified = (status: string) => (status === "verified" ? t.report.verified : t.report.toVerify);
   const factor = (f: { kgPerKwh: number; source: string; year: number; region: string; status: string }) => (
     <span className="text-xs text-muted">
       {f.kgPerKwh} kgCO₂e/kWh · {f.region} {f.year} ·{" "}
-      <Badge tone={f.status === "verified" ? "saving" : "waste"}>
-        {f.status === "verified" ? t.report.verified : t.report.toVerify}
-      </Badge>
+      <Badge tone={f.status === "verified" ? "saving" : "waste"}>{verified(f.status)}</Badge>
       <span className="mt-1 block break-all">{f.source}</span>
     </span>
   );
+
+  const { locationFactor, residualFactor } = r.scope2;
+  // the API's disclosures are English, for the CSV and for a frozen report; these say the same in the reader's language
+  const notes = [
+    t.report.notes.boundary,
+    fill(t.report.notes.location, {
+      factor: locationFactor.kgPerKwh,
+      source: locationFactor.source,
+      year: locationFactor.year,
+      status: verified(locationFactor.status),
+    }),
+    residualFactor
+      ? fill(t.report.notes.market, { factor: residualFactor.kgPerKwh, source: residualFactor.source })
+      : t.report.notes.marketNoResidual,
+    t.report.notes.scopes,
+    fill(t.report.notes.estimated, { share: pct(1 - r.totals.measuredShare, locale) }),
+  ];
 
   return (
     <>
@@ -85,7 +101,7 @@ export default function ReportPage() {
           <>
             <a
               href={csvHref}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium hover:bg-surface-2"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium hover:bg-surface-2 sm:h-9 sm:min-h-0"
             >
               <Download className="size-4" aria-hidden /> {t.report.csv}
             </a>
@@ -123,7 +139,8 @@ export default function ReportPage() {
           </Field>
           <Button type="submit">{t.common.apply}</Button>
           <span className="text-sm text-muted">
-            {periodFrom} – {periodTo ? addDays(periodTo, -1) : ""} · {r.period.days} d (
+            {periodFrom} – {periodTo ? addDays(periodTo, -1) : ""} ·{" "}
+            {fill(t.report.days, { n: r.period.days })} (
             {Object.entries(r.period.dayTypes)
               .map(([k, v]) => `${t.report.dayTypes[k]} ${v}`)
               .join(", ")}
@@ -154,11 +171,11 @@ export default function ReportPage() {
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card title={`Scope 2 · ${t.report.location}`}>
+        <Card title={`${t.report.scope2} · ${t.report.location}`}>
           <div className="num text-2xl font-semibold">{co2(r.scope2.locationBasedKg, locale)}</div>
           <div className="mt-2">{factor(r.scope2.locationFactor)}</div>
         </Card>
-        <Card title={`Scope 2 · ${t.report.market}`}>
+        <Card title={`${t.report.scope2} · ${t.report.market}`}>
           <div className="num text-2xl font-semibold">{co2(r.scope2.marketBasedKg, locale)}</div>
           <div className="mt-1 text-sm">
             {t.report.green}: {pct(r.scope2.greenShare, locale, 1)}
@@ -193,7 +210,7 @@ export default function ReportPage() {
             </Table>
           </Card>
           <Card title={t.report.byDayType}>
-            <Table head={["", "d", t.report.energy, t.report.avoidable]}>
+            <Table head={["", t.report.daysShort, t.report.energy, t.report.avoidable]}>
               {r.byDayType.map((x) => (
                 <tr key={x.dayType}>
                   <td>{t.report.dayTypes[x.dayType]}</td>
@@ -209,7 +226,7 @@ export default function ReportPage() {
 
       <Card title={t.report.disclosures} className="mb-6">
         <ol className="list-decimal space-y-2 pl-5 text-sm [overflow-wrap:anywhere]">
-          {r.disclosures.map((d) => (
+          {notes.map((d) => (
             <li key={d}>{d}</li>
           ))}
         </ol>

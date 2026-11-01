@@ -15,7 +15,8 @@ export default function SimulatePage() {
   const { t, locale } = useI18n();
   const { orgId, buildingId } = useIds();
   const { building } = useBuilding();
-  const role = useMembership()?.role;
+  const membership = useMembership();
+  const role = membership?.role;
   const qc = useQueryClient();
   const cur = building!.currency;
   const [strategyId, setStrategyId] = useState<StrategyId>("full_package");
@@ -25,6 +26,8 @@ export default function SimulatePage() {
   const [discountRate, setDiscountRate] = useState(0.06);
   const [scenarioName, setScenarioName] = useState("");
   const path = { orgId, buildingId };
+  // the investment estimates are in yuan and nothing here converts them, so nothing mixes them with another currency
+  const inYuan = cur === "CNY";
 
   const strategies = useQuery({
     queryKey: ["strategies", orgId, buildingId],
@@ -65,6 +68,7 @@ export default function SimulatePage() {
   // recompute whenever an input changes; the API is the single source of the finance model
   // biome-ignore lint/correctness/useExhaustiveDependencies: the inputs are the trigger
   useEffect(() => {
+    if (!inYuan) return;
     const id = setTimeout(() => epc.mutate(), 250);
     return () => clearTimeout(id);
   }, [strategyId, escoShare, years, achieved, discountRate]);
@@ -102,14 +106,16 @@ export default function SimulatePage() {
               </div>
               <div>
                 <dt className="text-xs text-muted">{t.simulate.capex}</dt>
-                <dd className="num">{money(x.capex, locale, cur)}</dd>
+                <dd className="num">{money(x.capex, locale, "CNY")}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted">{t.simulate.payback}</dt>
                 <dd className="num">
-                  {x.annualCost > 0
-                    ? `${num(x.capex / x.annualCost, locale, 1)} ${t.simulate.years}`
-                    : t.simulate.never}
+                  {!inYuan
+                    ? "–"
+                    : x.annualCost > 0
+                      ? `${num(x.capex / x.annualCost, locale, 1)} ${t.simulate.years}`
+                      : t.simulate.never}
                 </dd>
               </div>
             </dl>
@@ -117,132 +123,138 @@ export default function SimulatePage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.6fr]">
-        <Card title={t.simulate.epc}>
-          <div className="space-y-4">
-            <Field label={t.simulate.strategy}>
-              <Select value={strategyId} onChange={(e) => setStrategyId(e.target.value as StrategyId)}>
-                {s.strategies.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {t.domain.strategies[x.id]?.name ?? x.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={`${t.simulate.escoShare}: ${pct(escoShare, locale)}`}>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={escoShare}
-                onChange={(e) => setEscoShare(Number(e.target.value))}
-                className="accent-[var(--accent)]"
-              />
-            </Field>
-            <Field label={`${t.simulate.achieved}: ${pct(achieved, locale)}`}>
-              <input
-                type="range"
-                min={0.5}
-                max={1.2}
-                step={0.05}
-                value={achieved}
-                onChange={(e) => setAchieved(Number(e.target.value))}
-                className="accent-[var(--accent)]"
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t.simulate.contractYears}>
-                <Input
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={years}
-                  onChange={(e) => setYears(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
-                />
-              </Field>
-              <Field label={t.simulate.discount}>
-                <Input
-                  type="number"
-                  min={0}
-                  max={0.5}
-                  step={0.01}
-                  value={discountRate}
-                  onChange={(e) => setDiscountRate(Math.max(0, Math.min(0.5, Number(e.target.value) || 0)))}
-                />
-              </Field>
-            </div>
-            {can.saveScenario(role) ? (
-              <div className="flex gap-2 border-t border-border pt-4">
-                <Input
-                  placeholder={t.simulate.scenarioName}
-                  value={scenarioName}
-                  onChange={(e) => setScenarioName(e.target.value)}
-                  maxLength={120}
-                />
-                <Button onClick={() => save.mutate()} disabled={!scenarioName.trim()} busy={save.isPending}>
-                  {t.simulate.saveScenario}
-                </Button>
-              </div>
-            ) : null}
-            {scenarios.data?.length ? (
-              <div className="text-sm">
-                <div className="mb-1 text-xs font-semibold text-muted">{t.simulate.scenarios}</div>
-                <ul className="space-y-1">
-                  {scenarios.data.map((sc) => (
-                    <li key={sc.id}>
-                      <button
-                        type="button"
-                        className="text-left hover:underline"
-                        onClick={() => {
-                          setStrategyId(sc.strategyId as StrategyId);
-                          setEscoShare(sc.inputs.escoShare ?? 0.6);
-                          setYears(sc.inputs.years ?? 5);
-                          setAchieved(sc.inputs.achieved ?? 1);
-                          setDiscountRate(sc.inputs.discountRate ?? 0.06);
-                        }}
-                      >
-                        {sc.name}
-                      </button>
-                    </li>
+      {inYuan ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.6fr]">
+          <Card title={t.simulate.epc}>
+            <div className="space-y-4">
+              <Field label={t.simulate.strategy}>
+                <Select value={strategyId} onChange={(e) => setStrategyId(e.target.value as StrategyId)}>
+                  {s.strategies.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {t.domain.strategies[x.id]?.name ?? x.name}
+                    </option>
                   ))}
-                </ul>
+                </Select>
+              </Field>
+              <Field label={`${t.simulate.escoShare}: ${pct(escoShare, locale)}`}>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={escoShare}
+                  onChange={(e) => setEscoShare(Number(e.target.value))}
+                  className="min-h-11 accent-[var(--accent)] sm:min-h-0"
+                />
+              </Field>
+              <Field label={`${t.simulate.achieved}: ${pct(achieved, locale)}`}>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={1.2}
+                  step={0.05}
+                  value={achieved}
+                  onChange={(e) => setAchieved(Number(e.target.value))}
+                  className="min-h-11 accent-[var(--accent)] sm:min-h-0"
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t.simulate.contractYears}>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={years}
+                    onChange={(e) => setYears(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
+                  />
+                </Field>
+                <Field label={t.simulate.discount}>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={0.5}
+                    step={0.01}
+                    value={discountRate}
+                    onChange={(e) => setDiscountRate(Math.max(0, Math.min(0.5, Number(e.target.value) || 0)))}
+                  />
+                </Field>
               </div>
-            ) : null}
-            {save.error ? <ErrorBox error={save.error} /> : null}
-          </div>
-        </Card>
+              {can.saveScenario(role) ? (
+                <div className="flex gap-2 border-t border-border pt-4">
+                  <Input
+                    placeholder={t.simulate.scenarioName}
+                    value={scenarioName}
+                    onChange={(e) => setScenarioName(e.target.value)}
+                    maxLength={120}
+                  />
+                  <Button onClick={() => save.mutate()} disabled={!scenarioName.trim()} busy={save.isPending}>
+                    {t.simulate.saveScenario}
+                  </Button>
+                </div>
+              ) : null}
+              {scenarios.data?.length ? (
+                <div className="text-sm">
+                  <div className="mb-1 text-xs font-semibold text-muted">{t.simulate.scenarios}</div>
+                  <ul className="space-y-1">
+                    {scenarios.data.map((sc) => (
+                      <li key={sc.id}>
+                        <button
+                          type="button"
+                          className="text-left hover:underline"
+                          onClick={() => {
+                            setStrategyId(sc.strategyId as StrategyId);
+                            setEscoShare(sc.inputs.escoShare ?? 0.6);
+                            setYears(sc.inputs.years ?? 5);
+                            setAchieved(sc.inputs.achieved ?? 1);
+                            setDiscountRate(sc.inputs.discountRate ?? 0.06);
+                          }}
+                        >
+                          {sc.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {save.error ? <ErrorBox error={save.error} /> : null}
+            </div>
+          </Card>
 
-        <div className="space-y-6">
-          {epc.error ? <ErrorBox error={epc.error} /> : null}
-          {r ? (
-            <>
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-                <Metric
-                  label={t.simulate.ownerAnnual}
-                  value={money(r.ownerAnnual, locale, cur)}
-                  tone="saving"
-                />
-                <Metric label={t.simulate.escoAnnual} value={money(r.escoAnnual, locale, cur)} />
-                <Metric label={t.simulate.escoPayback} value={years$(r.escoPaybackYears)} />
-                <Metric label={t.simulate.selfPayback} value={years$(r.selfFundedPaybackYears)} />
-                <Metric label={t.simulate.ownerNpv} value={money(r.ownerNpv, locale, cur)} />
-                <Metric label={t.simulate.escoNpv} value={money(r.escoNpv, locale, cur)} />
-              </div>
-              <Card title={t.simulate.timeline}>
-                <CashflowChart
-                  data={r.timeline}
-                  locale={locale}
-                  labels={{ owner: t.simulate.owner, esco: t.simulate.esco }}
-                />
-              </Card>
-            </>
-          ) : (
-            <Loading />
-          )}
-          <p className="text-xs text-muted">{t.simulate.simulatedNote}</p>
+          <div className="space-y-6">
+            {epc.error ? <ErrorBox error={epc.error} /> : null}
+            {r ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+                  <Metric
+                    label={t.simulate.ownerAnnual}
+                    value={money(r.ownerAnnual, locale, cur)}
+                    tone="saving"
+                  />
+                  <Metric label={t.simulate.escoAnnual} value={money(r.escoAnnual, locale, cur)} />
+                  <Metric label={t.simulate.escoPayback} value={years$(r.escoPaybackYears)} />
+                  <Metric label={t.simulate.selfPayback} value={years$(r.selfFundedPaybackYears)} />
+                  <Metric label={t.simulate.ownerNpv} value={money(r.ownerNpv, locale, cur)} />
+                  <Metric label={t.simulate.escoNpv} value={money(r.escoNpv, locale, cur)} />
+                </div>
+                <Card title={t.simulate.timeline}>
+                  <CashflowChart
+                    data={r.timeline}
+                    locale={locale}
+                    labels={{ owner: t.simulate.owner, esco: t.simulate.esco }}
+                  />
+                </Card>
+              </>
+            ) : (
+              <Loading />
+            )}
+            <p className="text-xs text-muted">
+              {membership?.orgPlan === "demo" ? t.simulate.simulatedNote : t.simulate.estimateNote}
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <p className="text-xs text-muted">{t.simulate.yuanNote}</p>
+      )}
     </>
   );
 }

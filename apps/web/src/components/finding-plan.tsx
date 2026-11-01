@@ -11,7 +11,7 @@ import { Sheet } from "@/components/sheet";
 import { toast } from "@/components/toast";
 import { Badge, Button, ErrorBox } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
-import type { FindingDetail, Measure, Verification } from "@/lib/api-shapes";
+import type { FindingDetail, Measure } from "@/lib/api-shapes";
 import { dateTime, kwh, type Locale, money } from "@/lib/format";
 import { fill, useI18n } from "@/lib/i18n";
 import { can, type Role } from "@/lib/session";
@@ -30,13 +30,45 @@ export const strategyName = (t: Dict, id: string) => t.domain.strategies[id]?.na
 
 export const MEASURE_TONE = { planned: "accent", in_effect: "saving", cancelled: "neutral" } as const;
 
-/** One line saying what the data shows about a measure. */
+/** Mostly Han characters: the two languages here are told apart by script, and a name in the other one does not count. */
+const writtenIn = (text: string): Locale => {
+  const han = text.match(/\p{Script=Han}/gu)?.length ?? 0;
+  const latin = text.match(/\p{Script=Latin}/gu)?.length ?? 0;
+  return han * 2 > latin ? "zh" : "en";
+};
+
+/**
+ * A measure's note. What the team wrote stays as written, but a note that started as the assistant's sentence was written
+ * for the language of the moment it was adopted, so in the other language it says so and shows it only when asked.
+ */
+export function MeasureNote({ m, className }: { m: Pick<Measure, "note" | "source">; className?: string }) {
+  const { t, locale } = useI18n();
+  const [asked, setAsked] = useState(false);
+  if (!m.note) return null;
+  if (m.source === "manual" || asked || writtenIn(m.note) === locale)
+    return <p className={clsx("text-sm whitespace-pre-line", className)}>{m.note}</p>;
+  return (
+    <p className={clsx("text-sm text-muted", className)}>
+      {t.plan.noteOtherLanguage}{" "}
+      <button
+        type="button"
+        onClick={() => setAsked(true)}
+        className="inline-flex min-h-11 items-center font-medium text-accent sm:min-h-0"
+      >
+        {t.plan.noteShow}
+      </button>
+    </p>
+  );
+}
+
+/** One line saying what the data shows about a measure, or what is expected of it while the data has not said. */
 export function verdictLine(
   t: Dict,
-  v: Verification,
+  m: Pick<Measure, "status" | "verification">,
   locale: Locale,
   currency: string,
 ): { text: string; tone: "saving" | "accent" | "waste" | "neutral" } {
+  const v = m.verification;
   const kind = v.dayTypes.length === 1 ? v.dayTypes[0]! : "any";
   const vars = {
     day: t.plan.dayWord[kind] ?? t.plan.dayWord.any!,
@@ -44,8 +76,20 @@ export function verdictLine(
     after: kwh(v.after?.perDayKwh ?? 0, locale),
     kwh: kwh(v.weekly.kwh, locale),
     cost: money(v.weekly.cost, locale, currency),
+    days: v.expected?.days ?? 0,
+    low: kwh(v.expected?.lowKwh, locale),
+    high: kwh(v.expected?.highKwh, locale),
   };
-  const text = fill(t.plan.verdict[v.verdict] ?? "", vars);
+  const expecting = v.verdict === "projected" || v.verdict === "waiting";
+  const nothing = v.verdict === "projected" ? "nothing" : "nothingInEffect";
+  const line = !expecting
+    ? v.verdict
+    : m.status === "cancelled"
+      ? "cancelled"
+      : v.weekly.kwh
+        ? v.verdict
+        : nothing;
+  const text = fill(t.plan.verdict[line] ?? "", vars);
   const tone =
     v.verdict === "working"
       ? "saving"
@@ -87,6 +131,9 @@ export function usePlan(ctx: Ctx, rec: Recommendation | null) {
     qc.invalidateQueries({ queryKey: ["findings"] });
     qc.invalidateQueries({ queryKey: ["measures"] });
     qc.invalidateQueries({ queryKey: ["measure"] });
+    qc.invalidateQueries({ queryKey: ["strategy-board"] });
+    qc.invalidateQueries({ queryKey: ["assistant-turns"] });
+    qc.invalidateQueries({ queryKey: ["brief"] });
   };
 
   const patchMeasure = (
@@ -293,14 +340,14 @@ export function PlanCard({
         <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm">
           <button
             type="button"
-            className="font-medium text-muted hover:text-text"
+            className="inline-flex min-h-11 items-center font-medium text-muted hover:text-text sm:min-h-0"
             onClick={() => plan.open({ kind: "dismiss" })}
           >
             {t.plan.dismiss}
           </button>
           <button
             type="button"
-            className="font-medium text-muted hover:text-text"
+            className="inline-flex min-h-11 items-center font-medium text-muted hover:text-text sm:min-h-0"
             onClick={() => plan.findingStatus.mutate({ status: "fixed", note: t.plan.fixedOnSiteNote })}
           >
             {t.plan.fixedOnSite}
@@ -381,7 +428,7 @@ function MeasureSummary({
   reviewer: boolean;
 }) {
   const { t, locale } = useI18n();
-  const v = verdictLine(t, m.verification, locale, ctx.currency);
+  const v = verdictLine(t, m, locale, ctx.currency);
   const href = `/o/${ctx.path.orgId}/b/${ctx.path.buildingId}/measures/${m.id}`;
   return (
     <div className="space-y-3">
@@ -391,7 +438,7 @@ function MeasureSummary({
           <span className="min-w-0 flex-1 truncate font-semibold">{strategyName(t, m.strategyId)}</span>
           <Badge tone={MEASURE_TONE[m.status]}>{t.plan.statuses[m.status]}</Badge>
         </div>
-        {m.note ? <p className="mt-2 text-sm whitespace-pre-line">{m.note}</p> : null}
+        <MeasureNote m={m} className="mt-2" />
         <p className="mt-2 text-xs text-muted">
           {fill(t.plan.agreed, {
             name: m.createdBy ?? t.plan.someone,
@@ -399,7 +446,10 @@ function MeasureSummary({
             source: t.plan.sources[m.source] ?? m.source,
           })}
           {" · "}
-          {fill(t.plan.covers, { n: m.findings.total, floor: m.floorLabel })}
+          {fill(m.findings.total === 1 ? t.plan.coversOne : t.plan.covers, {
+            n: m.findings.total,
+            floor: m.floorLabel,
+          })}
         </p>
       </div>
       <p
@@ -440,7 +490,10 @@ function MeasureSummary({
         )
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        <Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-accent">
+        <Link
+          href={href}
+          className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-accent sm:min-h-0"
+        >
           {t.plan.details} <ChevronRight className="size-4" aria-hidden />
         </Link>
         {reviewer ? (
@@ -473,7 +526,10 @@ export function ConfirmText({ label, onConfirm }: { label: string; onConfirm: ()
           setArmed(true);
         }
       }}
-      className={clsx("text-sm font-medium", armed ? "text-danger" : "text-muted hover:text-text")}
+      className={clsx(
+        "inline-flex min-h-11 items-center text-sm font-medium sm:min-h-0",
+        armed ? "text-danger" : "text-muted hover:text-text",
+      )}
     >
       {armed ? (locale === "zh" ? `确定${label}？` : `${label}?`) : label}
     </button>
@@ -603,12 +659,12 @@ export function PlanSheet({
         />
       </label>
       {mode !== "change" && others > 0 && !joins ? (
-        <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-sm">
+        <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-2.5 text-sm">
           <input
             type="checkbox"
             checked={similar}
             onChange={(e) => setSimilar(e.target.checked)}
-            className="mt-0.5 size-4 accent-[var(--accent)]"
+            className="size-5 shrink-0 accent-[var(--accent)]"
           />
           <span>{fill(t.plan.similar, { n: others, floor: ctx.floorLabel })}</span>
         </label>

@@ -26,6 +26,7 @@ await build({
     pump: "packages/demo/src/pump-cli.ts",
     case: "packages/demo/src/case-cli.ts",
     reprocess: "packages/demo/src/reprocess-cli.ts",
+    community: "packages/demo/src/community-cli.ts",
   },
   outdir: out,
   outExtension: { ".js": ".mjs" },

@@ -71,7 +71,7 @@ export function Toaster() {
               current = null;
               emit();
             }}
-            className="fc-press shrink-0 rounded-full bg-[var(--glass-field)] px-3 py-1.5 font-semibold text-accent"
+            className="fc-press min-h-11 shrink-0 rounded-full bg-[var(--glass-field)] px-3.5 font-semibold text-accent sm:min-h-0 sm:py-1.5"
           >
             {t.action.label}
           </button>

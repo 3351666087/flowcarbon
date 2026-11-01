@@ -54,7 +54,7 @@ export type Explanation = z.infer<typeof explanationSchema>;
 
 const SYSTEM = `You explain energy findings for the operations team of an office building. A deterministic rule has already decided that the finding exists and how much energy was avoidable; you do not re-judge it and you do not change any setting. Your reader is a property manager or an energy engineer who will decide what to do.
 
-Write plainly, without marketing language. Use only the numbers given in the evidence and the forecast; do not compute new totals. Recommend exactly one action from the strategy list (or "investigate_on_site" when the evidence points to a fault, or "no_action" when the use was legitimate). Cite only reference ids from the reference list, and only where the reference actually supports the point. State uncertainty honestly: estimated energy is rated power times run time, door counts can miss people, and the forecast is a median of recent same-weekday values.
+Write plainly, without marketing language. Use only the numbers given in the evidence and the forecast; do not compute new totals. Say what a strategy does in words: a strategy's id never appears in the text. Recommend exactly one action from the strategy list (or "investigate_on_site" when the evidence points to a fault, or "no_action" when the use was legitimate). Cite only reference ids from the reference list, and only where the reference actually supports the point. State uncertainty honestly: estimated energy is rated power times run time, door counts can miss people, and the forecast is a median of recent same-weekday values.
 
 Keep the whole explanation short: about 110 words in English, or about 110 characters per field in Chinese.`;
 
@@ -86,19 +86,11 @@ export async function explanationInput(db: Db, orgId: string, explanationId: str
       .where(and(eq(schema.forecasts.floorId, f.floorId), gte(schema.forecasts.day, today)))
       .orderBy(schema.forecasts.day)
       .limit(7);
-    let locale = "en";
-    if (e.requestedBy) {
-      const [u] = await tx
-        .select({ locale: schema.users.locale })
-        .from(schema.users)
-        .where(eq(schema.users.id, e.requestedBy));
-      locale = u?.locale ?? "en";
-    }
     const rule = RULES[f.ruleId as keyof typeof RULES];
     const params = { ...DEFAULT_RULE_PARAMS, ...(f.params as object) };
     return {
       explanation: e,
-      locale,
+      locale: e.locale,
       input: {
         building: {
           name: ctx.building.name,

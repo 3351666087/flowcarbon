@@ -76,6 +76,7 @@ export default function FindingPage() {
       unwrap(
         api.POST("/api/v1/orgs/{orgId}/buildings/{buildingId}/findings/{findingId}/explanations", {
           params: { path },
+          body: { locale },
         }),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finding", findingId], exact: true }),
@@ -86,7 +87,8 @@ export default function FindingPage() {
     [t, strategyNames],
   );
 
-  const latest = f?.explanations[0] as Explanation | undefined;
+  // an explanation stays in the language it was written in, so only this language's is shown
+  const latest = f?.explanations.find((e) => e.locale === locale) as Explanation | undefined;
   const done = latest?.status === "done" ? (latest.output as { recommendedAction?: Recommendation }) : null;
   // "edit, then adopt" from the building overview arrives as ?adopt=<strategy>&why=<reason>
   const [fromBrief, setFromBrief] = useState<Recommendation | null>(null);
@@ -174,6 +176,8 @@ export default function FindingPage() {
         >
           <Sparkles className="size-4" aria-hidden /> {t.findings.aiRequest}
         </Button>
+      ) : !latest && f.explanations.some((e) => e.status === "done") ? (
+        <p className="mt-3 text-sm text-muted">{t.findings.aiOtherLanguage}</p>
       ) : null}
       {explain.error ? (
         <div className="mt-3">
@@ -187,7 +191,7 @@ export default function FindingPage() {
     <>
       <Link
         href={`/o/${orgId}/b/${buildingId}/findings`}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-text"
+        className="mb-2 inline-flex min-h-11 items-center gap-1 text-sm text-muted hover:text-text sm:mb-4 sm:min-h-0"
       >
         <ArrowLeft className="size-4" aria-hidden /> {t.findings.back}
       </Link>

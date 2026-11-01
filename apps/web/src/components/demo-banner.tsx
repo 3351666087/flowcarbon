@@ -45,7 +45,7 @@ export function DemoBanner() {
         type="button"
         disabled={own.busy}
         onClick={own.start}
-        className="fc-press fc-prominent shrink-0 rounded-full px-3.5 py-1.5 font-semibold disabled:opacity-60"
+        className="fc-press fc-prominent inline-flex min-h-11 shrink-0 items-center rounded-full px-3.5 py-1.5 font-semibold disabled:opacity-60 sm:min-h-0"
       >
         {t.demo.getOwn}
       </button>

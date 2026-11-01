@@ -1,5 +1,5 @@
-import { schema } from "@flowcarbon/db";
-import { and, desc, eq } from "drizzle-orm";
+import { schema, type Tx } from "@flowcarbon/db";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { assertAiQuota } from "../ai-quota";
@@ -7,14 +7,16 @@ import type { RouteDeps } from "../app";
 import { audit } from "../audit";
 import { notFound } from "../errors";
 import { userNames } from "../measures";
-import { buildingParams, errorResponses, iso, uuid } from "../schemas";
+import { buildingParams, errorResponses, iso, localeBody, localeSchema, uuid } from "../schemas";
 import { inBuilding } from "./helpers";
 
 const briefOut = z.object({
   id: uuid,
+  /** the language it is written in */
+  locale: z.string(),
   status: z.enum(["pending", "done", "failed"]),
   model: z.string().nullable(),
-  /** headline, priorities (floor, ruleId, strategyId, why, floorId, findings, avoidableKwh, avoidableCost, findingId), watch */
+  /** headline, priorities (floor, ruleId, strategyId, why, floorId, findings, avoidableKwh, avoidableCost, findingId, measureId when its finding has gone into a measure since), watch */
   output: z.record(z.string(), z.unknown()).nullable(),
   /** while pending: what has been written so far (partial JSON) */
   draft: z.string().nullable(),
@@ -26,6 +28,7 @@ const briefOut = z.object({
 type BriefRow = typeof schema.aiBriefs.$inferSelect;
 const briefJson = (b: BriefRow, names: Map<string, string>) => ({
   id: b.id,
+  locale: b.locale,
   status: b.status,
   model: b.model,
   output: b.output,
@@ -34,6 +37,34 @@ const briefJson = (b: BriefRow, names: Map<string, string>) => ({
   requestedBy: b.requestedBy ? (names.get(b.requestedBy) ?? null) : null,
   createdAt: b.createdAt.toISOString(),
   completedAt: iso(b.completedAt),
+});
+
+/**
+ * A brief is written once, but its findings move on: the measure a priority's finding is in now, which rules out
+ * adopting it again, however that measure came about.
+ */
+async function withMeasures(tx: Tx, output: BriefRow["output"]) {
+  const priorities = (output as { priorities?: { findingId?: string }[] } | null)?.priorities;
+  const ids = (priorities ?? []).flatMap((p) => p.findingId ?? []);
+  if (!ids.length) return output;
+  const rows = await tx
+    .select({ id: schema.findings.id, measureId: schema.findings.measureId })
+    .from(schema.findings)
+    .innerJoin(schema.measures, eq(schema.measures.id, schema.findings.measureId))
+    .where(and(inArray(schema.findings.id, ids), ne(schema.measures.status, "cancelled")));
+  const taken = new Map(rows.map((r) => [r.id, r.measureId]));
+  return {
+    ...output,
+    priorities: priorities!.map((p) => {
+      const measureId = p.findingId && taken.get(p.findingId);
+      return measureId ? { ...p, measureId } : p;
+    }),
+  };
+}
+
+const shownBrief = async (tx: Tx, row: BriefRow) => ({
+  ...briefJson(row, await userNames(tx, [row.requestedBy])),
+  output: await withMeasures(tx, row.output),
 });
 
 /** The AI assistant's look at a whole building: where to start, across all open findings. */
@@ -45,17 +76,25 @@ export const briefRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, j
       schema: {
         tags: ["analytics"],
         summary:
-          "Ask the AI assistant which groups of open findings to act on first (asynchronous, streamed)",
+          "Ask the AI assistant which groups of open findings to act on first, in one language (asynchronous, streamed)",
         params: buildingParams,
+        body: localeBody,
         response: { 202: z.object({ briefId: uuid }), ...errorResponses },
       },
     },
     async (req, reply) => {
       const id = await inBuilding(db, req, req.params, "finding:explain", async (tx, access, b) => {
+        const { locale } = req.body;
         const [pending] = await tx
           .select({ id: schema.aiBriefs.id })
           .from(schema.aiBriefs)
-          .where(and(eq(schema.aiBriefs.buildingId, b.id), eq(schema.aiBriefs.status, "pending")));
+          .where(
+            and(
+              eq(schema.aiBriefs.buildingId, b.id),
+              eq(schema.aiBriefs.locale, locale),
+              eq(schema.aiBriefs.status, "pending"),
+            ),
+          );
         if (pending) return pending.id;
         await assertAiQuota(tx, access.orgId, config.DEMO_AI_PER_DAY);
         const [row] = await tx
@@ -63,12 +102,18 @@ export const briefRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, j
           .values({
             orgId: access.orgId,
             buildingId: b.id,
+            locale,
             promptVersion: "pending",
             input: {},
             requestedBy: access.actor.type === "user" ? access.actor.id : null,
           })
           .returning({ id: schema.aiBriefs.id });
-        await audit(tx, req, access, { action: "building.brief", entityType: "building", entityId: b.id });
+        await audit(tx, req, access, {
+          action: "building.brief",
+          entityType: "building",
+          entityId: b.id,
+          data: { locale },
+        });
         return row!.id;
       });
       await jobs.brief({ orgId: req.params.orgId, briefId: id });
@@ -81,21 +126,51 @@ export const briefRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, j
     {
       schema: {
         tags: ["analytics"],
-        summary: "The building's latest AI brief, if there is one",
+        summary:
+          "The building's latest AI brief in a language (in any language if none is given), if there is one",
         params: buildingParams,
-        response: { 200: z.object({ brief: briefOut.nullable() }), ...errorResponses },
+        querystring: z.object({ locale: localeSchema.optional() }),
+        response: {
+          200: z.object({
+            brief: briefOut.nullable(),
+            /** a finished brief exists in another language than the one asked for */
+            otherLocale: z.boolean(),
+          }),
+          ...errorResponses,
+        },
       },
     },
     async (req) =>
       inBuilding(db, req, req.params, "finding:read", async (tx, _a, b) => {
+        const { locale } = req.query;
         const [row] = await tx
           .select()
           .from(schema.aiBriefs)
-          .where(eq(schema.aiBriefs.buildingId, b.id))
+          .where(
+            and(
+              eq(schema.aiBriefs.buildingId, b.id),
+              locale ? eq(schema.aiBriefs.locale, locale) : undefined,
+            ),
+          )
           .orderBy(desc(schema.aiBriefs.createdAt))
           .limit(1);
-        if (!row) return { brief: null };
-        return { brief: briefJson(row, await userNames(tx, [row.requestedBy])) };
+        const other = locale
+          ? await tx
+              .select({ id: schema.aiBriefs.id })
+              .from(schema.aiBriefs)
+              .where(
+                and(
+                  eq(schema.aiBriefs.buildingId, b.id),
+                  ne(schema.aiBriefs.locale, locale),
+                  eq(schema.aiBriefs.status, "done"),
+                ),
+              )
+              .limit(1)
+          : [];
+        return {
+          brief: row ? await shownBrief(tx, row) : null,
+          otherLocale: other.length > 0,
+        };
       }),
   );
 
@@ -118,7 +193,7 @@ export const briefRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, j
           .from(schema.aiBriefs)
           .where(and(eq(schema.aiBriefs.id, req.params.briefId), eq(schema.aiBriefs.buildingId, b.id)));
         if (!row) throw notFound("Brief");
-        return briefJson(row, await userNames(tx, [row.requestedBy]));
+        return shownBrief(tx, row);
       }),
   );
 };

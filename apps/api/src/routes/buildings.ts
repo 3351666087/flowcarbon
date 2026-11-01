@@ -5,7 +5,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { RouteDeps } from "../app";
 import { audit } from "../audit";
-import { requireOrg } from "../auth/access";
+import { requireOrg, visibleFloorIds } from "../auth/access";
 import { notFound, unprocessable } from "../errors";
 import {
   buildingParams,
@@ -18,7 +18,7 @@ import {
   tariffSchema,
   uuid,
 } from "../schemas";
-import { inBuilding } from "./helpers";
+import { inBuilding, todayIn } from "./helpers";
 
 const timeZone = z.string().refine((tz) => {
   try {
@@ -70,7 +70,8 @@ const floorBody = z.object({
   plugKwPerPerson: z.number().min(0).max(5).default(0.12),
   zoneOnlyFraction: z.number().min(0).max(1).default(0.3),
 });
-const floorOut = floorBody.extend({ id: uuid, tenantId: uuid.nullable() });
+const floorLayout = z.enum(["open_plan", "meeting_rooms"]);
+const floorOut = floorBody.extend({ id: uuid, tenantId: uuid.nullable(), layout: floorLayout });
 
 const tenantBody = z.object({
   name: z.string().trim().min(1).max(160),
@@ -274,19 +275,22 @@ export const buildingRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db
       },
     },
     async (req) =>
-      inBuilding(db, req, req.params, "building:read", async (tx, _a, b) => {
+      inBuilding(db, req, req.params, "building:read", async (tx, access, b) => {
         const today = new Date().toISOString().slice(0, 10);
+        const visible = await visibleFloorIds(tx, access, b.id, todayIn(b.timezone));
         const rows = await tx
           .select({
             floor: schema.floors,
+            // written out: with one table in the query, ${schema.floors.id} renders as a bare "id", which here is the lease's
             tenantId: sql<
               string | null
-            >`(select l.tenant_id from leases l where l.floor_id = ${schema.floors.id} and l.starts_on <= ${today} and (l.ends_on is null or l.ends_on >= ${today}) order by l.starts_on desc limit 1)`,
+            >`(select l.tenant_id from leases l where l.floor_id = floors.id and l.starts_on <= ${today} and (l.ends_on is null or l.ends_on >= ${today}) order by l.starts_on desc limit 1)`,
           })
           .from(schema.floors)
           .where(eq(schema.floors.buildingId, b.id))
           .orderBy(schema.floors.level);
-        return rows.map(({ floor: f, tenantId }) => ({
+        const shown = rows.filter(({ floor }) => !visible || visible.has(floor.id));
+        return shown.map(({ floor: f, tenantId }) => ({
           id: f.id,
           label: f.label,
           level: f.level,
@@ -296,6 +300,7 @@ export const buildingRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db
           plugKwPerPerson: f.plugKwPerPerson,
           zoneOnlyFraction: f.zoneOnlyFraction,
           tenantId,
+          layout: f.layout,
         }));
       }),
   );
@@ -325,7 +330,7 @@ export const buildingRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db
         });
         return f!;
       });
-      return reply.status(201).send({ ...req.body, id: row.id, tenantId: null });
+      return reply.status(201).send({ ...req.body, id: row.id, tenantId: null, layout: row.layout });
     },
   );
 
@@ -350,6 +355,36 @@ export const buildingRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db
         if (!done.length) throw notFound("Floor");
         await audit(tx, req, access, {
           action: "floor.update",
+          entityType: "floor",
+          entityId: req.params.floorId,
+          data: req.body,
+        });
+      });
+      return reply.status(204).send(null);
+    },
+  );
+
+  app.patch(
+    "/orgs/:orgId/buildings/:buildingId/floors/:floorId/layout",
+    {
+      schema: {
+        tags: ["portfolio"],
+        summary: "Choose the floor's layout for the digital twin",
+        params: buildingParams.extend({ floorId: uuid }),
+        body: z.object({ layout: floorLayout }),
+        response: { 204: z.null(), ...errorResponses },
+      },
+    },
+    async (req, reply) => {
+      await inBuilding(db, req, req.params, "building:write", async (tx, access, b) => {
+        const done = await tx
+          .update(schema.floors)
+          .set({ layout: req.body.layout, updatedAt: new Date() })
+          .where(and(eq(schema.floors.id, req.params.floorId), eq(schema.floors.buildingId, b.id)))
+          .returning({ id: schema.floors.id });
+        if (!done.length) throw notFound("Floor");
+        await audit(tx, req, access, {
+          action: "floor.layout",
           entityType: "floor",
           entityId: req.params.floorId,
           data: req.body,

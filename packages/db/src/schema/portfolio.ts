@@ -1,5 +1,7 @@
 import type { RuleParams, Tariff } from "@flowcarbon/core";
+import { sql } from "drizzle-orm";
 import {
+  check,
   date,
   doublePrecision,
   index,
@@ -17,6 +19,8 @@ import { dayKindEnum } from "./enums";
 import { organizations } from "./identity";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+
+export type FloorLayout = "open_plan" | "meeting_rooms";
 
 export const buildings = pgTable(
   "buildings",
@@ -60,10 +64,16 @@ export const floors = pgTable(
     ratedLightingKw: doublePrecision("rated_lighting_kw").notNull(),
     plugKwPerPerson: doublePrecision("plug_kw_per_person").notNull().default(0.12),
     zoneOnlyFraction: doublePrecision("zone_only_fraction").notNull().default(0.3),
+    /** the digital twin's template for the floor */
+    layout: text("layout").$type<FloorLayout>().notNull().default("open_plan"),
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
-  (t) => [unique("floors_building_label_uq").on(t.buildingId, t.label), index("floors_org_idx").on(t.orgId)],
+  (t) => [
+    unique("floors_building_label_uq").on(t.buildingId, t.label),
+    index("floors_org_idx").on(t.orgId),
+    check("floors_layout_check", sql`${t.layout} in ('open_plan', 'meeting_rooms')`),
+  ],
 );
 
 /** Companies occupying floors (not to be confused with the SaaS organisation, which is the customer). */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * What is open on top of the page (sheets, dialogs, menus), most recent last. The phone's back button and the Escape
@@ -36,6 +36,39 @@ if (typeof window !== "undefined") {
   addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !e.defaultPrevented && back()) e.preventDefault();
   });
+}
+
+/**
+ * A view that takes a step in the browser's history, so that its Back closes the view and stays on the page, on phones
+ * outside the app too. Closing goes through that step as well, which leaves history as it was. `onClosed` gets the view
+ * that closed. If the page is left with the view open the step stays behind, as an entry for the same page.
+ */
+export function useHistoryView<T>(onClosed?: (view: T) => void) {
+  const [view, setView] = useState<T | null>(null);
+  const stepped = useRef(false);
+  const closed = useRef(onClosed);
+  closed.current = onClosed;
+  const shown = useRef(view);
+  shown.current = view;
+  useEffect(() => {
+    const popped = () => {
+      stepped.current = false;
+      const last = shown.current;
+      setView(null);
+      if (last !== null) closed.current?.(last);
+    };
+    addEventListener("popstate", popped);
+    return () => removeEventListener("popstate", popped);
+  }, []);
+  const show = (next: T) => {
+    if (!stepped.current) history.pushState(history.state, "");
+    stepped.current = true;
+    setView(next);
+  };
+  const close = () => {
+    if (stepped.current) history.back();
+  };
+  return [view, show, close] as const;
 }
 
 /** While `open`, this layer is the one back and Escape close (or step back within, for a layer with steps). */

@@ -68,7 +68,7 @@ export function AuthFlow() {
   const [reveal, setReveal] = useState(false);
   const [ticket, setTicket] = useState("");
   const [name, setName] = useState("");
-  const [start, setStart] = useState<"demo" | "organisation">("demo");
+  const [start, setStart] = useState<"demo" | "explore" | "organisation">("demo");
   const [organisation, setOrganisation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -336,6 +336,9 @@ export function AuthFlow() {
             />
           </GroupField>
         </FieldGroup>
+        {!adding && methods.data?.signUp && methods.data.demo ? (
+          <p className="mt-3 px-1 text-sm text-muted">{t.auth.demoHint}</p>
+        ) : null}
         {alert}
         <Primary busy={busy}>{t.auth.continue}</Primary>
         <Link
@@ -481,6 +484,15 @@ export function AuthFlow() {
               icon={<Sparkles className="size-5" aria-hidden />}
               title={t.auth.startDemo}
               note={t.auth.startDemoNote.replace("{name}", methods.data.demo.name)}
+            />
+          ) : null}
+          {methods.data?.demo ? (
+            <Choice
+              selected={start === "explore"}
+              onSelect={() => setStart("explore")}
+              icon={<Eye className="size-5" aria-hidden />}
+              title={t.auth.startExplore}
+              note={t.auth.startExploreNote.replace("{name}", methods.data.demo.name)}
             />
           ) : null}
           <Choice

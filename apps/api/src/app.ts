@@ -15,20 +15,29 @@ import {
 } from "fastify-type-provider-zod";
 import { principalPlugin } from "./auth/principal";
 import type { Config } from "./config";
-import { registerErrorHandler } from "./errors";
+import { HttpError, registerErrorHandler } from "./errors";
 import { createMailer, type Mailer } from "./mail";
 import { createMetrics, instrument, type Metrics } from "./metrics";
 import { analyticsRoutes } from "./routes/analytics";
+import { assistantRoutes } from "./routes/assistant";
 import { authRoutes } from "./routes/auth";
 import { avatarRoutes } from "./routes/avatars";
 import { briefRoutes } from "./routes/briefs";
 import { buildingRoutes } from "./routes/buildings";
+import { communityRoutes } from "./routes/community";
 import { importRoutes } from "./routes/imports";
 import { measureRoutes } from "./routes/measures";
 import { opsRoutes } from "./routes/ops";
 import { orgRoutes } from "./routes/org";
 import { overtimeRoutes } from "./routes/overtime";
 import { telemetryRoutes } from "./routes/telemetry";
+
+/** PostgreSQL text cannot hold a NUL, and no route has a use for one. */
+function holdsNul(value: unknown): boolean {
+  if (typeof value === "string") return value.includes("\u0000");
+  if (Array.isArray(value)) return value.some(holdsNul);
+  return !!value && typeof value === "object" && Object.values(value).some(holdsNul);
+}
 
 export const API_VERSION = "0.1.0";
 export const API_PREFIX = "/api/v1";
@@ -77,6 +86,10 @@ export async function buildApp({ db, config, jobs, mailer, logger }: AppDeps) {
   instrument(app, metrics);
   app.addHook("onSend", async (req, reply) => {
     reply.header("x-request-id", req.id);
+  });
+  app.addHook("preValidation", async (req) => {
+    if (holdsNul(req.body) || holdsNul(req.query))
+      throw new HttpError(400, "The request is not valid.", "validation");
   });
 
   await app.register(helmet, {
@@ -156,6 +169,8 @@ export async function buildApp({ db, config, jobs, mailer, logger }: AppDeps) {
       await api.register(analyticsRoutes, deps);
       await api.register(measureRoutes, deps);
       await api.register(briefRoutes, deps);
+      await api.register(assistantRoutes, deps);
+      await api.register(communityRoutes, deps);
       await api.register(importRoutes, deps);
       await api.register(avatarRoutes, deps);
       await api.register(overtimeRoutes, deps);

@@ -20,6 +20,8 @@ interface Floor {
   target: number;
   waste: number;
   fix: number;
+  /** when the scan of a floor put right starts */
+  fixedAt: number;
   pulseAt: number;
 }
 
@@ -60,6 +62,14 @@ const easeOut = (t: number) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t));
 export interface LiveFloor {
   occ: number;
   waste: boolean;
+  /** put right: the floor gets the teal scan once, as it turns true */
+  fixed?: boolean;
+}
+
+/** The overview's floors, bottom to top, as the tower shows them: each as full as it is against a busy floor. */
+export function liveFloors(floors: readonly { occupancy: number; wasteNow: boolean }[]): LiveFloor[] {
+  const crowd = Math.max(20, ...floors.map((f) => f.occupancy));
+  return floors.map((f) => ({ occ: Math.min(1, f.occupancy / crowd), waste: f.wasteNow }));
 }
 
 /**
@@ -67,6 +77,7 @@ export interface LiveFloor {
  * it is the building as it is now: each floor glows with its people and turns amber while it wastes, and tapping a
  * floor (or turning the mouse wheel over the tower) calls `onPick` with its index; `picked` lifts that floor.
  * `reserveBottom` (px) keeps the tower clear of something laid over the bottom of the scene, such as a floor card.
+ * With `interactive` off it only shows: taps and the wheel pass through, so a page scrolling over it scrolls.
  */
 export function TowerScene({
   className,
@@ -74,12 +85,14 @@ export function TowerScene({
   onPick,
   picked = null,
   reserveBottom = 0,
+  interactive = true,
 }: {
   className?: string;
-  live?: LiveFloor[];
+  live?: readonly LiveFloor[];
   onPick?: (index: number) => void;
   picked?: number | null;
   reserveBottom?: number;
+  interactive?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const liveRef = useRef(live);
@@ -90,6 +103,10 @@ export function TowerScene({
   pickedRef.current = picked;
   const reserveRef = useRef(reserveBottom);
   reserveRef.current = reserveBottom;
+  const interactiveRef = useRef(interactive);
+  interactiveRef.current = interactive;
+  // with reduced motion nothing runs, so a change has to ask for its one frame
+  const stillRef = useRef<(() => void) | null>(null);
   const count = live?.length || FLOORS;
 
   useEffect(() => {
@@ -107,6 +124,7 @@ export function TowerScene({
       target: Math.random(),
       waste: 0,
       fix: 0,
+      fixedAt: 0,
       pulseAt: -1,
     }));
     const particles: Particle[] = [];
@@ -136,7 +154,7 @@ export function TowerScene({
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (reduced) draw(performance.now());
+      if (reduced) still();
     };
 
     // geometry of floor i: top-face corners plus slab thickness, in the room above `reserve`
@@ -208,6 +226,11 @@ export function TowerScene({
           ctx.globalAlpha = arrive * 0.22;
           ctx.fillStyle = f.waste > 0.02 ? palette.waste : accent;
           ctx.fill();
+        } else if (f.fix > 0) {
+          // once put right a floor stays marked, so a floor that was not wasting a moment ago still shows the change
+          ctx.globalAlpha = arrive * 0.32 * f.fix;
+          ctx.fillStyle = accent;
+          ctx.fill();
         }
         const edgeGlow = chosen ? 1 : 0.28 + f.occ * 0.35 + pulse * 0.6;
         ctx.strokeStyle = f.waste > 0.02 ? palette.waste : accent;
@@ -233,7 +256,7 @@ export function TowerScene({
         }
 
         // the fix: a teal scan across the top face
-        if (f.fix > 0 && f.fix < 1) {
+        if (f.fix > 0 && f.fix < 1 && !reduced) {
           const sx = L[0] + (R[0] - L[0]) * f.fix;
           const grad = ctx.createLinearGradient(sx - 40, 0, sx + 6, 0);
           grad.addColorStop(0, "transparent");
@@ -261,6 +284,19 @@ export function TowerScene({
       ctx.globalAlpha = 1;
     };
 
+    // the one frame reduced motion gets: no easing, the floors just are as they are
+    const still = () => {
+      const data = liveRef.current;
+      if (data)
+        floors.forEach((f, i) => {
+          f.occ = data[i]?.occ ?? 0;
+          f.waste = data[i]?.waste ? 1 : 0;
+          f.fix = data[i]?.fixed ? 1 : 0;
+        });
+      draw(performance.now());
+    };
+    stillRef.current = reduced ? still : null;
+
     const step = (now: number) => {
       const t = now - t0;
       reserve += (reserveRef.current - reserve) * 0.14;
@@ -273,6 +309,9 @@ export function TowerScene({
           f.target = d?.occ ?? 0;
           f.occ += (f.target - f.occ) * 0.06;
           f.waste += ((d?.waste ? 1 : 0) - f.waste) * 0.06;
+          if (!d?.fixed) f.fixedAt = 0;
+          else if (!f.fixedAt) f.fixedAt = now + i * 60;
+          f.fix = f.fixedAt ? Math.max(0, Math.min(1, (now - f.fixedAt) / 900)) : 0;
         });
       } else {
         // occupancy drifts toward targets that change every few seconds
@@ -365,6 +404,7 @@ export function TowerScene({
     };
 
     const onPointerDown = (e: PointerEvent) => {
+      if (!interactiveRef.current) return;
       const r = canvas.getBoundingClientRect();
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
       const now = performance.now();
@@ -397,6 +437,7 @@ export function TowerScene({
     // the wheel over the tower walks the highlight from floor to floor; past the top or bottom floor the page
     // scrolls as usual
     const onWheel = (e: WheelEvent) => {
+      if (!interactiveRef.current) return;
       const current = focused();
       const down = e.deltaY > 0;
       const next = current === null ? (down ? count - 1 : 0) : current + (down ? -1 : 1);
@@ -410,12 +451,12 @@ export function TowerScene({
       const pick = pickRef.current;
       if (pick) pick(next);
       else storyFocus = next;
-      if (reduced) draw(performance.now());
+      if (reduced) still();
     };
     const onVisibility = () => (document.hidden ? stop() : start());
     const onTheme = () => {
       palette = readPalette();
-      if (reduced) draw(performance.now());
+      if (reduced) still();
     };
 
     const resizeObserver = new ResizeObserver(resize);
@@ -450,6 +491,11 @@ export function TowerScene({
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [count]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: these are what the still frame shows
+  useEffect(() => {
+    stillRef.current?.();
+  }, [live, picked]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden />;
 }

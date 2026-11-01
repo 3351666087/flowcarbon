@@ -2,12 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { tick } from "@/components/glass";
 import { Card, Empty, ErrorBox, Loading, PageHeader } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { day } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
+import { fill, useI18n } from "@/lib/i18n";
 import { useFloors, useIds } from "@/lib/session";
 
 const TONE: Record<string, string> = {
@@ -35,7 +37,11 @@ export default function ForecastPage() {
   const days = [...new Set(fc.data.map((r) => r.day))].sort();
   const cell = new Map(fc.data.map((r) => [`${r.floorId}|${r.day}`, r]));
   const rows = [...(floors.data ?? [])].sort((a, b) => b.level - a.level);
-  const method = fc.data[0]?.method;
+  // the stored line is in English, for the API; the page says the same from the row's own figures
+  const first = fc.data[0];
+  const method =
+    first &&
+    (first.dayType === "holiday" ? t.forecast.methodHoliday : fill(t.forecast.method, { n: first.basis }));
   const selected = picked && days.includes(picked) ? picked : days[0];
   const today = rows.map((f) => ({ f, c: cell.get(`${f.id}|${selected}`) }));
   const peak = Math.max(1, ...today.map(({ c }) => c?.high ?? 0));
@@ -44,6 +50,12 @@ export default function ForecastPage() {
 
   return (
     <>
+      <Link
+        href={`/o/${orgId}/b/${buildingId}/strategies`}
+        className="mb-2 inline-flex min-h-11 items-center gap-1 text-sm text-muted hover:text-text"
+      >
+        <ArrowLeft className="size-4" aria-hidden /> {t.forecast.back}
+      </Link>
       <PageHeader title={t.forecast.title} subtitle={t.forecast.subtitle} />
       {fc.data.length === 0 ? (
         <Empty>{t.common.noData}</Empty>

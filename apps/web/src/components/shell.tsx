@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import {
   BarChart3,
+  Box,
   Building2,
   CalendarClock,
   ChevronDown,
@@ -12,7 +13,6 @@ import {
   Layers,
   Settings,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,8 +31,8 @@ import { ErrorBox, Loading, ShellTitle } from "./ui";
 
 const NAV = [
   { key: "floors", icon: Layers },
-  { key: "findings", icon: Sparkles },
-  { key: "forecast", icon: TrendingUp },
+  { key: "strategies", icon: Sparkles },
+  { key: "twin", icon: Box },
   { key: "simulate", icon: BarChart3 },
   { key: "requests", icon: CalendarClock },
   { key: "report", icon: FileText },
@@ -72,8 +72,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const role = membership?.role;
   const items = role ? NAV.filter((n) => PAGES[n.key]?.includes(role)) : [];
   const base = `/o/${orgId}/b/${buildingId}`;
-  // measures are reached from the opportunities, and live under that tab
-  const section = pathname.startsWith(`${base}/measures`) ? `${base}/findings` : pathname;
+  // the opportunities, the measures and the full forecast all live under the strategies tab
+  const section = /^\/(findings|measures|forecast)(\/|$)/.test(pathname.slice(base.length))
+    ? `${base}/strategies`
+    : pathname;
   const current = items.find(({ key }) => section.startsWith(`${base}/${key}`))?.key ?? null;
   useLiquid("y", current, sideList, sideMark);
 
@@ -112,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="truncate text-xs text-muted">{membership.orgName}</div>
             </div>
           </div>
-          <nav aria-label="Main">
+          <nav aria-label={t.navLabel}>
             <div ref={setSideList} className="relative flex flex-col gap-0.5">
               <span
                 ref={setSideMark}
@@ -184,13 +186,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               ) : (
                 <span className="truncate font-medium">{building?.name}</span>
               )}
-              <span
-                title={t.simulated}
-                className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-waste-soft px-2 py-0.5 text-[11px] font-medium text-waste"
-              >
-                <span className="size-1.5 animate-pulse rounded-full bg-waste" aria-hidden />
-                <span className="hidden min-[400px]:inline">{t.simulated}</span>
-              </span>
+              {membership.orgPlan === "demo" ? (
+                <span
+                  title={t.simulated}
+                  className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-waste-soft px-2 py-0.5 text-[11px] font-medium text-waste"
+                >
+                  <span className="size-1.5 animate-pulse rounded-full bg-waste" aria-hidden />
+                  <span className="hidden min-[400px]:inline">{t.simulated}</span>
+                </span>
+              ) : null}
             </div>
             <div
               aria-hidden={!barTitle}

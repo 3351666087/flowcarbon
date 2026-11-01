@@ -18,9 +18,9 @@ export const unauthorized = (msg = "Sign in required.") => new HttpError(401, ms
 export const forbidden = (msg = "You do not have permission for this action.") =>
   new HttpError(403, msg, "forbidden");
 export const notFound = (what = "Resource") => new HttpError(404, `${what} not found.`, "not_found");
-export const conflict = (msg: string) => new HttpError(409, msg, "conflict");
-export const unprocessable = (msg: string, details?: unknown) =>
-  new HttpError(422, msg, "unprocessable", details);
+export const conflict = (msg: string, code = "conflict") => new HttpError(409, msg, code);
+export const unprocessable = (msg: string, details?: unknown, code = "unprocessable") =>
+  new HttpError(422, msg, code, details);
 
 const TITLES: Record<number, string> = {
   400: "Bad Request",

@@ -5,14 +5,18 @@ import { clsx } from "clsx";
 import { ChevronRight, Lightbulb, Snowflake, Users } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState, useSyncExternalStore } from "react";
-import { DailyEnergyChart } from "@/components/charts";
+import { Assistant, glide, type ShareTarget, type SplitView } from "@/components/assistant";
+import { BeforeAfter } from "@/components/before-after";
+import { CommunityRail, ShareDialog } from "@/components/community-rail";
+import { FloorsDetail } from "@/components/floors-detail";
 import { tick } from "@/components/glass";
-import { TowerScene } from "@/components/tower-scene";
-import { Badge, Card, Empty, ErrorBox, Loading, Metric, PageHeader } from "@/components/ui";
+import { liveFloors, TowerScene } from "@/components/tower-scene";
+import { ErrorBox, Loading, Metric, PageHeader } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
-import { addDays, co2, dateTime, kwh, money, pct } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
-import { useBuilding, useIds, useMembership, useTenants } from "@/lib/session";
+import { useHistoryView } from "@/lib/back";
+import { co2, dateTime, kwh, money, pct } from "@/lib/format";
+import { fill, useI18n } from "@/lib/i18n";
+import { PAGES, useBuilding, useIds, useMembership, useTenants } from "@/lib/session";
 
 export default function FloorsPage() {
   const { t, locale } = useI18n();
@@ -21,6 +25,14 @@ export default function FloorsPage() {
   const role = useMembership()?.role;
   const tenants = useTenants();
   const [picked, setPicked] = useState<number | null>(null);
+  // an option on show, which splits the top of the page in two; back to where it stood on the page once it closes
+  const [split, setSplit, closeSplit] = useHistoryView<SplitView>((view) => {
+    const anchor = `option-${view.turnId ?? "board"}-${view.optionId}`;
+    requestAnimationFrame(() =>
+      document.getElementById(anchor)?.scrollIntoView({ behavior: glide(), block: "center" }),
+    );
+  });
+  const [sharing, setSharing] = useState<ShareTarget | null>(null);
   // on a phone the floor card lies over the bottom of the scene, so the tower moves up to stay clear of it
   const narrow = useSyncExternalStore(
     (change) => {
@@ -43,38 +55,20 @@ export default function FloorsPage() {
     refetchInterval: 60_000,
   });
   const asOf = overview.data?.asOf;
-  const daily = useQuery({
-    queryKey: ["daily", orgId, buildingId, asOf],
-    enabled: !!asOf,
-    queryFn: () =>
-      unwrap(
-        api.GET("/api/v1/orgs/{orgId}/buildings/{buildingId}/daily", {
-          params: {
-            path: { orgId, buildingId },
-            query: { from: addDays(asOf!, -27), to: addDays(asOf!, 1) },
-          },
-        }),
-      ),
-  });
 
   if (overview.isPending) return <Loading page />;
   if (overview.error) return <ErrorBox error={overview.error} onRetry={() => overview.refetch()} />;
   const o = overview.data;
   const tz = building!.timezone;
   const tenantName = new Map((tenants.data ?? []).map((x) => [x.id, x.name]));
-  const byDay = new Map<string, { day: string; kwh: number; avoidable: number }>();
-  for (const r of daily.data ?? []) {
-    const d = byDay.get(r.day) ?? { day: r.day, kwh: 0, avoidable: 0 };
-    d.kwh += r.kwhTotal;
-    d.avoidable += r.avoidableKwh;
-    byDay.set(r.day, d);
-  }
   const l = o.last28;
   // the tower is drawn bottom up; the list reads top down
   const bottomUp = [...o.floors].reverse();
-  const crowd = Math.max(20, ...o.floors.map((f) => f.occupancy));
-  const live = bottomUp.map((f) => ({ occ: Math.min(1, f.occupancy / crowd), waste: f.wasteNow }));
+  const live = liveFloors(bottomUp);
   const inBuilding = o.floors.reduce((n, f) => n + f.occupancy, 0);
+  // a floor with no reading is a floor nobody knows about, not an empty one
+  const reading = o.floors.some((f) => f.at);
+  const days = l?.days ?? 28;
   const wasting = o.floors.filter((f) => f.wasteNow).length;
   const chosen = picked === null ? null : bottomUp[picked];
   const pick = (index: number) => {
@@ -86,7 +80,7 @@ export default function FloorsPage() {
     <>
       <PageHeader
         title={t.floors.title}
-        subtitle={t.floors.subtitle}
+        subtitle={fill(t.floors.subtitle, { days })}
         actions={
           asOf ? (
             <span className="text-xs text-muted">
@@ -96,7 +90,18 @@ export default function FloorsPage() {
         }
       />
 
-      {o.floors.length ? (
+      {split ? (
+        <BeforeAfter
+          view={split}
+          floors={bottomUp}
+          live={live}
+          onChange={setSplit}
+          onClose={closeSplit}
+          onShare={setSharing}
+        />
+      ) : null}
+
+      {!split && o.floors.length ? (
         <div
           ref={hero}
           className="relative mb-6 h-[300px] overflow-hidden rounded-2xl border border-border bg-surface sm:h-[340px]"
@@ -115,9 +120,13 @@ export default function FloorsPage() {
                 ? ` · ${dateTime(o.floors[0].at, locale, tz, { dateStyle: undefined, timeStyle: "short" })}`
                 : ""}
             </div>
-            <div className="num mt-0.5 text-3xl font-semibold tracking-tight">
-              {inBuilding} <span className="text-sm font-normal text-muted">{t.floors.inBuilding}</span>
-            </div>
+            {reading ? (
+              <div className="num mt-0.5 text-3xl font-semibold tracking-tight">
+                {inBuilding} <span className="text-sm font-normal text-muted">{t.floors.inBuilding}</span>
+              </div>
+            ) : (
+              <div className="mt-1 text-sm font-medium">{t.floors.noReading}</div>
+            )}
             {wasting ? (
               <div className="mt-1 text-xs font-medium text-waste">
                 {wasting} {t.floors.wastingFloors}
@@ -131,7 +140,7 @@ export default function FloorsPage() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">
-                  {chosen.tenantId ? (tenantName.get(chosen.tenantId) ?? "—") : t.common.vacant}
+                  {chosen.tenantId ? (tenantName.get(chosen.tenantId) ?? "–") : t.common.vacant}
                 </span>
                 <span className="mt-0.5 flex items-center gap-2.5 text-xs text-muted">
                   <span className="inline-flex items-center gap-1">
@@ -166,7 +175,7 @@ export default function FloorsPage() {
                 <span className="num shrink-0 text-right text-xs text-muted">
                   {kwh(chosen.avoidableKwh28d, locale)}
                   <br />
-                  {t.floors.avoidable}
+                  {fill(t.floors.avoidable, { days })}
                 </span>
               )}
             </div>
@@ -178,15 +187,29 @@ export default function FloorsPage() {
         </div>
       ) : null}
 
-      {l ? (
+      {!asOf ? (
+        <div className="mb-6 rounded-2xl bg-surface-2 p-4 text-sm">
+          <p>{t.floors.noData}</p>
+          {role && PAGES.data?.includes(role) ? (
+            <Link
+              href={`/o/${orgId}/b/${buildingId}/data`}
+              className="mt-1 inline-flex min-h-11 items-center gap-0.5 font-medium text-accent sm:min-h-0"
+            >
+              {t.floors.toData} <ChevronRight className="size-4" aria-hidden />
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!split && l ? (
         <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Metric
-            label={t.floors.energy28}
+            label={fill(t.floors.energy28, { days })}
             value={kwh(l.kwh, locale)}
             sub={money(l.cost, locale, building!.currency)}
           />
           <Metric
-            label={t.floors.avoidable28}
+            label={fill(t.floors.avoidable28, { days })}
             value={kwh(l.avoidableKwh, locale)}
             tone="waste"
             sub={`${money(l.avoidableCost, locale, building!.currency)} · ${pct(l.avoidableShare, locale)}`}
@@ -202,91 +225,24 @@ export default function FloorsPage() {
         </div>
       ) : null}
 
-      <Card title={t.floors.now} pad={false} className="mb-6">
-        {o.floors.length === 0 ? (
-          <div className="p-4">
-            <Empty>{t.common.noData}</Empty>
-          </div>
-        ) : (
-          <ul className="divide-y divide-border">
-            {o.floors.map((f, row) => (
-              // tapping a floor in the list lights it up in the tower
-              // biome-ignore lint/a11y/useKeyWithClickEvents: the same floor is reachable in the tower and by its findings link
-              <li
-                key={f.floorId}
-                onClick={() => {
-                  pick(o.floors.length - 1 - row);
-                  hero.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                }}
-                className={clsx(
-                  "grid cursor-pointer grid-cols-[3.5rem_1fr_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[4rem_1.4fr_repeat(3,minmax(0,1fr))_auto]",
-                  f.wasteNow && "bg-waste-soft/40",
-                  picked === o.floors.length - 1 - row && "bg-accent-soft/60",
-                )}
-              >
-                <div className="text-lg font-semibold">{f.label}</div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">
-                    {f.tenantId ? (tenantName.get(f.tenantId) ?? "—") : t.common.vacant}
-                  </div>
-                  {f.wasteNow ? (
-                    <div className="text-xs font-medium text-waste">{t.floors.wasteNow}</div>
-                  ) : (
-                    <div className="text-xs text-muted">
-                      {f.at ? dateTime(f.at, locale, tz, { dateStyle: undefined, timeStyle: "short" }) : "–"}
-                    </div>
-                  )}
-                </div>
-                <div className="hidden items-center gap-1.5 text-sm sm:flex" title={t.common.people}>
-                  <Users className="size-4 text-muted" aria-hidden />
-                  <span className="num">{f.occupancy}</span>
-                </div>
-                <div className="hidden items-center gap-1.5 text-sm sm:flex">
-                  <Snowflake
-                    className={clsx("size-4", f.hvacMode === "off" ? "text-muted" : "text-accent")}
-                    aria-hidden
-                  />
-                  {t.floors.hvacMode[f.hvacMode] ?? f.hvacMode}
-                </div>
-                <div className="hidden items-center gap-1.5 text-sm sm:flex">
-                  <Lightbulb
-                    className={clsx("size-4", f.lightsOn >= 0.2 ? "text-waste" : "text-muted")}
-                    aria-hidden
-                  />
-                  {pct(f.lightsOn, locale)}
-                </div>
-                <div className="flex items-center justify-end gap-2 text-right">
-                  <div>
-                    <div className="num text-sm font-medium">{kwh(f.avoidableKwh28d, locale)}</div>
-                    <div className="text-xs text-muted">{t.floors.avoidable}</div>
-                  </div>
-                  {f.openFindings > 0 && role !== "tenant_admin" ? (
-                    <Link href={`/o/${orgId}/b/${buildingId}/findings?floorId=${f.floorId}`}>
-                      <Badge tone="waste">
-                        {f.openFindings} {t.floors.open}
-                      </Badge>
-                    </Link>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card title={t.floors.daily}>
-        {daily.isPending ? (
-          <Loading />
-        ) : byDay.size ? (
-          <DailyEnergyChart
-            data={[...byDay.values()].sort((a, b) => a.day.localeCompare(b.day))}
-            locale={locale}
-            labels={{ energy: t.report.energy, avoidable: t.report.avoidable }}
+      {role === "tenant_admin" ? (
+        <>
+          <p className="mb-6 text-sm text-muted">{t.assistant.tenantNote}</p>
+          <FloorsDetail
+            picked={picked}
+            onPick={(index) => {
+              pick(index);
+              hero.current?.scrollIntoView({ behavior: glide(), block: "nearest" });
+            }}
           />
-        ) : (
-          <Empty>{t.common.noData}</Empty>
-        )}
-      </Card>
+        </>
+      ) : (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
+          <Assistant noData={!asOf} onOpen={setSplit} onShare={setSharing} />
+          <CommunityRail onShare={setSharing} onPreview={setSplit} />
+        </div>
+      )}
+      {sharing ? <ShareDialog target={sharing} onClose={() => setSharing(null)} /> : null}
     </>
   );
 }

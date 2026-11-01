@@ -25,6 +25,8 @@
   --chart-4: #9aa4b2;
   --ring: rgb(13 112 104 / 0.35);
   --on-accent: #ffffff;
+  --twin-floor: #dfe3ea;
+  --twin-lamp: #ffd24d;
   color-scheme: light;
 }
 
@@ -50,6 +52,8 @@
     --chart-4: #5d6878;
     --ring: rgb(60 199 182 / 0.4);
     --on-accent: #04201d;
+    --twin-floor: #10151c;
+    --twin-lamp: #ffd76a;
     color-scheme: dark;
   }
 }
@@ -75,6 +79,8 @@
   --chart-4: #5d6878;
   --ring: rgb(60 199 182 / 0.4);
   --on-accent: #04201d;
+  --twin-floor: #10151c;
+  --twin-lamp: #ffd76a;
   color-scheme: dark;
 }
 
@@ -1112,6 +1118,17 @@ html.fc-locked body {
 }
 .fc-route-fade {
   animation: fc-rise 360ms var(--ease-enter) backwards;
+}
+
+/* a card turning over to show what became of it */
+@keyframes fc-flip {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateY(-80deg);
+  }
+}
+.fc-flip {
+  animation: fc-flip 520ms var(--ease-enter) backwards;
 }
 
 /* the top bar's place pill gives way to the page title once the large title has scrolled under it (phones) */

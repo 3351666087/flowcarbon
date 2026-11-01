@@ -13,11 +13,16 @@ export type Role =
   | "tenant_admin"
   | "viewer";
 
-/** Which pages each role sees. The API enforces the same rules; this only hides what would be refused. */
+/**
+ * Which pages each role sees. The API enforces the same rules; this only hides what would be refused. Findings and
+ * forecast are off the nav but stay here: `/go/<page>` links and app shortcuts are resolved against this.
+ */
 export const PAGES: Record<string, Role[]> = {
   floors: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "tenant_admin", "viewer"],
+  strategies: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
   findings: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
   forecast: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
+  twin: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
   simulate: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
   requests: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "tenant_admin", "viewer"],
   report: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],

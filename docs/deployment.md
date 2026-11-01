@@ -4,7 +4,7 @@ FlowCarbon ships as two images built from the repository's `Dockerfile`:
 
 | Image | Runs | Command |
 |---|---|---|
-| `ghcr.io/3351666087/flowcarbon-server` | API (port 4000), worker (health/metrics on 4100), migrations, demo seed and pump | `node api.mjs`, `node worker.mjs`, `node migrate.mjs`, `node seed.mjs`, `node pump.mjs` |
+| `ghcr.io/3351666087/flowcarbon-server` | API (port 4000), worker (health/metrics on 4100), migrations, demo seed, pump and community rows | `node api.mjs`, `node worker.mjs`, `node migrate.mjs`, `node seed.mjs`, `node pump.mjs`, `node community.mjs` |
 | `ghcr.io/3351666087/flowcarbon-web` | Web application (port 3000) | default |
 
 Both run as the unprivileged `node` user, carry a health check, and contain production dependencies only.
@@ -43,6 +43,18 @@ forecasts. It only continues days it started itself, so the seeded history is ne
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile pump up -d pump
+```
+
+### Community strategies
+
+The community rail starts empty. `community` fills it with what the planner suggests for the public datasets,
+`tower-a-demo` and `lbnl-b59-case` (one that is not on the server is skipped). Run it after the seed and again on each
+upgrade: it refreshes the same rows and leaves their count of uses alone. These rows belong to no organisation, which
+row-level security refuses the runtime role, so it needs the owner connection (`DATABASE_MIGRATION_URL`), which the
+Compose service has.
+
+```bash
+docker compose -f infra/docker-compose.yml --profile community run --rm community
 ```
 
 ## Database

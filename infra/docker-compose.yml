@@ -3,6 +3,7 @@
 #   docker compose -f infra/docker-compose.yml --profile app up -d --build # full stack on :3000 (web) and :4000 (API)
 #   DEMO_PASSWORD=... docker compose -f infra/docker-compose.yml --profile demo run --rm seed   # simulated tower
 #   docker compose -f infra/docker-compose.yml --profile pump up -d pump          # keep the simulated tower live
+#   docker compose -f infra/docker-compose.yml --profile community run --rm community  # strategies from the datasets
 #   DOMAIN=fc.example.org docker compose -f infra/docker-compose.yml --profile app --profile edge up -d   # HTTPS on :443
 # Published ports bind to 127.0.0.1 unless *_BIND says otherwise; only the edge proxy listens publicly.
 # Settings come from the environment or an .env file next to this one; see .env.example at the repository root.
@@ -50,7 +51,7 @@ services:
       retries: 20
 
   migrate:
-    profiles: [app, demo, pump]
+    profiles: [app, demo, pump, community]
     image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
     build: { context: .., target: server }
     command: ["node", "migrate.mjs"]
@@ -121,6 +122,19 @@ services:
     environment:
       DATABASE_URL: *app-db
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}  # empty: a random password is printed once
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+
+  # lists the planner's strategies for the public datasets in the community rail, and refreshes them when run again.
+  # Such rows belong to no organisation, which row-level security refuses the runtime role, so this runs as the owner.
+  community:
+    profiles: [community]
+    image: ghcr.io/3351666087/flowcarbon-server:${FLOWCARBON_VERSION:-local}
+    build: { context: .., target: server }
+    command: ["node", "community.mjs"]
+    environment:
+      DATABASE_MIGRATION_URL: postgres://flowcarbon:${POSTGRES_PASSWORD:-flowcarbon-dev}@db:5432/flowcarbon
     depends_on:
       migrate: { condition: service_completed_successfully }
     restart: "no"

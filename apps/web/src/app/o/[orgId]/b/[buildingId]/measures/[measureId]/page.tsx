@@ -6,14 +6,14 @@ import { ArrowLeft, Check, ChevronRight, Hammer, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { ConfirmText, MEASURE_TONE, strategyName, verdictLine } from "@/components/finding-plan";
+import { ConfirmText, MEASURE_TONE, MeasureNote, strategyName, verdictLine } from "@/components/finding-plan";
 import { feel } from "@/components/glass";
 import { Sheet } from "@/components/sheet";
 import { toast } from "@/components/toast";
 import { Badge, Button, Card, ErrorBox, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import type { MeasureDetail, Verification } from "@/lib/api-shapes";
-import { dateTime, day, kwh, type Locale, money } from "@/lib/format";
+import { dateTime, day, kwh, type Locale, money, pct } from "@/lib/format";
 import { fill, useI18n } from "@/lib/i18n";
 import { can, useBuilding, useIds, useMembership } from "@/lib/session";
 
@@ -41,6 +41,8 @@ export default function MeasurePage() {
     qc.invalidateQueries({ queryKey: ["measures"] });
     qc.invalidateQueries({ queryKey: ["finding"] });
     qc.invalidateQueries({ queryKey: ["findings"] });
+    qc.invalidateQueries({ queryKey: ["strategy-board"] });
+    qc.invalidateQueries({ queryKey: ["assistant-turns"] });
   };
   const patch = useMutation({
     mutationFn: (body: { status?: "planned" | "in_effect" | "cancelled"; note?: string | null }) =>
@@ -66,16 +68,20 @@ export default function MeasurePage() {
   if (q.isPending) return <Loading page />;
   if (q.error || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const m = q.data as MeasureDetail;
-  const v = verdictLine(t, m.verification, locale, currency);
+  const v = verdictLine(t, m, locale, currency);
   const reviewer = can.reviewFindings(role);
   const findingHref = (id: string) => `/o/${orgId}/b/${buildingId}/findings/${id}`;
-  const measured = m.status === "in_effect" && m.verification.verdict !== "waiting";
+  const { expected } = m.verification;
+  const measured = !expected;
+  // a cancelled measure is expected to do nothing, and nothing has to say what that assumes
+  const cancelled = m.status === "cancelled";
+  const saving = !!expected && !cancelled && m.verification.weekly.kwh > 0;
 
   return (
     <>
       <Link
         href={`/o/${orgId}/b/${buildingId}/measures`}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-text"
+        className="mb-2 inline-flex min-h-11 items-center gap-1 text-sm text-muted hover:text-text sm:mb-4 sm:min-h-0"
       >
         <ArrowLeft className="size-4" aria-hidden /> {t.measures.back}
       </Link>
@@ -101,15 +107,19 @@ export default function MeasurePage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
           <Card>
-            <p className="text-xs text-muted">
-              {measured ? t.measures.measured : t.measures.expected} · {t.measures.week}
-            </p>
-            <p className={clsx("num mt-1 text-3xl font-semibold", measured && "text-saving")}>
-              {kwh(m.verification.weekly.kwh, locale)}
-              <span className="ml-2 text-base font-medium text-muted">
-                {money(m.verification.weekly.cost, locale, currency)}
-              </span>
-            </p>
+            {expected && cancelled ? null : (
+              <>
+                <p className="text-xs text-muted">
+                  {measured ? t.measures.measured : t.measures.expected} · {t.measures.week}
+                </p>
+                <p className={clsx("num mt-1 text-3xl font-semibold", measured && "text-saving")}>
+                  {kwh(m.verification.weekly.kwh, locale)}
+                  <span className="ml-2 text-base font-medium text-muted">
+                    {money(m.verification.weekly.cost, locale, currency)}
+                  </span>
+                </p>
+              </>
+            )}
             <p
               className={clsx(
                 "mt-3 text-sm",
@@ -119,6 +129,23 @@ export default function MeasurePage() {
             >
               {v.text}
             </p>
+            {saving ? (
+              <p className="num mt-1 text-xs text-muted">
+                {/* a measure not in effect yet has its range in the line above */}
+                {m.verification.verdict === "waiting"
+                  ? `${fill(t.measures.expectedRange, {
+                      low: kwh(expected.lowKwh, locale),
+                      high: kwh(expected.highKwh, locale),
+                      days: expected.days,
+                    })} `
+                  : null}
+                {fill(t.assistant.assumes, {
+                  mid: pct(expected.realisation.mid, locale),
+                  low: pct(expected.realisation.low, locale),
+                  high: pct(expected.realisation.high, locale),
+                })}
+              </p>
+            ) : null}
             {m.status === "in_effect" && m.verification.after?.recurrences ? (
               <p className="mt-1 text-xs text-muted">
                 {fill(t.plan.recurred, { n: m.verification.after.recurrences })}
@@ -142,13 +169,13 @@ export default function MeasurePage() {
           </Card>
         </div>
 
-        <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+        <div className="space-y-6 lg:sticky lg:top-20 lg:self-start">
           <Card title={t.plan.note}>
-            <p className="text-sm whitespace-pre-line">{m.note || "–"}</p>
+            {m.note ? <MeasureNote key={locale} m={m} /> : <p className="text-sm">–</p>}
             {reviewer && m.status !== "cancelled" ? (
               <button
                 type="button"
-                className="mt-3 text-sm font-medium text-accent"
+                className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-accent sm:min-h-0"
                 onClick={() => setEditing(true)}
               >
                 {t.plan.change}
@@ -260,6 +287,8 @@ function BeforeAfter({ v, locale }: { v: Verification; locale: Locale }) {
   const first = v.series[0];
   const last = v.series.at(-1);
   const kind = v.dayTypes.length === 1 ? v.dayTypes[0]! : "any";
+  // what the comparison leaves out, in words: nothing when it takes every kind of day
+  const counted = v.dayTypes.length === 1 ? kind : v.dayTypes.includes("workday") ? null : "off";
   const changeAt = change ? (v.series.indexOf(change) + 0.5) / v.series.length : -1;
   const perDay = (value: number) =>
     fill(t.measures.perDayValue, { value: kwh(value, locale), day: t.plan.dayWord[kind] ?? "" });
@@ -322,7 +351,7 @@ function BeforeAfter({ v, locale }: { v: Verification; locale: Locale }) {
         ) : null}
       </div>
       <p className="mt-2 text-xs text-muted">
-        {fill(t.measures.basis, { days: t.plan.dayWord[kind] ?? "" })}
+        {counted ? fill(t.measures.basis, { days: t.plan.dayWords[counted] ?? "" }) : t.measures.basisAll}
       </p>
     </div>
   );

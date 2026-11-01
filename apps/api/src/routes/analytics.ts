@@ -24,7 +24,17 @@ import { audit } from "../audit";
 import { visibleFloorIds } from "../auth/access";
 import { badRequest, notFound, unprocessable } from "../errors";
 import { activityOf, activityOut, coveredBy, measureJson, measureOut, userNames } from "../measures";
-import { buildingParams, dateKey, decodeCursor, encodeCursor, errorResponses, iso, uuid } from "../schemas";
+import {
+  buildingParams,
+  dateKey,
+  decodeCursor,
+  encodeCursor,
+  errorResponses,
+  iso,
+  localeBody,
+  localeSchema,
+  uuid,
+} from "../schemas";
 import { addDaysKey, dateRange, inBuilding, todayIn, withBuildingContext } from "./helpers";
 
 const dayType = z.enum(["workday", "weekend", "holiday"]);
@@ -109,6 +119,8 @@ export const findingOut = z.object({
 });
 const explanationOut = z.object({
   id: uuid,
+  /** the language it is written in */
+  locale: z.string(),
   status: z.enum(["pending", "done", "failed"]),
   model: z.string().nullable(),
   promptVersion: z.string(),
@@ -122,6 +134,7 @@ const explanationOut = z.object({
 function explanationJson(e: typeof schema.aiExplanations.$inferSelect) {
   return {
     id: e.id,
+    locale: e.locale,
     status: e.status,
     model: e.model,
     promptVersion: e.promptVersion,
@@ -281,7 +294,14 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
               }),
             ),
             last28: reportOut.shape.totals
-              .extend({ co2eKg: z.number(), greenShare: z.number(), from: z.string(), to: z.string() })
+              .extend({
+                co2eKg: z.number(),
+                greenShare: z.number(),
+                from: z.string(),
+                to: z.string(),
+                /** days in the window that have data: a new building has fewer than 28 */
+                days: z.number(),
+              })
               .nullable(),
           }),
           ...errorResponses,
@@ -291,22 +311,28 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
     async (req) =>
       withBuildingContext(db, req, req.params, "usage:read", async (tx, access, ctx) => {
         const last = await latestDataDay(tx, ctx);
-        const today = last ?? todayIn(ctx.building.timezone);
-        const visible = await visibleFloorIds(tx, access, ctx.building.id, todayIn(ctx.building.timezone));
-        const floors = (await floorsNow(tx, ctx, today)).filter((f) => !visible || visible.has(f.floorId));
+        const today = todayIn(ctx.building.timezone);
+        // today is still coming in, so the figures stop at the last whole day, as a plan's do
+        const whole = last && last >= today ? addDaysKey(today, -1) : last;
+        const visible = await visibleFloorIds(tx, access, ctx.building.id, today);
+        const floors = (await floorsNow(tx, ctx, whole ?? today)).filter(
+          (f) => !visible || visible.has(f.floorId),
+        );
         let last28 = null;
         // building-wide figures are for staff only; tenant admins see their floors
-        if (!access.tenantId && last) {
-          const from = addDaysKey(last, -27);
-          const to = addDaysKey(last, 1);
+        if (!access.tenantId && whole) {
+          const from = addDaysKey(whole, -27);
+          const to = addDaysKey(whole, 1);
           const r = await buildingReport(tx, ctx, from, to);
-          last28 = {
-            ...r.totals,
-            co2eKg: r.scope2.locationBasedKg,
-            greenShare: r.scope2.greenShare,
-            from,
-            to,
-          };
+          if (r.period.days)
+            last28 = {
+              ...r.totals,
+              co2eKg: r.scope2.locationBasedKg,
+              greenShare: r.scope2.greenShare,
+              from,
+              to,
+              days: r.period.days,
+            };
         }
         return {
           asOf: last,
@@ -413,8 +439,9 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
       schema: {
         tags: ["analytics"],
         summary:
-          "One finding with its AI explanations, the measure answering it, what could be done about it, the thresholds it was judged by, and what happened to it",
+          "One finding with its AI explanations (in one language if `locale` is given), the measure answering it, what could be done about it, the thresholds it was judged by, and what happened to it",
         params: findingParams,
+        querystring: z.object({ locale: localeSchema.optional() }),
         response: {
           200: findingOut.extend({
             explanations: z.array(explanationOut),
@@ -461,7 +488,12 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         const ex = await tx
           .select()
           .from(schema.aiExplanations)
-          .where(eq(schema.aiExplanations.findingId, f.id))
+          .where(
+            and(
+              eq(schema.aiExplanations.findingId, f.id),
+              req.query.locale ? eq(schema.aiExplanations.locale, req.query.locale) : undefined,
+            ),
+          )
           .orderBy(desc(schema.aiExplanations.createdAt))
           .limit(10);
         const [m] = f.measureId
@@ -603,8 +635,9 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         tags: ["analytics"],
-        summary: "Ask the AI assistant to explain a finding (asynchronous)",
+        summary: "Ask the AI assistant to explain a finding, in one language (asynchronous)",
         params: findingParams,
+        body: localeBody,
         response: { 202: z.object({ explanationId: uuid }), ...errorResponses },
       },
     },
@@ -625,11 +658,16 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
               ),
             );
           if (!f) throw notFound("Finding");
+          const { locale } = req.body;
           const [pending] = await tx
             .select({ id: schema.aiExplanations.id })
             .from(schema.aiExplanations)
             .where(
-              and(eq(schema.aiExplanations.findingId, f.id), eq(schema.aiExplanations.status, "pending")),
+              and(
+                eq(schema.aiExplanations.findingId, f.id),
+                eq(schema.aiExplanations.locale, locale),
+                eq(schema.aiExplanations.status, "pending"),
+              ),
             );
           if (pending) return pending.id;
           await assertAiQuota(tx, access.orgId, config.DEMO_AI_PER_DAY);
@@ -638,6 +676,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
             .values({
               orgId: access.orgId,
               findingId: f.id,
+              locale,
               promptVersion: "pending",
               input: {},
               requestedBy: access.actor.type === "user" ? access.actor.id : null,

@@ -99,6 +99,9 @@ export interface CapexModel {
   integrationFixed: number;
 }
 
+/** The currency `DEFAULT_CAPEX` is in. */
+export const CAPEX_CURRENCY = "CNY";
+
 /**
  * Order-of-magnitude capex, to replace with supplier quotes: two door counters at ¥3,000, zone valve
  * actuators ¥15,000 and lighting relays ¥1,000 per floor, plus fixed BMS integration labour.
@@ -134,9 +137,13 @@ function annualise(kwhByType: Record<DayType, number>, basis: AnnualisationBasis
   return total;
 }
 
+/** One floor's hardware bill: each kind counted once, however many strategies on the floor need it. */
+export function floorCapex(hardware: StrategyMeta["hardware"], model: CapexModel): number {
+  return [...new Set(hardware)].reduce((s, h) => s + model.perFloor[h], 0);
+}
+
 function capexFor(hardware: StrategyMeta["hardware"], floors: number, model: CapexModel): number {
-  const perFloor = [...new Set(hardware)].reduce((s, h) => s + model.perFloor[h], 0);
-  return perFloor * floors + model.integrationFixed;
+  return floorCapex(hardware, model) * floors + model.integrationFixed;
 }
 
 /**
@@ -144,7 +151,7 @@ function capexFor(hardware: StrategyMeta["hardware"], floors: number, model: Cap
  * (per day type, so a window full of holidays is not mistaken for a normal month).
  */
 export function estimateStrategies(
-  findings: readonly Finding[],
+  findings: readonly Pick<Finding, "ruleId" | "dayType" | "avoidableKwh">[],
   floors: readonly FloorProfile[],
   basis: AnnualisationBasis,
   capex: CapexModel = DEFAULT_CAPEX,

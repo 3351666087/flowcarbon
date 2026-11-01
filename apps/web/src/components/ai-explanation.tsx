@@ -28,7 +28,7 @@ interface Answer {
   strategyId: string;
   reason: string;
   uncertainties: string[];
-  basis: string[];
+  basis: { id?: unknown; title?: unknown }[];
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -48,7 +48,8 @@ function answerOf(e: Explanation): Answer | null {
     strategyId: str(action.strategyId),
     reason: str(action.reason),
     uncertainties: strings(o.uncertainties),
-    basis: done && Array.isArray(o.basis) ? o.basis.map((b) => str((b as { title?: unknown }).title)) : [],
+    basis:
+      done && Array.isArray(o.basis) ? o.basis.flatMap((b) => (b && typeof b === "object" ? [b] : [])) : [],
   };
 }
 
@@ -120,9 +121,13 @@ export function AiExplanation({
       { key: "action", text: strategyName(answer.strategyId) ?? "" },
       { key: "reason", text: answer.reason },
       ...answer.uncertainties.map((text, i) => ({ key: `unsure-${i}`, text })),
-      ...answer.basis.map((text, i) => ({ key: `basis-${i}`, text })),
+      ...answer.basis.map((b, i) => ({
+        key: `basis-${i}`,
+        // the worker stores a citation's English title; the interface knows each source by its id
+        text: t.findings.references[str(b.id)] ?? str(b.title),
+      })),
     ];
-  }, [answer, strategyName]);
+  }, [answer, strategyName, t]);
   const total = segments.reduce((n, s) => n + s.text.length, 0);
   const done = current?.status === "done";
   const shown = useTypewriter(total, streams, done, locale === "zh" ? "zh" : "en");

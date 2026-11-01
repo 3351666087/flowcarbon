@@ -6,9 +6,11 @@ import { type ReactNode, useState } from "react";
 /** the tabs, in the order the tab bar and sidebar show them */
 const ORDER = [
   "floors",
+  "strategies",
   "findings",
   "measures",
   "forecast",
+  "twin",
   "simulate",
   "requests",
   "report",

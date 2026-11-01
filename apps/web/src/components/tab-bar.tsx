@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { useBackClose } from "@/lib/back";
+import { useI18n } from "@/lib/i18n";
 import { tick, useLens } from "./glass";
 import { useLiquid } from "./liquid";
 
@@ -34,6 +35,7 @@ export function TabBar({
   active: string | null;
   moreLabel: string;
 }) {
+  const { t: copy } = useI18n();
   const router = useRouter();
   const overflow = tabs.length > SLOTS;
   const primary = overflow ? tabs.slice(0, SLOTS - 1) : tabs;
@@ -247,7 +249,7 @@ export function TabBar({
         <nav
           ref={bar.ref}
           style={bar.style}
-          aria-label="Main"
+          aria-label={copy.navLabel}
           data-compact={compact || undefined}
           className="fc-glass fc-tabbar pointer-events-auto mx-auto max-w-md rounded-full p-1.5"
         >

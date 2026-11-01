@@ -25,7 +25,7 @@ counts people per floor, finds the hours a floor was cooled or lit for nobody, f
 lets tenants book cooling for their own floor instead of the whole tower, and prices the saving under an
 energy performance contract — with every number traceable to the rule and the data behind it.
 
-> **Status: 0.1.** The engine, data platform, API, worker and web app are implemented and tested end to end.
+> **Status: 0.2.** The engine, data platform, API, worker and web app are implemented and tested end to end.
 > All bundled data is **simulated**; nothing here describes a real building.
 
 ## What it does
@@ -40,6 +40,11 @@ energy performance contract — with every number traceable to the rule and the 
     <td valign="top"><b>Forecast & simulate</b><br>After-hours headcount for the next seven days per floor; strategies annualised by day type; EPC split, paybacks and NPV.</td>
     <td valign="top"><b>Report</b><br>Electricity and Scope 2 by the location- and market-based methods, with factor provenance, CSV export and frozen snapshots.</td>
     <td valign="top"><b>Operate</b><br>Multi-tenant with PostgreSQL row-level security, roles with tenant scoping, scoped API keys for gateways, audit log, metrics.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>Ask</b><br>Ask for a target or say "turn the lights off at night". Plans and figures come from code over the building's own data; Claude reads the request and writes the words, and a template takes over if it can't.</td>
+    <td valign="top"><b>Compare & share</b><br>Strategies side by side, before and after, with their basis and a stated range. Adopting one creates real measures that the data then verifies. Buildings can publish a strategy and reuse each other's.</td>
+    <td valign="top"><b>Digital twin</b><br>A simulated floor, open plan or meeting rooms, with lights switched by row or room and fan coils by zone. See what a policy draws and how bright each desk stays. It assumes controls can switch equipment directly.</td>
   </tr>
 </table>
 

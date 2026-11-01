@@ -5,6 +5,14 @@ export const dateKey = z.iso.date();
 export const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM");
 export const timestamp = z.iso.datetime({ offset: true });
 
+/** the two languages the interface, and so everything written for it, comes in */
+export const localeSchema = z.enum(["en", "zh"]);
+/** The body of a request that only says in which language to answer; Fastify passes null when there is no body. */
+export const localeBody = z
+  .object({ locale: localeSchema.default("en") })
+  .nullable()
+  .transform((b) => ({ locale: b?.locale ?? ("en" as const) }));
+
 export const orgParams = z.object({ orgId: uuid });
 export const buildingParams = z.object({ orgId: uuid, buildingId: uuid });
 

@@ -78,6 +78,20 @@
       "when": 1792394274385,
       "tag": "0010_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793541183627,
+      "tag": "0011_assistant_community",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793563240824,
+      "tag": "0012_ai_text_language",
+      "breakpoints": true
     }
   ]
 }

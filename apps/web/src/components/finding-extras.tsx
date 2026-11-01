@@ -196,6 +196,7 @@ const ICONS: Record<string, typeof CircleDot> = {
   "finding.explain": Sparkles,
   "measure.create": Hammer,
   "measure.join": Hammer,
+  "measure.leave": X,
   "measure.implement": CircleCheck,
   "measure.cancel": X,
 };

@@ -6,8 +6,10 @@ import { Check, ChevronRight, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { POLL_MS, useTypewriter } from "@/components/ai-explanation";
+import { glide, useStrategyBoard } from "@/components/assistant";
 import { strategyName } from "@/components/finding-plan";
-import { feel } from "@/components/glass";
+import { feel, tick } from "@/components/glass";
+import type { ComparedPriority } from "@/components/strategy-compare";
 import { toast } from "@/components/toast";
 import { Badge, Button, Card, ErrorBox } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
@@ -27,12 +29,17 @@ interface Priority {
   avoidableKwh?: number;
   avoidableCost?: number;
   findingId?: string;
+  /** the measure its finding has gone into since, however that came about: adopting it again would be refused */
+  measureId?: string;
 }
 interface Brief {
   headline: string;
   priorities: Priority[];
   watch: string[];
 }
+
+/** A brief asked for without a tap, because this language had none: once per building and language in a session. */
+const askedFor = new Set<string>();
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
@@ -49,24 +56,55 @@ function briefOf(output: unknown, draft: string | null): Brief | null {
   };
 }
 
+interface OverviewProps {
+  onShow: (floorId: string, ruleId: string) => void;
+  /** the priority on show in the comparison */
+  compared: ComparedPriority | null;
+  onCompare: (priority: ComparedPriority) => void;
+}
+
 /**
- * The AI assistant's look at the whole building, above (or beside) the list of opportunities: which groups to act on
- * first and with what, so nobody has to open findings one by one to find out. Each priority can be adopted as it
- * stands (a measure for that floor, taking in its open findings of that kind), adopted after editing, or opened.
+ * The AI assistant's look at the whole building, beside the comparison of strategies: which groups to act on first and
+ * with what, so nobody has to open findings one by one to find out. Each priority can be compared before and after
+ * (the figures come from the plan, not from the model), adopted as it stands (a measure for that floor, taking in its
+ * open findings of that kind), adopted after editing, or opened.
+ *
+ * A brief is written in one language and shown only in that one. Each language starts from nothing, so text in the
+ * old language never stays on screen: its own brief if there is one, otherwise it is asked for once (when the viewer
+ * may ask), and a viewer who cannot ask is told so.
  */
-export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: string) => void }) {
+export function BuildingBrief(props: OverviewProps) {
+  const { locale } = useI18n();
+  return <Overview key={locale} {...props} />;
+}
+
+function Overview({ onShow, compared, onCompare }: OverviewProps) {
   const { t, locale } = useI18n();
   const { orgId, buildingId } = useIds();
   const { building } = useBuilding();
   const role = useMembership()?.role;
+  const asker = can.explain(role);
+  const reviewer = can.reviewFindings(role);
   const qc = useQueryClient();
   const path = { orgId, buildingId };
 
   const latest = useQuery({
-    queryKey: ["brief", orgId, buildingId],
+    queryKey: ["brief", orgId, buildingId, locale],
     queryFn: () =>
-      unwrap(api.GET("/api/v1/orgs/{orgId}/buildings/{buildingId}/briefs/latest", { params: { path } })),
+      unwrap(
+        api.GET("/api/v1/orgs/{orgId}/buildings/{buildingId}/briefs/latest", {
+          params: { path, query: { locale } },
+        }),
+      ),
   });
+  // English has no names of its own for the rules: the API's are in English
+  const rules = useQuery({
+    queryKey: ["rules"],
+    queryFn: () => unwrap(api.GET("/api/v1/rules")),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const ruleName = (id: string) =>
+    t.domain.ruleNames[id] ?? rules.data?.rules.find((r) => r.id === id)?.name ?? id;
   const pending = latest.data?.brief?.status === "pending" ? latest.data.brief : null;
   const live = useQuery({
     queryKey: ["brief-live", pending?.id],
@@ -92,14 +130,42 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
   });
   const adopted = (p: Priority) =>
     (measures.data?.items ?? []).find(
-      (m) => m.status !== "cancelled" && m.floorId === p.floorId && m.strategyId === p.strategyId,
+      (m) =>
+        m.status !== "cancelled" &&
+        (m.id === p.measureId || (m.floorId === p.floorId && m.strategyId === p.strategyId)),
     );
+  // only what the plan has an action for can be compared: its figures are the planner's
+  const board = useStrategyBoard();
+  const actions = board.data?.plan.options.flatMap((o) => o.actions) ?? [];
+  const action = (p: Priority) =>
+    actions.find((a) => a.floorId === p.floorId && a.strategyId === p.strategyId);
+
+  const refresh = () => {
+    for (const key of ["measures", "findings", "strategy-board", "brief"])
+      qc.invalidateQueries({ queryKey: [key] });
+  };
 
   const request = useMutation({
     mutationFn: () =>
-      unwrap(api.POST("/api/v1/orgs/{orgId}/buildings/{buildingId}/briefs", { params: { path } })),
+      unwrap(
+        api.POST("/api/v1/orgs/{orgId}/buildings/{buildingId}/briefs", {
+          params: { path },
+          body: { locale },
+        }),
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["brief", orgId, buildingId] }),
   });
+  const once = `${buildingId}|${locale}`;
+  const missing = !!latest.data && !latest.data.brief && latest.data.otherLocale && asker;
+  const { mutate: ask } = request;
+  useEffect(() => {
+    if (!missing || askedFor.has(once)) return;
+    askedFor.add(once);
+    ask();
+  }, [missing, once, ask]);
+  // from the moment it is known to be missing until the new brief is there to read
+  const asking =
+    !request.isError && (request.isPending || request.isSuccess || (missing && !askedFor.has(once)));
   const adopt = useMutation({
     mutationFn: (p: Priority) =>
       unwrap(
@@ -110,8 +176,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
       ),
     onSuccess: (r) => {
       feel("confirm");
-      qc.invalidateQueries({ queryKey: ["measures"] });
-      qc.invalidateQueries({ queryKey: ["findings"] });
+      refresh();
       toast(
         r.joined
           ? fill(t.plan.joined, { floor: r.measure.floorLabel })
@@ -125,8 +190,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                 body: { status: "cancelled" } as never,
               }),
             );
-            qc.invalidateQueries({ queryKey: ["measures"] });
-            qc.invalidateQueries({ queryKey: ["findings"] });
+            refresh();
           },
         },
       );
@@ -170,10 +234,18 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
       {writing && caret === key ? <span className="fc-stream-caret" aria-hidden /> : null}
     </>
   );
-  const asker = can.explain(role);
-  const reviewer = can.reviewFindings(role);
   const currency = building?.currency ?? "CNY";
   const base = `/o/${orgId}/b/${buildingId}`;
+  const reading = (
+    <div className="mt-4 space-y-2.5" aria-busy>
+      <p className="inline-flex items-center gap-2 text-sm font-medium">
+        <Sparkles className="size-4 animate-pulse text-accent" aria-hidden />
+        <span className="fc-stream-wait">{t.brief.reading}</span>
+      </p>
+      <div className="fc-skel h-3 w-11/12" />
+      <div className="fc-skel h-3 w-4/5" />
+    </div>
+  );
 
   return (
     <Card
@@ -191,36 +263,33 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
           <div className="fc-skel h-3 w-2/3" />
         </div>
       ) : !current ? (
-        asker ? (
+        asking ? (
+          reading
+        ) : asker ? (
           <Button
             variant="primary"
-            className="mt-4"
+            className="mt-4 min-h-11 sm:min-h-9"
             busy={request.isPending}
             onClick={() => request.mutate()}
           >
             <Sparkles className="size-4" aria-hidden /> {t.brief.request}
           </Button>
         ) : (
-          <p className="mt-4 text-sm text-muted">{t.brief.none}</p>
+          <p className="mt-4 text-sm text-muted">
+            {latest.data?.otherLocale ? t.brief.otherLanguage : t.brief.none}
+          </p>
         )
       ) : current.status === "failed" ? (
         <div className="mt-3 space-y-3">
           <p className="text-sm text-danger">{current.error}</p>
           {asker ? (
-            <Button busy={request.isPending} onClick={() => request.mutate()}>
+            <Button className="min-h-11 sm:min-h-9" busy={request.isPending} onClick={() => request.mutate()}>
               <RefreshCw className="size-4" aria-hidden /> {t.brief.again}
             </Button>
           ) : null}
         </div>
       ) : !brief || total === 0 ? (
-        <div className="mt-4 space-y-2.5" aria-busy>
-          <p className="inline-flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="size-4 animate-pulse text-accent" aria-hidden />
-            <span className="fc-stream-wait">{t.brief.reading}</span>
-          </p>
-          <div className="fc-skel h-3 w-11/12" />
-          <div className="fc-skel h-3 w-4/5" />
-        </div>
+        reading
       ) : (
         <div className="mt-3 space-y-3" aria-busy={writing}>
           {visible.get("headline") ? <p className="text-[15px] font-medium">{text("headline")}</p> : null}
@@ -231,6 +300,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                 if (!visible.get(key)) return null;
                 const has = adopted(p);
                 const finished = done && !writing && !!p.findingId;
+                const showing = compared?.floorId === p.floorId && compared?.strategyId === p.strategyId;
                 return (
                   <li key={key} className={clsx("rounded-2xl bg-surface-2 p-3", streams && "fc-stream-in")}>
                     <div className="flex items-start gap-3">
@@ -238,7 +308,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                         {p.floor}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium">{t.domain.ruleNames[p.ruleId] ?? p.ruleId}</div>
+                        <div className="text-sm font-medium">{ruleName(p.ruleId)}</div>
                         {p.findings ? (
                           <div className="num text-xs text-muted">
                             {fill(t.brief.size, {
@@ -261,13 +331,38 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                       ) : null}
                     </div>
                     <p className="mt-2 text-sm">{text(key)}</p>
+                    {has && has.strategyId !== p.strategyId ? (
+                      <p className="mt-1 text-xs text-muted">
+                        {fill(t.brief.taken, { strategy: strategyName(t, has.strategyId) })}
+                      </p>
+                    ) : null}
                     {finished ? (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {action(p) ? (
+                          <Button
+                            aria-pressed={showing}
+                            className="min-h-11 px-3 sm:h-8 sm:min-h-0"
+                            onClick={() => {
+                              tick();
+                              onCompare({
+                                floorId: p.floorId!,
+                                strategyId: p.strategyId,
+                                title: `${p.floor} · ${strategyName(t, p.strategyId)}`,
+                                coveredKwh: action(p)!.coveredKwh,
+                              });
+                              document
+                                .getElementById("strategy-panel")
+                                ?.scrollIntoView({ behavior: glide(), block: "start" });
+                            }}
+                          >
+                            {showing ? t.brief.comparing : t.brief.compare}
+                          </Button>
+                        ) : null}
                         {reviewer && !has && p.strategyId !== "no_action" ? (
                           <>
                             <Button
                               variant="primary"
-                              className="h-8 px-3"
+                              className="min-h-11 px-3 sm:h-8 sm:min-h-0"
                               busy={adopt.isPending && adopt.variables === p}
                               onClick={() => adopt.mutate(p)}
                             >
@@ -275,7 +370,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                             </Button>
                             <Link
                               href={`${base}/findings/${p.findingId}?adopt=${p.strategyId}&why=${encodeURIComponent(p.why)}`}
-                              className="fc-press inline-flex h-8 items-center rounded-full border border-border bg-surface px-3 text-sm font-medium"
+                              className="fc-press inline-flex min-h-11 items-center rounded-full border border-border bg-surface px-3 text-sm font-medium sm:h-8 sm:min-h-0"
                             >
                               {t.plan.adoptEdit}
                             </Link>
@@ -283,7 +378,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                         ) : has ? (
                           <Link
                             href={`${base}/measures/${has.id}`}
-                            className="text-sm font-medium text-accent"
+                            className="inline-flex min-h-11 items-center text-sm font-medium text-accent sm:min-h-0"
                           >
                             {t.plan.details}
                           </Link>
@@ -291,7 +386,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                         <button
                           type="button"
                           onClick={() => p.floorId && onShow(p.floorId, p.ruleId)}
-                          className="ml-auto inline-flex items-center gap-0.5 text-sm font-medium text-muted hover:text-text"
+                          className="ml-auto inline-flex min-h-11 items-center gap-0.5 text-sm font-medium text-muted hover:text-text sm:min-h-0"
                         >
                           {t.brief.show} <ChevronRight className="size-4" aria-hidden />
                         </button>
@@ -329,7 +424,7 @@ export function BuildingBrief({ onShow }: { onShow: (floorId: string, ruleId: st
                   type="button"
                   disabled={request.isPending}
                   onClick={() => request.mutate()}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-accent disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-accent disabled:opacity-50 sm:min-h-0"
                 >
                   <RefreshCw className="size-3.5" aria-hidden /> {t.brief.again}
                 </button>

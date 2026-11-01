@@ -307,9 +307,10 @@ export default function SettingsPage() {
             <fieldset className="flex flex-wrap gap-4 text-sm">
               <legend className="mb-1 font-medium">{t.settings.scopes}</legend>
               {SCOPES.map((s) => (
-                <label key={s} className="inline-flex items-center gap-2">
+                <label key={s} className="inline-flex min-h-11 items-center gap-2 sm:min-h-0">
                   <input
                     type="checkbox"
+                    className="size-5 accent-[var(--accent)] sm:size-auto"
                     checked={keyScopes.includes(s)}
                     onChange={(e) =>
                       setKeyScopes(e.target.checked ? [...keyScopes, s] : keyScopes.filter((x) => x !== s))

@@ -28,6 +28,8 @@ const membership = z.object({
   orgId: uuid,
   orgSlug: z.string(),
   orgName: z.string(),
+  /** "demo" for a simulated organisation, which is what the interface labels as simulated */
+  orgPlan: z.string(),
   role: roleSchema,
   tenantId: uuid.nullable(),
 });
@@ -85,6 +87,7 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
         orgId: schema.organizations.id,
         orgSlug: schema.organizations.slug,
         orgName: schema.organizations.name,
+        orgPlan: schema.organizations.plan,
         role: schema.memberships.role,
         tenantId: schema.memberships.tenantId,
       })
@@ -404,12 +407,12 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
       schema: {
         tags: ["auth"],
         summary:
-          "Sign-up, step 3: create the account for a verified address with a password, then start in a demo building of one's own (built in the background) or found an organisation",
+          "Sign-up, step 3: create the account for a verified address with a password, then start in a demo building of one's own (built in the background), look around the shared demo read-only, or found an organisation",
         body: z.object({
           ticket: z.string().min(20).max(100),
           name: z.string().trim().min(1).max(120),
           password: z.string().max(256),
-          start: z.enum(["demo", "organisation"]),
+          start: z.enum(["demo", "explore", "organisation"]),
           organisation: z.string().trim().min(2).max(120).optional(),
           locale: z.enum(["en", "zh"]).default("en"),
           remember: z.boolean().default(false).describe("Keep me signed in, as for sign-in"),
@@ -431,7 +434,7 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
       const problems = passwordProblems(password, { email: pending?.email });
       if (problems.length) throw unprocessable("The password is not acceptable.", problems);
       const passwordHash = await hashPassword(password);
-      if (start === "demo" && !config.DEMO_ORG_SLUG)
+      if (start !== "organisation" && !config.DEMO_ORG_SLUG)
         throw unprocessable("There is no demo here to start with.");
       let demoId: string | null = null;
       const userId = await db.transaction(async (tx) => {
@@ -465,6 +468,26 @@ export const authRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db, co
             { max: config.DEMO_WORKSPACES_MAX, ip: req.ip, requestId: String(req.id) },
           );
           demoId = demo.id;
+          return user!.id;
+        }
+        if (start === "explore") {
+          const [shared] = await tx
+            .select({ id: schema.organizations.id })
+            .from(schema.organizations)
+            .where(eq(schema.organizations.slug, config.DEMO_ORG_SLUG!));
+          if (!shared) throw unprocessable("There is no demo here to start with.");
+          await tx.insert(schema.memberships).values({ orgId: shared.id, userId: user!.id, role: "viewer" });
+          await tx.execute(sql`select set_config('app.org_id', ${shared.id}, true)`);
+          await tx.insert(schema.auditLog).values({
+            orgId: shared.id,
+            actorType: "user",
+            actorId: user!.id,
+            action: "member.join_demo",
+            entityType: "membership",
+            entityId: user!.id,
+            ip: req.ip,
+            requestId: String(req.id),
+          });
           return user!.id;
         }
         const [org] = await tx

@@ -16,6 +16,7 @@ const app = await buildApp({
     explain: async () => null,
     demo: async () => null,
     brief: async () => null,
+    assistant: async () => null,
   },
   logger: false,
 });

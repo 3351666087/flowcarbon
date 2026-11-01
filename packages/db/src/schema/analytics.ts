@@ -1,3 +1,12 @@
+import type {
+  AppliedMeasure,
+  CommunityResult,
+  MeasureStrategyMix,
+  Plan,
+  PlanReply,
+  TurnIntent,
+} from "@flowcarbon/core";
+import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   date,
@@ -16,6 +25,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   aiStatusEnum,
+  communityOptionKindEnum,
   dataTierEnum,
   dayTypeEnum,
   factorMethodEnum,
@@ -93,6 +103,8 @@ export const aiBriefs = pgTable(
     buildingId: uuid("building_id")
       .notNull()
       .references(() => buildings.id, { onDelete: "cascade" }),
+    /** the language it is written in; a brief is requested per language */
+    locale: text("locale").notNull().default("en"),
     status: aiStatusEnum("status").notNull().default("pending"),
     model: text("model"),
     promptVersion: text("prompt_version").notNull(),
@@ -106,7 +118,84 @@ export const aiBriefs = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
     completedAt: ts("completed_at"),
   },
-  (t) => [index("ai_briefs_building_idx").on(t.buildingId, t.createdAt)],
+  (t) => [
+    index("ai_briefs_building_idx").on(t.buildingId, t.createdAt),
+    index("ai_briefs_building_locale_idx").on(t.buildingId, t.locale, t.createdAt),
+  ],
+);
+
+/**
+ * One exchange with the assistant: a request in plain words, the plan computed for it and the reply written around
+ * that plan. Applying an option records what it created, which is what undo takes back.
+ */
+export const assistantTurns = pgTable(
+  "assistant_turns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "cascade" }),
+    requestedBy: uuid("requested_by").references(() => users.id, { onDelete: "set null" }),
+    locale: text("locale").notNull().default("en"),
+    prompt: text("prompt").notNull(),
+    status: aiStatusEnum("status").notNull().default("pending"),
+    intent: jsonb("intent").$type<TurnIntent>(),
+    plan: jsonb("plan").$type<Plan>(),
+    reply: jsonb("reply").$type<PlanReply>(),
+    /** the reply as generated so far (partial JSON) while it is being written */
+    draft: text("draft"),
+    error: text("error"),
+    /** null when the reply came from a template rather than a model */
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    completedAt: ts("completed_at"),
+    appliedOption: text("applied_option"),
+    appliedAt: ts("applied_at"),
+    appliedBy: uuid("applied_by").references(() => users.id, { onDelete: "set null" }),
+    appliedMeasures: jsonb("applied_measures").$type<AppliedMeasure[]>(),
+  },
+  (t) => [index("assistant_turns_building_idx").on(t.buildingId, t.createdAt)],
+);
+
+/**
+ * Strategies buildings share with each other, like skills. The one table read across organisations, so it holds only
+ * what is meant to be public: no tenant names, floor labels or floor ids, and no building name unless the publisher
+ * typed it as the alias. A row with a null org was seeded from a public dataset.
+ */
+export const communityStrategies = pgTable(
+  "community_strategies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "cascade" }),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "cascade" }),
+    /** shown as the author */
+    alias: text("alias").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    locale: text("locale").notNull().default("en"),
+    optionKind: communityOptionKindEnum("option_kind").notNull(),
+    strategyMix: jsonb("strategy_mix").$type<MeasureStrategyMix>().notNull(),
+    floorsCount: integer("floors_count").notNull(),
+    areaBand: text("area_band").notNull(),
+    result: jsonb("result").$type<CommunityResult>().notNull(),
+    publishedBy: uuid("published_by").references(() => users.id, { onDelete: "set null" }),
+    uses: integer("uses").notNull().default(0),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    withdrawnAt: ts("withdrawn_at"),
+  },
+  (t) => [
+    uniqueIndex("community_strategies_seeded_uq")
+      .on(t.buildingId, t.optionKind)
+      .where(sql`${t.orgId} is null`),
+  ],
 );
 
 /**
@@ -161,6 +250,8 @@ export const aiExplanations = pgTable(
     findingId: uuid("finding_id")
       .notNull()
       .references(() => findings.id, { onDelete: "cascade" }),
+    /** the language it is written in */
+    locale: text("locale").notNull().default("en"),
     status: aiStatusEnum("status").notNull().default("pending"),
     model: text("model"),
     promptVersion: text("prompt_version").notNull(),
@@ -175,7 +266,10 @@ export const aiExplanations = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
     completedAt: ts("completed_at"),
   },
-  (t) => [index("ai_finding_idx").on(t.findingId, t.createdAt)],
+  (t) => [
+    index("ai_finding_idx").on(t.findingId, t.createdAt),
+    index("ai_finding_locale_idx").on(t.findingId, t.locale, t.createdAt),
+  ],
 );
 
 export const forecasts = pgTable(

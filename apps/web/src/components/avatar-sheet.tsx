@@ -229,7 +229,7 @@ export function AvatarSheet({
                 value={zoom}
                 aria-label={a.zoom}
                 onChange={(e) => zoomTo(Number(e.target.value))}
-                className="mt-4 w-[260px] accent-[var(--accent)]"
+                className="mt-4 min-h-11 w-[260px] accent-[var(--accent)]"
               />
               <p className="mt-2 text-xs text-muted">{a.cropHint}</p>
             </div>

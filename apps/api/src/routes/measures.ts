@@ -1,34 +1,30 @@
 import { MEASURE_STRATEGY_IDS } from "@flowcarbon/core";
 import { schema, type Tx } from "@flowcarbon/db";
-import { and, desc, eq, inArray, isNull, lt, ne } from "drizzle-orm";
+import { measureFooting } from "@flowcarbon/pipeline";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { RouteDeps } from "../app";
 import { audit } from "../audit";
-import type { OrgAccess } from "../auth/access";
 import { conflict, notFound, unprocessable } from "../errors";
-import { coveredBy, type MeasureJson, type MeasureRow, measureJson, measureOut } from "../measures";
+import {
+  agreeMeasure,
+  coveredBy,
+  type MeasureJson,
+  type MeasureRow,
+  measureJson,
+  measureOut,
+  setFindings,
+  settleFindings,
+  statusChange,
+  takeEffectIfSimulated,
+  userOf,
+} from "../measures";
 import { buildingParams, errorResponses, uuid } from "../schemas";
 import { findingJson, findingOut } from "./analytics";
 import { withBuildingContext } from "./helpers";
 
 const measureParams = buildingParams.extend({ measureId: uuid });
-const userOf = (access: OrgAccess) => (access.actor.type === "user" ? access.actor.id : null);
-
-/** Sets the status of findings linked to a measure (and, with `link`, links them first). */
-async function setFindings(
-  tx: Tx,
-  access: OrgAccess,
-  ids: string[],
-  set: { status: "open" | "acknowledged" | "fixed"; measureId: string | null },
-) {
-  if (!ids.length) return 0;
-  await tx
-    .update(schema.findings)
-    .set({ ...set, statusBy: userOf(access), statusAt: new Date(), statusNote: null })
-    .where(inArray(schema.findings.id, ids));
-  return ids.length;
-}
 
 export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db }) => {
   app.get(
@@ -52,6 +48,10 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
               weeklyCost: z.number(),
               expectedWeeklyKwh: z.number(),
               expectedWeeklyCost: z.number(),
+              /** the range around `expectedWeeklyKwh`, and the days of data behind it */
+              expectedWeeklyLowKwh: z.number(),
+              expectedWeeklyHighKwh: z.number(),
+              expectedDays: z.number(),
             }),
           }),
           ...errorResponses,
@@ -71,8 +71,9 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
           )
           .orderBy(desc(schema.measures.createdAt))
           .limit(200);
+        const footing = await measureFooting(tx, ctx);
         const items: MeasureJson[] = [];
-        for (const m of rows) items.push(await measureJson(tx, ctx, m));
+        for (const m of rows) items.push(await measureJson(tx, ctx, m, footing));
         // measured: in effect with complete days since; expected: planned, or in effect but not measured yet
         const measured = items.filter(
           (m) => m.status === "in_effect" && (m.verification.after?.days ?? 0) > 0,
@@ -82,6 +83,8 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
         );
         const sum = (list: MeasureJson[], key: "kwh" | "cost") =>
           Math.round(list.reduce((s, m) => s + m.verification.weekly[key], 0) * 100) / 100;
+        const range = (key: "lowKwh" | "highKwh") =>
+          Math.round(expected.reduce((s, m) => s + (m.verification.expected?.[key] ?? 0), 0) * 100) / 100;
         return {
           items,
           totals: {
@@ -92,6 +95,9 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
             weeklyCost: sum(measured, "cost"),
             expectedWeeklyKwh: sum(expected, "kwh"),
             expectedWeeklyCost: sum(expected, "cost"),
+            expectedWeeklyLowKwh: range("lowKwh"),
+            expectedWeeklyHighKwh: range("highKwh"),
+            expectedDays: footing.days,
           },
         };
       }),
@@ -207,66 +213,20 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
                   ),
                 )
             : [];
-          // one active measure per floor and strategy: a second finding joins it
-          const [existing] = await tx
-            .select()
-            .from(schema.measures)
-            .where(
-              and(
-                eq(schema.measures.floorId, f.floorId),
-                eq(schema.measures.strategyId, b.strategyId),
-                inArray(schema.measures.status, ["planned", "in_effect"]),
-                b.strategyId === "investigate_on_site"
-                  ? eq(schema.measures.originRuleId, f.ruleId)
-                  : undefined,
-              ),
-            );
-          const m =
-            existing ??
-            (
-              await tx
-                .insert(schema.measures)
-                .values({
-                  orgId: access.orgId,
-                  buildingId: ctx.building.id,
-                  floorId: f.floorId,
-                  strategyId: b.strategyId,
-                  note: b.note || null,
-                  source: b.source,
-                  explanationId: explanation?.id ?? null,
-                  originFindingId: f.id,
-                  originRuleId: f.ruleId,
-                  createdBy: userOf(access),
-                })
-                .returning()
-            )[0]!;
-          const ids = [f.id];
-          if (b.similar) {
-            const similar = await tx
-              .select({ id: schema.findings.id })
-              .from(schema.findings)
-              .where(
-                and(
-                  eq(schema.findings.buildingId, ctx.building.id),
-                  eq(schema.findings.status, "open"),
-                  isNull(schema.findings.measureId),
-                  ne(schema.findings.id, f.id),
-                  coveredBy(m),
-                ),
-              );
-            ids.push(...similar.map((s) => s.id));
-          }
-          await setFindings(tx, access, ids, {
-            status: m.status === "in_effect" ? "fixed" : "acknowledged",
-            measureId: m.id,
+          const agreed = await agreeMeasure(tx, req, access, ctx.building.id, {
+            finding: f,
+            strategyId: b.strategyId,
+            source: b.source,
+            note: b.note,
+            explanationId: explanation?.id,
+            similar: b.similar,
           });
-          await audit(tx, req, access, {
-            action: existing ? "measure.join" : "measure.create",
-            entityType: "measure",
-            entityId: m.id,
-            data: { findingId: f.id, strategyId: m.strategyId, source: b.source, linked: ids.length },
-          });
-          return { measure: await measureJson(tx, ctx, m), linked: ids.length, joined: !!existing };
+          const measure = await takeEffectIfSimulated(tx, req, access, agreed);
+          return {
+            measure: await measureJson(tx, ctx, measure),
+            linked: agreed.linked.length,
+            joined: agreed.joined,
+          };
         },
       );
       return reply.status(201).send(out);
@@ -300,74 +260,20 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
         if (b.strategyId && b.strategyId !== before.strategyId && before.status !== "planned")
           throw unprocessable("A measure in effect keeps its strategy; cancel it and agree a new one.");
         const now = new Date();
-        const user = userOf(access);
         const [m] = await tx
           .update(schema.measures)
           .set({
             ...(b.note !== undefined ? { note: b.note || null } : {}),
             ...(b.strategyId ? { strategyId: b.strategyId } : {}),
-            ...(b.status === "in_effect" && before.status === "planned"
-              ? { status: "in_effect" as const, implementedAt: now, implementedBy: user }
-              : {}),
-            ...(b.status === "planned" && before.status === "in_effect"
-              ? { status: "planned" as const, implementedAt: null, implementedBy: null }
-              : {}),
-            ...(b.status === "cancelled"
-              ? { status: "cancelled" as const, cancelledAt: now, cancelledBy: user }
-              : {}),
+            ...statusChange(before.status, b.status, userOf(access), now),
           })
           .where(eq(schema.measures.id, before.id))
           .returning();
         const after = m!;
-        const linked = (status: "acknowledged" | "fixed") =>
-          tx
-            .select({ id: schema.findings.id })
-            .from(schema.findings)
-            .where(and(eq(schema.findings.measureId, after.id), eq(schema.findings.status, status)))
-            .then((rows) => rows.map((r) => r.id));
-
         let action = "measure.update";
         let count = 0;
         if (after.status !== before.status) {
-          if (after.status === "in_effect") {
-            action = "measure.implement";
-            // the floor's open findings of the same kinds from before the change are the problem it solved
-            const earlier = await tx
-              .select({ id: schema.findings.id })
-              .from(schema.findings)
-              .where(
-                and(
-                  eq(schema.findings.buildingId, ctx.building.id),
-                  eq(schema.findings.status, "open"),
-                  isNull(schema.findings.measureId),
-                  lt(schema.findings.startAt, now),
-                  coveredBy(after),
-                ),
-              );
-            count = await setFindings(
-              tx,
-              access,
-              [...(await linked("acknowledged")), ...earlier.map((r) => r.id)],
-              { status: "fixed", measureId: after.id },
-            );
-          } else if (after.status === "planned") {
-            action = "measure.unimplement";
-            count = await setFindings(tx, access, await linked("fixed"), {
-              status: "acknowledged",
-              measureId: after.id,
-            });
-          } else {
-            action = "measure.cancel";
-            count = await setFindings(
-              tx,
-              access,
-              [...(await linked("acknowledged")), ...(await linked("fixed"))],
-              {
-                status: "open",
-                measureId: null,
-              },
-            );
-          }
+          ({ action, count } = await settleFindings(tx, access, ctx.building.id, after, now));
         } else if (b.strategyId && b.strategyId !== before.strategyId) {
           // findings the new strategy does not cover go back to the list, except the one it was agreed from
           const keep = await tx
@@ -375,7 +281,11 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
             .from(schema.findings)
             .where(and(eq(schema.findings.measureId, after.id), coveredBy(after)));
           const keepIds = new Set([...keep.map((k) => k.id), after.originFindingId]);
-          const drop = (await linked("acknowledged")).filter((id) => !keepIds.has(id));
+          const linked = await tx
+            .select({ id: schema.findings.id })
+            .from(schema.findings)
+            .where(and(eq(schema.findings.measureId, after.id), eq(schema.findings.status, "acknowledged")));
+          const drop = linked.map((r) => r.id).filter((id) => !keepIds.has(id));
           count = await setFindings(tx, access, drop, { status: "open", measureId: null });
         }
         await audit(tx, req, access, {

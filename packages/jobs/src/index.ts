@@ -43,6 +43,16 @@ export const QUEUES = {
     deleteAfterSeconds: 7 * 86_400,
     deadLetter: DEAD_LETTER,
   },
+  // the worker answers from a template when the model fails, so a retry here only covers the worker itself
+  assistant: {
+    name: "assistant-reply",
+    policy: "standard",
+    retryLimit: 2,
+    retryDelay: 5,
+    expireInSeconds: 5 * 60,
+    deleteAfterSeconds: 7 * 86_400,
+    deadLetter: DEAD_LETTER,
+  },
   demo: {
     name: "demo-workspace",
     policy: "standard",
@@ -70,6 +80,9 @@ export const explainPayload = z.object({ orgId: z.uuid(), explanationId: z.uuid(
 /** the AI assistant's look at a whole building */
 export const briefPayload = z.object({ orgId: z.uuid(), briefId: z.uuid() });
 export type BriefPayload = z.infer<typeof briefPayload>;
+/** one exchange with the assistant */
+export const assistantPayload = z.object({ orgId: z.uuid(), turnId: z.uuid() });
+export type AssistantPayload = z.infer<typeof assistantPayload>;
 /** builds the simulated tower in a person's new demo organisation */
 export const demoPayload = z.object({ orgId: z.uuid() });
 export type RecomputePayload = z.infer<typeof recomputePayload>;
@@ -82,6 +95,7 @@ export interface JobQueue {
   explain(payload: ExplainPayload): Promise<string | null>;
   demo(payload: DemoPayload): Promise<string | null>;
   brief(payload: BriefPayload): Promise<string | null>;
+  assistant(payload: AssistantPayload): Promise<string | null>;
 }
 
 export class PgBossJobQueue implements JobQueue {
@@ -94,6 +108,9 @@ export class PgBossJobQueue implements JobQueue {
   }
   brief(payload: BriefPayload) {
     return this.boss.send(QUEUES.brief.name, payload);
+  }
+  assistant(payload: AssistantPayload) {
+    return this.boss.send(QUEUES.assistant.name, payload);
   }
   demo(payload: DemoPayload) {
     return this.boss.send(QUEUES.demo.name, payload, { singletonKey: payload.orgId });
@@ -142,6 +159,7 @@ export async function installJobSchema(ownerUrl: string, appRole = APP_ROLE): Pr
       QUEUES.recompute,
       QUEUES.explain,
       QUEUES.brief,
+      QUEUES.assistant,
       QUEUES.demo,
       QUEUES.nightly,
     ];

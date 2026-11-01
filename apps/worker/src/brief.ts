@@ -51,7 +51,7 @@ const SYSTEM = `You help the operations team of an office building decide where 
 
 Pick at most four groups worth acting on, most valuable first: weigh the avoidable energy, how often it recurs, and whether one change would fix it. For each, choose one strategy from the list ("investigate_on_site" when the pattern suggests a fault, "no_action" when the use looks legitimate). Leave out groups that already have a planned or active measure; mention a measure in effect under "watch" if its floor still shows the kind of finding it should have stopped.
 
-Write plainly, without marketing language, and use only the numbers given. Keep it short: the headline about 40 words in English or 60 characters in Chinese, each reason about 30 words or 50 characters.`;
+Write plainly, without marketing language, and use only the numbers given. Say what a strategy does in words: a strategy's id belongs in the strategyId field and never in the text. Keep it short: the headline about 40 words in English or 60 characters in Chinese, each reason about 30 words or 50 characters.`;
 
 /** Groups the building's recent open findings by floor and rule, largest first. */
 export async function briefInput(db: Db, orgId: string, briefId: string, now = Date.now()) {
@@ -124,18 +124,10 @@ export async function briefInput(db: Db, orgId: string, briefId: string, now = D
           inArray(schema.measures.status, ["planned", "in_effect"]),
         ),
       );
-    let locale = "en";
-    if (brief.requestedBy) {
-      const [u] = await tx
-        .select({ locale: schema.users.locale })
-        .from(schema.users)
-        .where(eq(schema.users.id, brief.requestedBy));
-      locale = u?.locale ?? "en";
-    }
     const round = (n: number) => Math.round(n * 10) / 10;
     return {
       brief,
-      locale,
+      locale: brief.locale,
       groups: top,
       input: {
         building: {
