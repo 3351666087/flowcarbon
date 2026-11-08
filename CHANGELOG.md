@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-11-08
+
+- **Any OpenAI-compatible endpoint can write the AI text.** With `AI_PROVIDER=openai-compatible`, `AI_BASE_URL` and
+  `AI_API_KEY`, the worker sends its model calls (assistant replies, finding explanations, briefs) to that endpoint's
+  chat completions instead of the Anthropic API, for when that API is unavailable. Nothing else changes: the same
+  structured output, checked the same way, with the plan's numbers and nothing else; the same drafts while it writes;
+  the same retries. Each answer keeps the id of the model that wrote it, and the page shows it.
+
 ## 0.2.0 — 2026-11-02
 
 - **Assistant on the first page.** Ask for a target ("bring avoidable energy down to 5%") or say what a smart home
