@@ -100,6 +100,7 @@ in `CORS_ORIGINS`.
 | `DOCS_ENABLED` | api | true | OpenAPI UI at `/api/v1/docs` |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_WORKSPACE_ID` | worker | — | AI explanations; optional |
 | `AI_MODEL`, `AI_EFFORT` | worker | `claude-opus-5-5`, `medium` | |
+| `AI_PROVIDER`, `AI_BASE_URL`, `AI_API_KEY` | worker | `anthropic`, —, — | `openai-compatible` sends the same requests to `AI_BASE_URL/v1/chat/completions` (a relay); the model's id is stored with every answer |
 | `RECOMPUTE_CONCURRENCY`, `EXPLAIN_CONCURRENCY` | worker | 2, 4 | per process |
 | `NIGHTLY_LOCAL_HOUR` | worker | 4 | each building's local hour for nightly reprocessing |
 

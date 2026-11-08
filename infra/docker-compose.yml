@@ -98,6 +98,9 @@ services:
       ANTHROPIC_WORKSPACE_ID: ${ANTHROPIC_WORKSPACE_ID:-}
       AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
       AI_EFFORT: ${AI_EFFORT:-medium}
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
     mem_limit: ${WORKER_MEM_LIMIT:-512m}
 
   web:

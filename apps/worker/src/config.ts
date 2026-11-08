@@ -16,6 +16,10 @@ const schema = z.object({
   /** required for keys that are not scoped to a workspace (sent as the anthropic-workspace-id header) */
   ANTHROPIC_WORKSPACE_ID: z.string().min(1).optional(),
   AI_MODEL: z.string().default("claude-opus-5-5"),
+  /** anthropic (default) or openai-compatible: a chat-completions endpoint at AI_BASE_URL, key in AI_API_KEY */
+  AI_PROVIDER: z.enum(["anthropic", "openai-compatible"]).default("anthropic"),
+  AI_BASE_URL: z.string().url().optional(),
+  AI_API_KEY: z.string().min(1).optional(),
   AI_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
   /** port for /healthz and /metrics; 0 disables the endpoint */
   HEALTH_PORT: z.coerce.number().int().min(0).max(65_535).default(4100),

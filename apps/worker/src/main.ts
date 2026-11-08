@@ -20,6 +20,7 @@ import { loadWorkerConfig } from "./config";
 import { runDemoWorkspace } from "./demo";
 import { runExplain } from "./explain";
 import { runNightly } from "./nightly";
+import { openAICompatClient } from "./openai-compat";
 import { markRecomputeFailed, runRecompute } from "./recompute";
 
 const config = loadWorkerConfig();
@@ -35,16 +36,26 @@ const boss = createBoss(config.DATABASE_URL, {
   max: 4,
 });
 const jobs = new PgBossJobQueue(boss);
-const anthropic = config.ANTHROPIC_API_KEY
-  ? new Anthropic({
-      apiKey: config.ANTHROPIC_API_KEY,
-      maxRetries: 2,
-      timeout: 120_000,
-      defaultHeaders: config.ANTHROPIC_WORKSPACE_ID
-        ? { "anthropic-workspace-id": config.ANTHROPIC_WORKSPACE_ID }
-        : undefined,
-    })
-  : null;
+const anthropic =
+  config.AI_PROVIDER === "openai-compatible"
+    ? config.AI_BASE_URL && config.AI_API_KEY
+      ? openAICompatClient({
+          baseURL: config.AI_BASE_URL,
+          apiKey: config.AI_API_KEY,
+          maxRetries: 2,
+          timeoutMs: 120_000,
+        })
+      : null
+    : config.ANTHROPIC_API_KEY
+      ? new Anthropic({
+          apiKey: config.ANTHROPIC_API_KEY,
+          maxRetries: 2,
+          timeout: 120_000,
+          defaultHeaders: config.ANTHROPIC_WORKSPACE_ID
+            ? { "anthropic-workspace-id": config.ANTHROPIC_WORKSPACE_ID }
+            : undefined,
+        })
+      : null;
 if (!anthropic)
   log.warn(
     "ANTHROPIC_API_KEY is not set: explanation requests will be marked failed, and the assistant answers from templates",
@@ -243,7 +254,10 @@ const server =
     : null;
 
 log.info(
-  { queues: Object.values(QUEUES).map((q) => q.name), ai: anthropic ? config.AI_MODEL : "disabled" },
+  {
+    queues: Object.values(QUEUES).map((q) => q.name),
+    ai: anthropic ? `${config.AI_PROVIDER}:${config.AI_MODEL}` : "disabled",
+  },
   "worker started",
 );
 
