@@ -23,6 +23,7 @@ import { useBackClose } from "@/lib/back";
 import { fill, useI18n } from "@/lib/i18n";
 import { can, useIds, useMe } from "@/lib/session";
 import { applyTheme, readTheme, type ThemeChoice } from "@/lib/theme";
+import { AppearanceSettings } from "./appearance-settings";
 import { Segmented, useAuthMethods } from "./auth-code";
 import { Avatar } from "./auth-flow";
 import { AvatarBadge, AvatarSheet } from "./avatar-sheet";
@@ -410,6 +411,7 @@ function AccountSheet({ onClose }: { onClose: () => void }) {
                 />
               </div>
             </div>
+            <AppearanceSettings />
             <div className="fc-web-only">
               <Row
                 onClick={() => {

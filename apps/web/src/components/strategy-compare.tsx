@@ -14,7 +14,7 @@ import {
   useTurnActions,
   whole,
 } from "@/components/assistant";
-import { CountUp, rangeOf, SplitPanel } from "@/components/before-after";
+import { CountUp, inEffectLine, rangeOf, SplitPanel } from "@/components/before-after";
 import { tick } from "@/components/glass";
 import { liveFloors } from "@/components/tower-scene";
 import { Badge, Button, Card, ErrorBox, Loading } from "@/components/ui";
@@ -134,6 +134,7 @@ function AdoptedCard({
   card,
   fresh,
   reviewer,
+  demo,
   undo,
 }: {
   plan: TurnPlan;
@@ -141,6 +142,8 @@ function AdoptedCard({
   /** adopted while watching, so it turns over */
   fresh: boolean;
   reviewer: boolean;
+  /** the simulated building follows what is in effect, and no data will verify it */
+  demo: boolean;
   undo: Actions["undo"];
 }) {
   const { t, locale } = useI18n();
@@ -169,7 +172,7 @@ function AdoptedCard({
           high: whole(kwh(covered * high, locale)),
         })}
       </div>
-      <p className="mt-1 text-xs">{statusLine(card.rows, t)}</p>
+      <p className="mt-1 text-xs">{inEffectLine(statusLine(card.rows, t), t, demo)}</p>
       {reviewer ? (
         <div className="mt-auto pt-3">
           <Button
@@ -238,7 +241,9 @@ function WeekAhead({
   });
   // a day of a kind the data never saw has no figure, and adding it as zero would understate the week
   const known = rows.filter((r) => r.basis > 0);
-  const sum = (pick: (r: (typeof rows)[number]) => number) => known.reduce((s, r) => s + pick(r), 0);
+  // each day is shown in whole kWh, so the week adds the whole kWh shown and the total matches the rows
+  const sum = (pick: (r: (typeof rows)[number]) => number) =>
+    known.reduce((s, r) => s + Math.round(pick(r)), 0);
   const peak = Math.max(1, ...rows.map((r) => r.withoutKwh));
   const after = sum((r) => r.after);
   const moves = "transition-[width] duration-500";
@@ -364,7 +369,9 @@ export function StrategyCompare({
 }) {
   const { t } = useI18n();
   const { orgId, buildingId } = useIds();
-  const role = useMembership()?.role;
+  const membership = useMembership();
+  const role = membership?.role;
+  const demo = membership?.orgPlan === "demo";
   const board = useStrategyBoard();
   const actions = useTurnActions();
   const overview = useQuery({
@@ -398,10 +405,20 @@ export function StrategyCompare({
 
   // an on-site check holds findings but switches nothing, so it is no part of what is expected to be saved
   const saving = adopted.measures.filter((m) => m.strategyId !== "investigate_on_site");
-  const showing = priority ? [priority] : (option?.actions ?? []);
-  const covered = plan.adoptedKwh + coveredBy(showing);
-  const figures = rangeOf(plan.recorded, covered, plan.realisation);
-  const acted = new Set([...saving.map((m) => m.floorId), ...showing.map((a) => a.floorId)]);
+  // a preview stands on what is adopted (plan.before counts it), so its change is the option's own, as on its card;
+  // with nothing to preview the panel shows what is adopted against the window as recorded
+  const previewing = !!(priority || option);
+  const before = previewing ? plan.before : plan.recorded;
+  const figures = priority
+    ? rangeOf(plan.before, priority.coveredKwh, plan.realisation)
+    : (option ?? rangeOf(plan.recorded, plan.adoptedKwh, plan.realisation));
+  const acted = new Set(
+    priority
+      ? [priority.floorId]
+      : option
+        ? option.actions.map((a) => a.floorId)
+        : saving.map((m) => m.floorId),
+  );
   const bottomUp = [...(overview.data?.floors ?? [])].reverse();
   const any = saving.length > 0;
 
@@ -432,6 +449,7 @@ export function StrategyCompare({
                   card={slot}
                   fresh={!known.current?.has(slot.turnId)}
                   reviewer={reviewer}
+                  demo={demo}
                   undo={actions.undo}
                 />
               ) : (
@@ -478,18 +496,17 @@ export function StrategyCompare({
               {priority?.title ??
                 (option ? (t.assistant.options[option.id] ?? option.id) : t.strategies.adoptedSoFar)}
             </h2>
-            {priority || option ? <Badge tone="accent">{t.split.previewing}</Badge> : null}
-            {(priority || option) && any ? (
-              <span className="text-xs text-muted">{t.strategies.onTop}</span>
-            ) : null}
+            {previewing ? <Badge tone="accent">{t.split.previewing}</Badge> : null}
+            {previewing && any ? <span className="text-xs text-muted">{t.strategies.onTop}</span> : null}
           </div>
           <SplitPanel
             plan={plan}
-            before={plan.recorded}
+            before={before}
             figures={figures}
             acted={acted}
             floors={bottomUp}
             live={liveFloors(bottomUp)}
+            stacked={previewing && plan.adoptedKwh > 0}
           />
           {priority ? (
             <p className="mt-3 text-xs text-muted">{t.strategies.fromOverview}</p>

@@ -13153,6 +13153,7 @@ export interface paths {
                                 requestedBy: string | null;
                                 createdAt: string;
                                 completedAt: string | null;
+                                outdated: boolean;
                             } | null;
                             otherLocale: boolean;
                         };
@@ -13312,6 +13313,7 @@ export interface paths {
                             requestedBy: string | null;
                             createdAt: string;
                             completedAt: string | null;
+                            outdated: boolean;
                         };
                     };
                 };

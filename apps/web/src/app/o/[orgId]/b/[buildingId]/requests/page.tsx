@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { addDays, dateTime, money, num, todayIn, zonedToIso } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
+import { fill, useI18n } from "@/lib/i18n";
 import { can, useBuilding, useFloors, useIds, useMembership, useTenants } from "@/lib/session";
 
 const TONE = { requested: "waste", approved: "saving", declined: "danger", cancelled: "neutral" } as const;
@@ -150,8 +150,11 @@ export default function RequestsPage() {
                 <div className="rounded-lg bg-accent-soft p-3 text-sm">
                   <div className="font-medium">{t.requests.mode[create.data.recommendedMode]}</div>
                   <p className="mt-1">{create.data.recommendation}</p>
-                  <p className="mt-1 text-xs">
-                    {t.requests.fee}: {money(create.data.fee, locale, building!.currency)}
+                  <p className="mt-1 text-xs" title={t.requests.feeHint}>
+                    {fill(t.common.labelled, {
+                      label: t.requests.fee,
+                      value: money(create.data.fee, locale, building!.currency),
+                    })}
                   </p>
                 </div>
               ) : null}
@@ -191,10 +194,14 @@ export default function RequestsPage() {
                     <span className="font-semibold">{floorLabel.get(r.floorId)}</span>
                     <span className="text-sm text-muted">{tenantName.get(r.tenantId)}</span>
                     <Badge tone={TONE[r.status]}>{t.requests.statuses[r.status]}</Badge>
-                    <span className="ml-auto num text-sm">{money(r.fee, locale, building!.currency)}</span>
+                    <span className="ml-auto text-sm" title={t.requests.feeHint}>
+                      <span className="text-muted">{t.requests.fee}</span>{" "}
+                      <span className="num">{money(r.fee, locale, building!.currency)}</span>
+                    </span>
                   </div>
                   <div className="mt-1 text-sm">
-                    {dateTime(r.startAt, locale, tz)} · {num(r.hours, locale, 2)} {t.common.hours} ·{" "}
+                    {dateTime(r.startAt, locale, tz)} ·{" "}
+                    {num(r.hours, locale, Number.isInteger(r.hours) ? 0 : 1)} {t.common.hours} ·{" "}
                     {r.expectedPeople} {t.common.people}
                   </div>
                   <div className="mt-1 text-xs text-muted">

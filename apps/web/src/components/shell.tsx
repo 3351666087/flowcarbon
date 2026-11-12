@@ -40,6 +40,18 @@ const NAV = [
   { key: "settings", icon: Settings },
 ] as const;
 
+/** Older demo buildings were stored as "Tower A (simulated)"; the header already carries a "Simulated data" badge. */
+export const buildingLabel = (name: string | undefined) => name?.replace(/\s*\(simulated\)$/i, "");
+
+/**
+ * The same page in another building. A finding or a measure belongs to one building, so from its detail page this
+ * goes to the list of findings or measures there instead.
+ */
+function inBuilding(pathname: string, from: string, to: string) {
+  const next = pathname.replace(`/b/${from}`, `/b/${to}`);
+  return next.replace(/(\/b\/[^/]+\/(?:findings|measures))\/[^/]+.*$/, "$1");
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -168,13 +180,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                     aria-label={t.common.building}
                     className="min-w-0 appearance-none truncate bg-transparent pr-5 font-medium outline-none"
                     value={buildingId}
-                    onChange={(e) =>
-                      router.push(pathname.replace(`/b/${buildingId}`, `/b/${e.target.value}`))
-                    }
+                    onChange={(e) => router.push(inBuilding(pathname, buildingId, e.target.value))}
                   >
                     {buildings.data.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.name}
+                        {buildingLabel(b.name)}
                       </option>
                     ))}
                   </select>
@@ -184,7 +194,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   />
                 </span>
               ) : (
-                <span className="truncate font-medium">{building?.name}</span>
+                <span className="truncate font-medium">{buildingLabel(building?.name)}</span>
               )}
               {membership.orgPlan === "demo" ? (
                 <span

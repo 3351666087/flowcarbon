@@ -48,6 +48,13 @@ export default function DataPage() {
   if (health.error) return <ErrorBox error={health.error} onRetry={() => health.refetch()} />;
   const h = health.data;
   const floorLabel = new Map((floors.data ?? []).map((f) => [f.id, f.label]));
+  // devices floor by floor, bottom up; those on no floor last
+  const floorLevel = new Map((floors.data ?? []).map((f) => [f.id, f.level]));
+  const levelOf = (floorId: string | null) =>
+    (floorId ? floorLevel.get(floorId) : undefined) ?? Number.POSITIVE_INFINITY;
+  const deviceList = [...(devices.data ?? [])].sort(
+    (a, b) => levelOf(a.floorId) - levelOf(b.floorId) || a.externalId.localeCompare(b.externalId),
+  );
 
   return (
     <>
@@ -83,14 +90,14 @@ export default function DataPage() {
             <Loading />
           ) : (
             <Table head={[t.data.external, t.data.kind, t.common.floor, t.data.lastSeen]}>
-              {(devices.data ?? []).map((d) => {
+              {deviceList.map((d) => {
                 const silent = h.silentDevices.some((s) => s.id === d.id);
                 return (
                   <tr key={d.id}>
                     <td className="font-mono text-xs">{d.externalId}</td>
                     <td className="text-xs">
-                      {d.kind}
-                      {d.system ? ` · ${d.system}` : ""}
+                      {t.data.kinds[d.kind] ?? d.kind}
+                      {d.system ? ` · ${t.data.systems[d.system] ?? d.system}` : ""}
                     </td>
                     <td>{d.floorId ? floorLabel.get(d.floorId) : "–"}</td>
                     <td className="whitespace-nowrap text-xs">
@@ -122,9 +129,11 @@ export default function DataPage() {
             <Table head={[t.data.received, t.data.items, t.common.status]}>
               {(batches.data ?? []).map((b) => (
                 <tr key={b.id}>
-                  <td className="whitespace-nowrap text-xs">
+                  <td
+                    className="whitespace-nowrap text-xs"
+                    title={b.idempotencyKey ? fill(t.data.batchKey, { key: b.idempotencyKey }) : undefined}
+                  >
                     {dateTime(b.receivedAt, locale, tz)}
-                    <div className="font-mono text-[11px] text-muted">{b.idempotencyKey}</div>
                   </td>
                   <td className="num text-xs">
                     {num(

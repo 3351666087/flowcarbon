@@ -7,7 +7,7 @@ import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { ExplainDeps } from "./explain";
 
-export const BRIEF_PROMPT_VERSION = "brief-v1";
+export const BRIEF_PROMPT_VERSION = "brief-v2";
 /** days of open findings the assistant looks at */
 const WINDOW_DAYS = 14;
 /** groups of findings handed to the model, largest first */
@@ -15,6 +15,12 @@ const MAX_GROUPS = 12;
 const DRAFT_EVERY_MS = 250;
 
 const RULE_IDS = Object.keys(RULES) as [string, ...string[]];
+/** display names of the strategies the brief can pick; ids stay in the structured fields only */
+const STRATEGY_NAMES: Record<string, string> = {
+  ...Object.fromEntries(Object.values(STRATEGIES).map((s) => [s.id, s.name])),
+  investigate_on_site: "Investigate on site",
+  no_action: "No action",
+};
 const STRATEGY_IDS = [
   "occupancy_gated_workday",
   "zone_only_non_working",
@@ -51,7 +57,7 @@ const SYSTEM = `You help the operations team of an office building decide where 
 
 Pick at most four groups worth acting on, most valuable first: weigh the avoidable energy, how often it recurs, and whether one change would fix it. For each, choose one strategy from the list ("investigate_on_site" when the pattern suggests a fault, "no_action" when the use looks legitimate). Leave out groups that already have a planned or active measure; mention a measure in effect under "watch" if its floor still shows the kind of finding it should have stopped.
 
-Write plainly, without marketing language, and use only the numbers given. Say what a strategy does in words: a strategy's id belongs in the strategyId field and never in the text. Keep it short: the headline about 40 words in English or 60 characters in Chinese, each reason about 30 words or 50 characters.`;
+Write plainly, without marketing language, and use only the numbers given. Say what a strategy does in words or by its name: a strategy's id belongs in the strategyId field and never in the text. Lead with the energy that can be saved in kWh; cost comes after it, carbon is not needed. Keep it short: the headline about 40 words in English or 60 characters in Chinese, each reason about 30 words or 50 characters.`;
 
 /** Groups the building's recent open findings by floor and rule, largest first. */
 export async function briefInput(db: Db, orgId: string, briefId: string, now = Date.now()) {
@@ -124,7 +130,6 @@ export async function briefInput(db: Db, orgId: string, briefId: string, now = D
           inArray(schema.measures.status, ["planned", "in_effect"]),
         ),
       );
-    const round = (n: number) => Math.round(n * 10) / 10;
     return {
       brief,
       locale: brief.locale,
@@ -148,24 +153,31 @@ export async function briefInput(db: Db, orgId: string, briefId: string, now = D
           findings: g.count,
           daysWithFindings: g.days.size,
           dayTypes: [...g.dayTypes],
-          avoidableKwh: round(g.kwh),
-          avoidableCost: round(g.cost),
+          // whole numbers: the model repeats what it is given, and decimals of a kWh are noise to a reader
+          avoidableKwh: Math.round(g.kwh),
+          avoidableCost: Math.round(g.cost),
           peakPeople: g.peakPeople,
         })),
         measures: measures.map((m) => ({
           floor: label.get(m.floorId) ?? "?",
           strategyId: m.strategyId,
+          strategy: STRATEGY_NAMES[m.strategyId] ?? m.strategyId,
           status: m.status,
-          since: (m.implementedAt ?? m.createdAt).toISOString().slice(0, 10),
+          // the building's own calendar day, as the Measures page shows it
+          since: localDateOf(ctx, (m.implementedAt ?? m.createdAt).getTime()),
         })),
         strategies: [
           ...Object.values(STRATEGIES).map((s) => ({ id: s.id, name: s.name, description: s.description })),
           {
             id: "investigate_on_site",
-            name: "Investigate on site",
+            name: STRATEGY_NAMES.investigate_on_site,
             description: "Check the BMS schedule, overrides and sensors first.",
           },
-          { id: "no_action", name: "No action", description: "The use was legitimate; keep the record." },
+          {
+            id: "no_action",
+            name: STRATEGY_NAMES.no_action,
+            description: "The use was legitimate; keep the record.",
+          },
         ],
       },
     };

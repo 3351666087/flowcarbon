@@ -84,6 +84,112 @@
   color-scheme: dark;
 }
 
+/* ---- appearance --------------------------------------------------------------------------------------------
+   The reader's accent (data-accent on <html>, set from the account menu; teal is the default and has no attribute).
+   Each one has a light and a dark value, at the same specificity pattern as the theme above, so it follows the
+   theme. Waste amber, saving green and danger red stay as they are: they carry meaning. */
+:root[data-accent="blue"] {
+  --accent: #1d5fc4;
+  --accent-soft: #e3edfb;
+  --chart-1: #1d5fc4;
+  --ring: rgb(29 95 196 / 0.35);
+  --on-accent: #ffffff;
+}
+:root[data-accent="green"] {
+  --accent: #3f7f1e;
+  --accent-soft: #ebf4e3;
+  --chart-1: #3f7f1e;
+  --ring: rgb(63 127 30 / 0.35);
+  --on-accent: #ffffff;
+}
+:root[data-accent="violet"] {
+  --accent: #6a43c7;
+  --accent-soft: #efe9fb;
+  --chart-1: #6a43c7;
+  --ring: rgb(106 67 199 / 0.35);
+  --on-accent: #ffffff;
+}
+:root[data-accent="rose"] {
+  --accent: #ad2f6f;
+  --accent-soft: #fbe8f1;
+  --chart-1: #ad2f6f;
+  --ring: rgb(173 47 111 / 0.35);
+  --on-accent: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="blue"]:not([data-theme="light"]) {
+    --accent: #6ea8ff;
+    --accent-soft: #142440;
+    --chart-1: #6ea8ff;
+    --ring: rgb(110 168 255 / 0.4);
+    --on-accent: #061a38;
+  }
+  :root[data-accent="green"]:not([data-theme="light"]) {
+    --accent: #8fd45a;
+    --accent-soft: #1a2a12;
+    --chart-1: #8fd45a;
+    --ring: rgb(143 212 90 / 0.4);
+    --on-accent: #0d1f05;
+  }
+  :root[data-accent="violet"]:not([data-theme="light"]) {
+    --accent: #b49cff;
+    --accent-soft: #251c40;
+    --chart-1: #b49cff;
+    --ring: rgb(180 156 255 / 0.4);
+    --on-accent: #1a0f3d;
+  }
+  :root[data-accent="rose"]:not([data-theme="light"]) {
+    --accent: #f27bb8;
+    --accent-soft: #3a1529;
+    --chart-1: #f27bb8;
+    --ring: rgb(242 123 184 / 0.4);
+    --on-accent: #3a0a22;
+  }
+}
+:root[data-theme="dark"][data-accent="blue"] {
+  --accent: #6ea8ff;
+  --accent-soft: #142440;
+  --chart-1: #6ea8ff;
+  --ring: rgb(110 168 255 / 0.4);
+  --on-accent: #061a38;
+}
+:root[data-theme="dark"][data-accent="green"] {
+  --accent: #8fd45a;
+  --accent-soft: #1a2a12;
+  --chart-1: #8fd45a;
+  --ring: rgb(143 212 90 / 0.4);
+  --on-accent: #0d1f05;
+}
+:root[data-theme="dark"][data-accent="violet"] {
+  --accent: #b49cff;
+  --accent-soft: #251c40;
+  --chart-1: #b49cff;
+  --ring: rgb(180 156 255 / 0.4);
+  --on-accent: #1a0f3d;
+}
+:root[data-theme="dark"][data-accent="rose"] {
+  --accent: #f27bb8;
+  --accent-soft: #3a1529;
+  --chart-1: #f27bb8;
+  --ring: rgb(242 123 184 / 0.4);
+  --on-accent: #3a0a22;
+}
+
+/* The reader's text size (data-text-size on <html>). Tailwind's sizes and spacing are in rem, so the root size
+   scales them; the few type sizes written in px are scaled by --text-scale further down. Breakpoints are in rem
+   too, but media queries measure against the browser's size, not this one, so layouts switch at the same widths. */
+:root {
+  --text-scale: 1;
+}
+:root[data-text-size="small"] {
+  --text-scale: 0.9375;
+  font-size: 93.75%;
+}
+:root[data-text-size="large"] {
+  --text-scale: 1.125;
+  font-size: 112.5%;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -1065,7 +1171,7 @@ html.fc-locked body {
   .fc-table td::before {
     content: attr(data-label);
     flex-shrink: 0;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--muted);
     text-align: left;
   }
@@ -1151,5 +1257,54 @@ html.fc-locked body {
   [data-titled] .fc-bar-place {
     opacity: 0;
     transform: translateY(-10px);
+  }
+}
+
+/* type sizes written in px follow the reader's text size too (unlayered, so they win over the utilities) */
+:root[data-text-size] .text-\[10\.5px\] {
+  font-size: calc(10.5px * var(--text-scale));
+}
+:root[data-text-size] .text-\[11px\] {
+  font-size: calc(11px * var(--text-scale));
+}
+:root[data-text-size] .text-\[11\.5px\] {
+  font-size: calc(11.5px * var(--text-scale));
+}
+:root[data-text-size] .text-\[13px\] {
+  font-size: calc(13px * var(--text-scale));
+}
+:root[data-text-size] .text-\[15px\] {
+  font-size: calc(15px * var(--text-scale));
+}
+:root[data-text-size] .text-\[16px\] {
+  font-size: calc(16px * var(--text-scale));
+}
+:root[data-text-size] .text-\[17px\] {
+  font-size: calc(17px * var(--text-scale));
+}
+:root[data-text-size] .text-\[22px\] {
+  font-size: calc(22px * var(--text-scale));
+}
+:root[data-text-size] .text-\[24px\] {
+  font-size: calc(24px * var(--text-scale));
+}
+:root[data-text-size] .text-\[26px\] {
+  font-size: calc(26px * var(--text-scale));
+}
+:root[data-text-size] .text-\[28px\] {
+  font-size: calc(28px * var(--text-scale));
+}
+:root[data-text-size] .text-\[34px\] {
+  font-size: calc(34px * var(--text-scale));
+}
+:root[data-text-size] .text-\[40px\] {
+  font-size: calc(40px * var(--text-scale));
+}
+:root[data-text-size] .text-\[42px\] {
+  font-size: calc(42px * var(--text-scale));
+}
+@media (width >= 40rem) {
+  :root[data-text-size] .sm\:text-\[42px\] {
+    font-size: calc(42px * var(--text-scale));
   }
 }

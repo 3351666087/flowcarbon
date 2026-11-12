@@ -24,7 +24,8 @@ export default function ReportPage() {
   const { t, locale } = useI18n();
   const { orgId, buildingId } = useIds();
   const { building } = useBuilding();
-  const role = useMembership()?.role;
+  const membership = useMembership();
+  const role = membership?.role;
   const qc = useQueryClient();
   const path = { orgId, buildingId };
   const cur = building!.currency;
@@ -78,6 +79,7 @@ export default function ReportPage() {
   const { locationFactor, residualFactor } = r.scope2;
   // the API's disclosures are English, for the CSV and for a frozen report; these say the same in the reader's language
   const notes = [
+    ...(membership?.orgPlan === "demo" ? [t.report.notes.simulated] : []),
     t.report.notes.boundary,
     fill(t.report.notes.location, {
       factor: locationFactor.kgPerKwh,
@@ -140,11 +142,12 @@ export default function ReportPage() {
           <Button type="submit">{t.common.apply}</Button>
           <span className="text-sm text-muted">
             {periodFrom} – {periodTo ? addDays(periodTo, -1) : ""} ·{" "}
-            {fill(t.report.days, { n: r.period.days })} (
-            {Object.entries(r.period.dayTypes)
-              .map(([k, v]) => `${t.report.dayTypes[k]} ${v}`)
-              .join(", ")}
-            )
+            {fill(t.report.days, { n: r.period.days })}
+            {fill(t.common.paren, {
+              text: Object.entries(r.period.dayTypes)
+                .map(([k, v]) => `${t.report.dayTypes[k]} ${v}`)
+                .join(t.common.listSep),
+            })}
           </span>
         </form>
       </Card>
@@ -178,15 +181,23 @@ export default function ReportPage() {
         <Card title={`${t.report.scope2} · ${t.report.market}`}>
           <div className="num text-2xl font-semibold">{co2(r.scope2.marketBasedKg, locale)}</div>
           <div className="mt-1 text-sm">
-            {t.report.green}: {pct(r.scope2.greenShare, locale, 1)}
+            {fill(t.common.labelled, { label: t.report.green, value: pct(r.scope2.greenShare, locale, 1) })}
           </div>
           {r.scope2.residualFactor ? <div className="mt-2">{factor(r.scope2.residualFactor)}</div> : null}
         </Card>
+        <p className="-mt-3 text-sm text-muted lg:col-span-2">{t.report.scope2Plain}</p>
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title={t.report.byFloor}>
-          <Table head={[t.common.floor, t.report.energy, t.report.afterHours, t.report.avoidable]}>
+          <Table
+            head={[
+              t.common.floor,
+              fill(t.report.withUnit, { label: t.report.energy }),
+              fill(t.report.withUnit, { label: t.report.afterHours }),
+              fill(t.report.withUnit, { label: t.report.avoidable }),
+            ]}
+          >
             {r.byFloor.map((f) => (
               <tr key={f.floorId}>
                 <td className="font-medium">{f.label}</td>
@@ -199,24 +210,33 @@ export default function ReportPage() {
         </Card>
         <div className="space-y-6">
           <Card title={t.report.byRule}>
-            <Table head={[t.findings.rule, "#", t.report.avoidable]}>
+            <Table
+              head={[t.findings.rule, t.report.count, fill(t.report.withUnit, { label: t.report.avoidable })]}
+            >
               {r.byRule.map((x) => (
                 <tr key={x.ruleId}>
                   <td>{t.domain.ruleNames[x.ruleId] ?? x.name}</td>
                   <td className="num">{x.count}</td>
-                  <td className="num text-waste">{kwh(x.kwh, locale)}</td>
+                  <td className="num text-waste">{num(x.kwh, locale)}</td>
                 </tr>
               ))}
             </Table>
           </Card>
           <Card title={t.report.byDayType}>
-            <Table head={["", t.report.daysShort, t.report.energy, t.report.avoidable]}>
+            <Table
+              head={[
+                "",
+                t.report.daysShort,
+                fill(t.report.withUnit, { label: t.report.energy }),
+                fill(t.report.withUnit, { label: t.report.avoidable }),
+              ]}
+            >
               {r.byDayType.map((x) => (
                 <tr key={x.dayType}>
                   <td>{t.report.dayTypes[x.dayType]}</td>
                   <td className="num">{x.days}</td>
-                  <td className="num">{kwh(x.kwh, locale)}</td>
-                  <td className="num text-waste">{kwh(x.avoidableKwh, locale)}</td>
+                  <td className="num">{num(x.kwh, locale)}</td>
+                  <td className="num text-waste">{num(x.avoidableKwh, locale)}</td>
                 </tr>
               ))}
             </Table>

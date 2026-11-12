@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { cookies, headers } from "next/headers";
 import type { ReactNode } from "react";
+import { APPEARANCE_SCRIPT } from "@/lib/appearance";
 import { LOCALE_COOKIE, type Locale } from "@/lib/format";
 import { EARLY_SCRIPT } from "@/lib/theme";
 import "./globals.css";
@@ -36,6 +37,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed script that must run before first paint */}
         <script dangerouslySetInnerHTML={{ __html: EARLY_SCRIPT }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed script that must run before first paint */}
+        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_SCRIPT }} />
       </head>
       <body>
         <Providers locale={locale}>{children}</Providers>

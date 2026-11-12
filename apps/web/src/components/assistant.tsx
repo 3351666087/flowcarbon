@@ -11,7 +11,7 @@ import { toast } from "@/components/toast";
 import { Badge, Button, Card, ErrorBox, errorText, Input } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import type { AssistantTurn, TurnOption, TurnPlan } from "@/lib/api-shapes";
-import { dateTime, kwh, pct } from "@/lib/format";
+import { dateTime, kwh, pct, prettyNumbers } from "@/lib/format";
 import { type Dict, fill, useI18n } from "@/lib/i18n";
 import { parsePartialJson } from "@/lib/partial-json";
 import { can, useBuilding, useFloors, useIds, useMembership } from "@/lib/session";
@@ -266,7 +266,7 @@ function OptionCard({
             <Check className="size-3" aria-hidden /> {t.assistant.applied}
           </Badge>
         ) : option.reachesTarget ? (
-          <Badge tone="saving">{t.assistant.reaches}</Badge>
+          <Badge tone="saving">{option.reachesAtLow ? t.assistant.reaches : t.assistant.reachesMid}</Badge>
         ) : option.shortBy !== null ? (
           <Badge tone="waste">{fill(t.assistant.short, { pct: pct(option.shortBy, locale, 1) })}</Badge>
         ) : null}
@@ -367,9 +367,14 @@ function Turn({
   const said = useMemo(() => (foreign ? saidIn({ ...turn, draft: null }) : saidIn(turn)), [turn, foreign]);
   const plan = turn.plan;
   const options = plan?.options ?? [];
+  // figures in the words read like the cards beside them (181.3 MWh, not 181288 kWh); what was stored is untouched
+  const currency = building?.currency ?? "CNY";
   const segments = [
-    { key: "reply", text: said.reply },
-    ...options.map((o) => ({ key: o.id, text: said.options.get(o.id)?.why ?? "" })),
+    { key: "reply", text: prettyNumbers(said.reply, locale, currency) },
+    ...options.map((o) => ({
+      key: o.id,
+      text: prettyNumbers(said.options.get(o.id)?.why ?? "", locale, currency),
+    })),
   ];
   const total = segments.reduce((n, s) => n + s.text.length, 0);
   const done = turn.status === "done";
@@ -439,7 +444,7 @@ function Turn({
                 {[
                   turn.requestedBy,
                   dateTime(turn.completedAt, locale, building?.timezone ?? "Asia/Shanghai"),
-                  turn.model ? null : t.assistant.template,
+                  turn.model ? fill(t.assistant.writtenBy, { model: turn.model }) : t.assistant.template,
                 ]
                   .filter(Boolean)
                   .join(" · ")}

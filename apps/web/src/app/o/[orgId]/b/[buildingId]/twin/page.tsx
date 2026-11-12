@@ -15,7 +15,7 @@ import {
   twinLayout,
   twinPolicies,
 } from "@flowcarbon/core/twin";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { Info, Minus, Plus, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -37,9 +37,9 @@ import {
   Select,
 } from "@/components/ui";
 import { ApiError, api, unwrap } from "@/lib/api";
-import { num, pct } from "@/lib/format";
+import { addDays, num, pct, todayIn } from "@/lib/format";
 import { fill, useI18n } from "@/lib/i18n";
-import { can, PAGES, useFloors, useIds, useMembership } from "@/lib/session";
+import { can, PAGES, useBuilding, useFloors, useIds, useMembership } from "@/lib/session";
 
 /** Layouts picked by someone who may not save them: this browser's own, by floor. */
 const LOCAL_LAYOUTS = "flowcarbon.twin.layouts";
@@ -60,6 +60,30 @@ function writeLocal(layouts: Record<string, TwinTemplate>) {
   }
 }
 
+/** The local hour (0–23) of an instant in a time zone. */
+function hourIn(at: Date, timeZone: string): number {
+  return (
+    Number(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(at)) % 24
+  );
+}
+
+/** Weeks of history a floor with no recent count is started from. */
+const TYPICAL_WEEKS = 4;
+
+/** The same weekday as today, on or before the last day with data, then a week, two weeks… earlier. */
+function sameWeekdays(lastDay: string, timeZone: string): string[] {
+  const weekday = (key: string) => new Date(`${key}T00:00:00Z`).getUTCDay();
+  const back = (weekday(lastDay) - weekday(todayIn(timeZone)) + 7) % 7;
+  const first = addDays(lastDay, -back);
+  return Array.from({ length: TYPICAL_WEEKS }, (_, i) => addDays(first, -7 * i));
+}
+
+function median(xs: readonly number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const n = s.length;
+  return n % 2 ? s[(n - 1) / 2]! : (s[n / 2 - 1]! + s[n / 2]!) / 2;
+}
+
 interface LayoutChange {
   floorId: string;
   label: string;
@@ -77,6 +101,7 @@ export default function TwinPage() {
   const { t, locale } = useI18n();
   const { orgId, buildingId } = useIds();
   const role = useMembership()?.role;
+  const timeZone = useBuilding().building?.timezone ?? "UTC";
   const qc = useQueryClient();
   const floors = useFloors();
   const overview = useQuery({
@@ -148,11 +173,35 @@ export default function TwinPage() {
   const areaM2 = floor?.areaM2 ?? 0;
   const template: TwinTemplate = (floorId && local[floorId]) || floor?.layout || "open_plan";
   const live = (floorId && occupancy.get(floorId)) || 0;
-  // no reading says nothing about who is there: such a floor starts empty, and nothing claims it is
+  // no reading says nothing about who is there, and nobody is not the same as unknown: such a floor starts
+  // from the median count at this hour on the same weekday in the last weeks with data, labelled as assumed
   const counted = !!overview.data?.floors.find((f) => f.floorId === floorId)?.at;
+  const lastDay = overview.data?.asOf ?? null;
+  const history = useQueries({
+    queries: (!counted && floorId && lastDay ? sameWeekdays(lastDay, timeZone) : []).map((date) => ({
+      queryKey: ["intervals", orgId, buildingId, floorId, date],
+      queryFn: () =>
+        unwrap(
+          api.GET("/api/v1/orgs/{orgId}/buildings/{buildingId}/floors/{floorId}/intervals", {
+            params: { path: { orgId, buildingId, floorId: floorId! }, query: { date } },
+          }),
+        ),
+      staleTime: 30 * 60_000,
+    })),
+  });
+  const hour = hourIn(new Date(), timeZone);
+  const typicalDays = history
+    .map((q) => (q.data ?? []).filter((iv) => hourIn(new Date(iv.start), timeZone) === hour))
+    .filter((ivs) => ivs.length)
+    .map((ivs) => ivs.reduce((n, iv) => n + iv.occupancy, 0) / ivs.length);
+  const historyPending = history.some((q) => q.isPending);
+  // with no history either, half the desks: a stated guess, not a reading
+  const typical = typicalDays.length ? Math.round(median(typicalDays)) : null;
 
   const layout = useMemo(() => twinLayout(areaM2, template), [areaM2, template]);
-  const placed = useMemo(() => placePeople(layout, live, floorId ?? ""), [layout, live, floorId]);
+  const assumed = counted ? null : historyPending ? 0 : (typical ?? Math.round(layout.seats.length / 2));
+  const start = assumed ?? live;
+  const placed = useMemo(() => placePeople(layout, start, floorId ?? ""), [layout, start, floorId]);
   const key = `${floorId}:${template}`;
   const otherKey = `${floorId}:${template === "open_plan" ? "meeting_rooms" : "open_plan"}`;
   // another layout has other seats, and the same number of people to put in them
@@ -184,7 +233,23 @@ export default function TwinPage() {
   const offered = twinPolicies(template);
   const picked = policies[floor.id];
   const policy = picked && offered.includes(picked) ? picked : (matched ?? occupiedPolicy(template));
-  const inEffect = [...new Set(active.map((m) => strategyName(t, m.strategyId)))];
+  // a cooling measure picks a policy that follows people too, so each line says which kind it is
+  const kindOf = (id: string) =>
+    id === "occupancy_gated_workday" || id === "zone_only_non_working"
+      ? "cooling"
+      : id === "auto_lights_off"
+        ? "lighting"
+        : "other";
+  const inEffect = (["cooling", "lighting", "other"] as const)
+    .map((kind) => ({
+      kind,
+      names: [
+        ...new Set(
+          active.filter((m) => kindOf(m.strategyId) === kind).map((m) => strategyName(t, m.strategyId)),
+        ),
+      ],
+    }))
+    .filter((x) => x.names.length);
 
   const before = evaluateTwin(floor, layout, "all_on", people);
   const after = evaluateTwin(floor, layout, policy, people);
@@ -207,6 +272,10 @@ export default function TwinPage() {
     ? (after.after.totalKw - after.before.totalKw) / after.before.totalKw
     : 0;
   const changeText = `${change < 0 ? "−" : ""}${num(Math.abs(change) * 100, locale)} %`;
+  // with nobody seated the change is only the policy switching everything off, which says nothing useful
+  const powerSub = people.length
+    ? fill(t.twin.powerSub, { before: kw(after.before.totalKw), change: changeText })
+    : fill(t.twin.wasAll, { all: kw(after.before.totalKw) });
   const rowGap = layout.depth / layout.groups.length;
 
   const setPeople = (next: readonly string[]) => setEdits((e) => ({ ...e, [key]: next }));
@@ -318,11 +387,11 @@ export default function TwinPage() {
               ))}
             </div>
             <p className="mt-1 text-xs text-muted">{t.twin.policyHints[policy]}</p>
-            {inEffect.length ? (
-              <p className="mt-1 text-xs text-saving">
-                {fill(t.twin.inEffect, { strategy: inEffect.join(locale === "zh" ? "、" : ", ") })}
+            {inEffect.map(({ kind, names }) => (
+              <p key={kind} className="mt-1 text-xs text-saving">
+                {fill(t.twin.inEffectKind[kind], { strategy: names.join(locale === "zh" ? "、" : ", ") })}
               </p>
-            ) : null}
+            ))}
           </div>
         </div>
         {save.error ? (
@@ -373,6 +442,7 @@ export default function TwinPage() {
         </Card>
       </div>
 
+      <p className="mt-2 text-xs text-muted">{t.twin.tapHint}</p>
       <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
         <TwinLegend />
         <p className="num text-xs text-muted">
@@ -390,6 +460,13 @@ export default function TwinPage() {
               <div className="num mt-1 text-xs text-muted">
                 {counted ? fill(t.twin.live, { n: live }) : t.twin.noLive}
               </div>
+              {assumed !== null && !historyPending ? (
+                <div className="mt-0.5 text-xs font-medium text-accent">
+                  {typical !== null
+                    ? fill(t.twin.assumedTypical, { n: typicalDays.length })
+                    : t.twin.assumedHalf}
+                </div>
+              ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Button
@@ -412,7 +489,7 @@ export default function TwinPage() {
               </Button>
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted">{people.length ? t.twin.tapHint : t.twin.empty}</p>
+          {people.length ? null : <p className="mt-3 text-xs text-muted">{t.twin.empty}</p>}
           {counted && live > layout.seats.length ? (
             <p className="mt-1 text-xs text-muted">
               {fill(t.twin.fewerDesks, { desks: layout.seats.length })}
@@ -420,7 +497,7 @@ export default function TwinPage() {
           ) : null}
           {edits[key] ? (
             <Button variant="ghost" className="mt-2 min-h-11 text-accent sm:min-h-9" onClick={resetPeople}>
-              <RotateCcw className="size-3.5" aria-hidden /> {t.twin.reset}
+              <RotateCcw className="size-3.5" aria-hidden /> {counted ? t.twin.reset : t.twin.resetAssumed}
             </Button>
           ) : null}
         </Card>
@@ -500,7 +577,7 @@ export default function TwinPage() {
           label={t.twin.power}
           tone="saving"
           value={<CountUp value={after.after.totalKw} from={after.before.totalKw} format={kw} />}
-          sub={fill(t.twin.powerSub, { before: kw(after.before.totalKw), change: changeText })}
+          sub={powerSub}
         />
         <Metric
           label={t.twin.worstSeat}

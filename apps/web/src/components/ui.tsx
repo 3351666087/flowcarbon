@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react";
 import {
   type ButtonHTMLAttributes,
   Children,
+  type CSSProperties,
   cloneElement,
   createContext,
   type InputHTMLAttributes,
@@ -315,7 +316,16 @@ export function Empty({ children }: { children: ReactNode }) {
  * A data table. On a phone each row becomes a small card of label and value lines (the labels come from `head`),
  * so nothing has to be scrolled sideways.
  */
-export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
+/** `minWidth`: the width (px) below which the table scrolls sideways instead of squeezing; 560 by default. */
+export function Table({
+  head,
+  children,
+  minWidth = 560,
+}: {
+  head: ReactNode[];
+  children: ReactNode;
+  minWidth?: number;
+}) {
   const labels = head.map((h) => (typeof h === "string" ? h : ""));
   const rows = Children.map(children, (row) => {
     if (!isValidElement<{ children?: ReactNode }>(row)) return row;
@@ -328,7 +338,10 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
   });
   return (
     <div className="-mx-4 overflow-x-auto">
-      <table className="fc-table w-full min-w-[560px] border-collapse text-sm">
+      <table
+        className="fc-table w-full min-w-[var(--table-min)] border-collapse text-sm"
+        style={{ "--table-min": `${minWidth}px` } as CSSProperties}
+      >
         <thead>
           <tr className="border-b border-border text-left text-xs text-muted">
             {head.map((h, i) => (

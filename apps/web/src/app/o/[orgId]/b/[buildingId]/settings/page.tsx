@@ -17,8 +17,8 @@ import {
 } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { dateTime } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
-import { type Role, useBuilding, useIds, useMembership, useTenants } from "@/lib/session";
+import { fill, useI18n } from "@/lib/i18n";
+import { type Role, useBuilding, useFloors, useIds, useMembership, useTenants } from "@/lib/session";
 
 const ROLES: Role[] = [
   "owner",
@@ -61,6 +61,7 @@ export default function SettingsPage() {
   const { building } = useBuilding();
   const me = useMembership();
   const tenants = useTenants();
+  const floors = useFloors();
   const qc = useQueryClient();
   const tz = building!.timezone;
   const org = { orgId };
@@ -149,21 +150,32 @@ export default function SettingsPage() {
   if (members.isPending) return <Loading page />;
   if (members.error) return <ErrorBox error={members.error} />;
 
+  // the audit log stores codes and ids; people read who did what to which floor
+  const memberName = new Map(members.data.map((m) => [m.userId, m.name || m.email]));
+  const keyLabel = new Map((keys.data ?? []).map((k) => [k.id, k.name]));
+  const floorLabel = new Map((floors.data ?? []).map((f) => [f.id, f.label]));
+  const actor = (a: { actorType: string; actorId: string | null }) =>
+    a.actorType === "system"
+      ? t.settings.actorSystem
+      : a.actorType === "api_key"
+        ? fill(t.settings.actorApiKey, { name: (a.actorId && keyLabel.get(a.actorId)) ?? "" }).trim()
+        : ((a.actorId && memberName.get(a.actorId)) ?? t.settings.actorUnknown);
+
   return (
     <>
       <PageHeader title={t.settings.title} subtitle={me?.orgName} />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card title={t.settings.members}>
-          <Table head={["", t.settings.role]}>
+          <Table head={["", t.settings.role]} minWidth={320}>
             {members.data.map((m) => (
               <tr key={m.userId}>
-                <td>
+                <td className="[overflow-wrap:anywhere]">
                   <div className="font-medium">{m.name}</div>
                   <div className="text-xs text-muted">{m.email}</div>
                 </td>
                 <td>
                   <Select
-                    className="h-8"
+                    className="h-8 w-auto max-w-full"
                     aria-label={t.settings.role}
                     value={m.role}
                     disabled={m.role === "tenant_admin" || (me?.role !== "owner" && m.role === "owner")}
@@ -263,6 +275,8 @@ export default function SettingsPage() {
         <Card title={t.settings.apiKeys}>
           {keys.isPending ? (
             <Loading />
+          ) : !keys.data?.length ? (
+            <p className="text-sm text-muted">{t.settings.noKeys}</p>
           ) : (
             <Table head={[t.settings.keyName, t.settings.scopes, t.data.lastSeen, ""]}>
               {(keys.data ?? []).map((k) => (
@@ -333,21 +347,24 @@ export default function SettingsPage() {
         {audit.isPending ? (
           <Loading />
         ) : (
-          <Table head={["", "", ""]}>
-            {(audit.data?.items ?? []).map((a) => (
-              <tr key={a.id}>
-                <td className="whitespace-nowrap text-xs">{dateTime(a.at, locale, tz)}</td>
-                <td>
-                  <code className="text-xs">{a.action}</code>
-                  <div className="text-xs text-muted">
-                    {a.entityType} {a.entityId?.slice(0, 8)}
-                  </div>
-                </td>
-                <td className="text-xs text-muted">
-                  {a.actorType} {a.actorId?.slice(0, 8)}
-                </td>
-              </tr>
-            ))}
+          <Table head={[t.settings.auditWhen, t.settings.auditWhat, t.settings.auditWho]}>
+            {(audit.data?.items ?? []).map((a) => {
+              const floor = a.entityType === "floor" && a.entityId ? floorLabel.get(a.entityId) : undefined;
+              return (
+                <tr key={a.id}>
+                  <td className="whitespace-nowrap text-xs">{dateTime(a.at, locale, tz)}</td>
+                  <td title={`${a.action} · ${a.entityType}${a.entityId ? ` ${a.entityId}` : ""}`}>
+                    <div className="text-sm">{t.settings.actions[a.action] ?? a.action}</div>
+                    {floor ? (
+                      <div className="text-xs text-muted">
+                        {fill(t.settings.auditFloor, { label: floor })}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="text-xs text-muted [overflow-wrap:anywhere]">{actor(a)}</td>
+                </tr>
+              );
+            })}
           </Table>
         )}
       </Card>

@@ -103,9 +103,7 @@ function Findings() {
           value={floorId}
           onChange={(e) => setFilter("floorId", e.target.value)}
         >
-          <option value="">
-            {t.common.floor}: {t.common.all}
-          </option>
+          <option value="">{fill(t.common.labelled, { label: t.common.floor, value: t.common.all })}</option>
           {(floors.data ?? []).map((f) => (
             <option key={f.id} value={f.id}>
               {f.label}
@@ -117,9 +115,7 @@ function Findings() {
           value={ruleId}
           onChange={(e) => setFilter("ruleId", e.target.value)}
         >
-          <option value="">
-            {t.findings.rule}: {t.common.all}
-          </option>
+          <option value="">{fill(t.common.labelled, { label: t.findings.rule, value: t.common.all })}</option>
           {(rules.data?.rules ?? []).map((r) => (
             <option key={r.id} value={r.id}>
               {t.domain.ruleNames[r.id] ?? r.name}

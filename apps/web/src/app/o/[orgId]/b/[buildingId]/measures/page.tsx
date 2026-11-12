@@ -4,18 +4,21 @@ import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { ChevronRight, Hammer } from "lucide-react";
 import Link from "next/link";
+import { whole } from "@/components/assistant";
 import { MEASURE_TONE, strategyName, verdictLine } from "@/components/finding-plan";
 import { FindingsTabs } from "@/components/findings-tabs";
 import { Badge, Card, Empty, ErrorBox, Loading, PageHeader } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
 import { dateTime, kwh, money, pct } from "@/lib/format";
 import { fill, useI18n } from "@/lib/i18n";
-import { useBuilding, useIds } from "@/lib/session";
+import { useBuilding, useIds, useMembership } from "@/lib/session";
 
 export default function MeasuresPage() {
   const { t, locale } = useI18n();
   const { orgId, buildingId } = useIds();
   const { building } = useBuilding();
+  // on the demo the simulated tower follows a measure once it is in effect, so no data is waited on to verify it
+  const demo = useMembership()?.orgPlan === "demo";
   const currency = building!.currency;
   const list = useQuery({
     queryKey: ["measures", orgId, buildingId],
@@ -71,7 +74,9 @@ export default function MeasuresPage() {
                     {[
                       totals.planned ? fill(t.measures.planned, { n: totals.planned }) : null,
                       totals.inEffect > totals.measured
-                        ? fill(t.measures.waiting, { n: totals.inEffect - totals.measured })
+                        ? fill(demo ? t.measures.waitingSim : t.measures.waiting, {
+                            n: totals.inEffect - totals.measured,
+                          })
                         : null,
                       // an on-site check saves nothing by itself, so there is no saving to give a range for
                       totals.expectedWeeklyKwh > 0
@@ -82,8 +87,8 @@ export default function MeasuresPage() {
                         : null,
                       totals.expectedWeeklyKwh > 0
                         ? fill(t.measures.expectedRange, {
-                            low: kwh(totals.expectedWeeklyLowKwh, locale),
-                            high: kwh(totals.expectedWeeklyHighKwh, locale),
+                            low: whole(kwh(totals.expectedWeeklyLowKwh, locale)),
+                            high: whole(kwh(totals.expectedWeeklyHighKwh, locale)),
                             days: totals.expectedDays,
                           })
                         : null,
@@ -107,6 +112,7 @@ export default function MeasuresPage() {
           <ul className="overflow-hidden rounded-2xl border border-border bg-surface">
             {items.map((m) => {
               const v = verdictLine(t, m, locale, currency);
+              const simulated = demo && m.status === "in_effect" && m.verification.verdict === "waiting";
               return (
                 <li key={m.id} className="border-b border-border last:border-0">
                   <Link
@@ -133,7 +139,7 @@ export default function MeasuresPage() {
                               : "text-muted",
                         )}
                       >
-                        {v.text}
+                        {simulated ? t.split.inEffectSim : v.text}
                       </span>
                       <span className="mt-1 block text-xs text-muted">
                         {m.implementedAt
@@ -153,14 +159,15 @@ export default function MeasuresPage() {
                       <Badge tone={MEASURE_TONE[m.status]}>{t.plan.statuses[m.status]}</Badge>
                       <span className="num text-xs font-medium">
                         {m.verification.after?.days ? "" : `${t.measures.expected} `}
-                        {kwh(m.verification.weekly.kwh, locale)}
-                        <span className="text-muted"> / {t.measures.week}</span>
+                        {fill(t.measures.perWeek, { kwh: kwh(m.verification.weekly.kwh, locale) })}
                         {m.verification.expected &&
                         m.verification.weekly.kwh > 0 &&
                         m.verification.verdict === "waiting" ? (
                           <span className="block font-normal text-muted sm:text-right">
-                            {kwh(m.verification.expected.lowKwh, locale)} –{" "}
-                            {kwh(m.verification.expected.highKwh, locale)}
+                            {fill(t.assistant.range, {
+                              low: whole(kwh(m.verification.expected.lowKwh, locale)),
+                              high: whole(kwh(m.verification.expected.highKwh, locale)),
+                            })}
                           </span>
                         ) : null}
                       </span>

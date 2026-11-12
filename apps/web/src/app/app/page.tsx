@@ -18,11 +18,13 @@ function useRelease() {
     let alive = true;
     (async () => {
       try {
-        const sums = await (await fetch("/download/SHA256SUMS", { cache: "no-store" })).text();
-        const [sha256, file] = sums.trim().split(/\s+/);
-        const version = /FlowCarbon-(\d+\.\d+\.\d+)\.apk/.exec(file ?? "")?.[1];
+        // a missing file comes back as the app's HTML page: only a real checksum line counts
+        const res = await fetch("/download/SHA256SUMS", { cache: "no-store" });
+        const [sum, file] = res.ok ? (await res.text()).trim().split(/\s+/) : [];
+        const sha256 = sum && /^[0-9a-f]{64}$/i.test(sum) ? sum : undefined;
+        const version = sha256 ? /FlowCarbon-(\d+\.\d+\.\d+)\.apk/.exec(file ?? "")?.[1] : undefined;
         const head = await fetch(APK, { method: "HEAD", cache: "no-store" });
-        const bytes = Number(head.headers.get("content-length"));
+        const bytes = head.ok ? Number(head.headers.get("content-length")) : 0;
         if (alive) setRelease({ version, sha256, mb: bytes ? (bytes / 1_048_576).toFixed(1) : undefined });
       } catch {
         // served without the download folder (development): the button still works where the file exists

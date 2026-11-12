@@ -8,6 +8,7 @@ import {
   RULE_PARAM_RATIONALE,
   RULES,
   type RuleId,
+  reportDisclosures,
   SCHEDULE_LABELS,
   STRATEGIES,
   strategiesFor,
@@ -1095,6 +1096,25 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
   );
 
   // ---- reports -------------------------------------------------------------------------------------------
+  /** A demo organisation's building is simulated, and its report's disclosures say so before anything else. */
+  const disclosed = async (tx: Tx, orgId: string, r: Awaited<ReturnType<typeof buildingReport>>) => {
+    const [org] = await tx
+      .select({ plan: schema.organizations.plan })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId));
+    if (org?.plan !== "demo") return r;
+    return {
+      ...r,
+      disclosures: reportDisclosures(
+        r.scope2.locationFactor,
+        r.scope2.residualFactor,
+        r.totals.measuredShare,
+        {
+          simulated: true,
+        },
+      ),
+    };
+  };
   const reportJson = (r: Awaited<ReturnType<typeof buildingReport>>) => ({
     ...r,
     period: {
@@ -1121,16 +1141,22 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
       },
     },
     async (req, reply) => {
-      const report = await withBuildingContext(db, req, req.params, "report:read", async (tx, _a, ctx) => {
-        const end = (await latestDataDay(tx, ctx)) ?? todayIn(ctx.building.timezone);
-        const range = dateRange(req.query.from, req.query.to, end, 28);
-        if (!range) throw badRequest("Choose between 1 and 400 days.");
-        return {
-          report: await buildingReport(tx, ctx, range.from, range.to),
-          range,
-          name: ctx.building.name,
-        };
-      });
+      const report = await withBuildingContext(
+        db,
+        req,
+        req.params,
+        "report:read",
+        async (tx, access, ctx) => {
+          const end = (await latestDataDay(tx, ctx)) ?? todayIn(ctx.building.timezone);
+          const range = dateRange(req.query.from, req.query.to, end, 28);
+          if (!range) throw badRequest("Choose between 1 and 400 days.");
+          return {
+            report: await disclosed(tx, access.orgId, await buildingReport(tx, ctx, range.from, range.to)),
+            range,
+            name: ctx.building.name,
+          };
+        },
+      );
       if (req.query.format === "csv") {
         const r = report.report;
         const esc = (v: unknown) => `"${String(v).replaceAll('"', '""')}"`;
@@ -1186,7 +1212,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         async (tx, access, ctx) => {
           const range = dateRange(req.body.from, req.body.to, todayIn(ctx.building.timezone), 28);
           if (!range) throw badRequest("Choose between 1 and 400 days.");
-          const r = await buildingReport(tx, ctx, range.from, range.to);
+          const r = await disclosed(tx, access.orgId, await buildingReport(tx, ctx, range.from, range.to));
           const [s] = await tx
             .insert(schema.reportSnapshots)
             .values({

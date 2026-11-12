@@ -28,6 +28,13 @@ const tooltip = {
   labelStyle: { color: "var(--muted)" },
 } as const;
 
+/** kWh on an axis: plain below a thousand (so no "0k"), thousands with a k above it */
+function kwhTick(v: number, locale: Locale): string {
+  if (Math.abs(v) < 1000) return num(v, locale);
+  const k = v / 1000;
+  return `${num(k, locale, Number.isInteger(k) ? 0 : 1)}k`;
+}
+
 export function DailyEnergyChart({
   data,
   locale,
@@ -37,53 +44,58 @@ export function DailyEnergyChart({
   locale: Locale;
   labels: { energy: string; avoidable: string };
 }) {
+  // the lower bar is the electricity that was not avoidable; together the two make the day's total
+  const series = [
+    { key: "base", label: labels.energy, fill: "var(--chart-4)" },
+    { key: "avoidable", label: labels.avoidable, fill: "var(--chart-2)" },
+  ];
+  const nameOf = (key: unknown) => (key === "avoidable" ? labels.avoidable : labels.energy);
   return (
-    <div className="h-64 w-full">
-      <ResponsiveContainer>
-        <ComposedChart
-          data={data.map((d) => ({ ...d, base: Math.max(0, d.kwh - d.avoidable) }))}
-          margin={{ top: 8, right: 8, bottom: 0, left: -8 }}
-        >
-          <CartesianGrid {...grid} />
-          <XAxis
-            dataKey="day"
-            {...axis}
-            tickFormatter={(d: string) => day(d, locale, { day: "numeric", month: "numeric" })}
-            minTickGap={16}
-          />
-          <YAxis {...axis} tickFormatter={(v: number) => `${num(v / 1000, locale, 0)}k`} width={44} />
-          <Tooltip
-            {...tooltip}
-            labelFormatter={(d) => day(String(d), locale)}
-            formatter={(v, name) => [
-              `${num(Number(v), locale)} kWh`,
-              name === "avoidable" ? labels.avoidable : labels.energy,
-            ]}
-          />
-          {/* the grow-in animation runs on the main thread, right when a page is being rendered */}
-          <Bar
-            dataKey="base"
-            stackId="e"
-            fill="var(--chart-4)"
-            name="energy"
-            radius={[0, 0, 0, 0]}
-            isAnimationActive={false}
-          />
-          <Bar
-            dataKey="avoidable"
-            stackId="e"
-            fill="var(--chart-2)"
-            name="avoidable"
-            radius={[3, 3, 0, 0]}
-            isAnimationActive={false}
-          />
-          <Legend
-            formatter={(v) => (v === "avoidable" ? labels.avoidable : labels.energy)}
-            iconType="square"
-            wrapperStyle={{ fontSize: 12 }}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+    <div className="w-full">
+      <div className="mb-1 text-[11px] text-muted">kWh</div>
+      <div className="h-60 w-full">
+        <ResponsiveContainer>
+          <ComposedChart
+            data={data.map((d) => ({ ...d, base: Math.max(0, d.kwh - d.avoidable) }))}
+            margin={{ top: 8, right: 8, bottom: 0, left: -8 }}
+          >
+            <CartesianGrid {...grid} />
+            <XAxis
+              dataKey="day"
+              {...axis}
+              tickFormatter={(d: string) => day(d, locale, { day: "numeric", month: "numeric" })}
+              minTickGap={16}
+            />
+            <YAxis {...axis} tickFormatter={(v: number) => kwhTick(v, locale)} width={44} />
+            <Tooltip
+              {...tooltip}
+              labelFormatter={(d) =>
+                day(String(d), locale, { year: "numeric", month: "short", day: "numeric", weekday: "short" })
+              }
+              formatter={(v, _name, item) => [`${num(Number(v), locale)} kWh`, nameOf(item?.dataKey)]}
+            />
+            {/* the grow-in animation runs on the main thread, right when a page is being rendered */}
+            {series.map((s, i) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                stackId="e"
+                fill={s.fill}
+                name={s.label}
+                radius={i === series.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                isAnimationActive={false}
+              />
+            ))}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <ul className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted">
+        {series.map((s) => (
+          <li key={s.key} className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-sm" style={{ background: s.fill }} aria-hidden /> {s.label}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

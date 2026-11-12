@@ -8,6 +8,7 @@ import { useRef, useState, useSyncExternalStore } from "react";
 import { Assistant, glide, type ShareTarget, type SplitView } from "@/components/assistant";
 import { BeforeAfter } from "@/components/before-after";
 import { CommunityRail, ShareDialog } from "@/components/community-rail";
+import { FirstUse, FirstUseLink, useFirstUse } from "@/components/first-use";
 import { FloorsDetail } from "@/components/floors-detail";
 import { tick } from "@/components/glass";
 import { liveFloors, TowerScene } from "@/components/tower-scene";
@@ -44,6 +45,9 @@ export default function FloorsPage() {
     () => false,
   );
   const hero = useRef<HTMLDivElement>(null);
+  const assistant = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const guide = useFirstUse();
   const overview = useQuery({
     queryKey: ["overview", orgId, buildingId],
     queryFn: () =>
@@ -82,13 +86,35 @@ export default function FloorsPage() {
         title={t.floors.title}
         subtitle={fill(t.floors.subtitle, { days })}
         actions={
-          asOf ? (
-            <span className="text-xs text-muted">
-              {t.floors.asOf} {asOf}
-            </span>
-          ) : null
+          <span className="flex flex-wrap items-center gap-x-3">
+            {guide.shown ? null : <FirstUseLink onClick={guide.show} />}
+            {asOf ? (
+              <span className="text-xs text-muted">
+                {t.floors.asOf} {asOf}
+              </span>
+            ) : null}
+          </span>
         }
       />
+
+      {guide.shown ? (
+        <FirstUse
+          onDone={guide.hide}
+          onTower={() => {
+            tick();
+            // the tower, or with an option on show (which takes its place) the floor list a tenant sees
+            (hero.current ?? list.current)?.scrollIntoView({ behavior: glide(), block: "start" });
+          }}
+          onAssistant={
+            role === "tenant_admin"
+              ? undefined
+              : () => {
+                  tick();
+                  assistant.current?.scrollIntoView({ behavior: glide(), block: "start" });
+                }
+          }
+        />
+      ) : null}
 
       {split ? (
         <BeforeAfter
@@ -125,7 +151,9 @@ export default function FloorsPage() {
                 {inBuilding} <span className="text-sm font-normal text-muted">{t.floors.inBuilding}</span>
               </div>
             ) : (
-              <div className="mt-1 text-sm font-medium">{t.floors.noReading}</div>
+              <div className="mt-1 text-sm font-medium">
+                {asOf ? fill(t.floors.noReadingUntil, { date: asOf }) : t.floors.noReading}
+              </div>
             )}
             {wasting ? (
               <div className="mt-1 text-xs font-medium text-waste">
@@ -212,12 +240,12 @@ export default function FloorsPage() {
             label={fill(t.floors.avoidable28, { days })}
             value={kwh(l.avoidableKwh, locale)}
             tone="waste"
-            sub={`${money(l.avoidableCost, locale, building!.currency)} · ${pct(l.avoidableShare, locale)}`}
+            sub={`${money(l.avoidableCost, locale, building!.currency)} · ${pct(l.avoidableShare, locale, 1)}`}
           />
           <Metric label={t.floors.scope2} value={co2(l.co2eKg, locale)} />
           <Metric
             label={t.floors.measuredShare}
-            value={pct(l.measuredShare, locale)}
+            value={pct(l.measuredShare, locale, 1)}
             sub={`${t.common.measured} / ${t.common.estimated}`}
             tone="accent"
           />
@@ -228,16 +256,21 @@ export default function FloorsPage() {
       {role === "tenant_admin" ? (
         <>
           <p className="mb-6 text-sm text-muted">{t.assistant.tenantNote}</p>
-          <FloorsDetail
-            picked={picked}
-            onPick={(index) => {
-              pick(index);
-              hero.current?.scrollIntoView({ behavior: glide(), block: "nearest" });
-            }}
-          />
+          <div ref={list} className="scroll-mt-24">
+            <FloorsDetail
+              picked={picked}
+              onPick={(index) => {
+                pick(index);
+                hero.current?.scrollIntoView({ behavior: glide(), block: "nearest" });
+              }}
+            />
+          </div>
         </>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div
+          ref={assistant}
+          className="grid scroll-mt-24 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]"
+        >
           <Assistant noData={!asOf} onOpen={setSplit} onShare={setSharing} />
           <CommunityRail onShare={setSharing} onPreview={setSplit} />
         </div>

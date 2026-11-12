@@ -21,7 +21,8 @@ export function money(v: number | null | undefined, locale: Locale, currency = "
   return new Intl.NumberFormat(intl(locale), {
     style: "currency",
     currency,
-    maximumFractionDigits: Math.abs(v) >= 1000 ? 0 : 2,
+    // whole units from 100 up (CN¥1,200, CN¥900); cents only where they matter, as in a tariff
+    maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 2,
   }).format(v);
 }
 
@@ -31,6 +32,37 @@ export const co2 = (kg: number | null | undefined, locale: Locale) =>
 
 export const pct = (share: number | null | undefined, locale: Locale, digits = 0) =>
   share === null || share === undefined ? "–" : `${num(share * 100, locale, digits)} %`;
+
+/**
+ * A figure in a number in running text: grouped digits, or digits with an optional decimal part. It must not sit inside
+ * a word, a date, a time or a version (F10, 2026-11-01, 18:30, 0.2.1), so neither side may touch letters, digits,
+ * separators or a further decimal part.
+ */
+const FIGURE =
+  /(?<![\w.:/-])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?:(\s?kWh\b)|(\s?(?:CNY|RMB)\b|\s?元)|(\s?%)|)(?![\w:/-]|[.,]\d)/g;
+
+/**
+ * Text written by a model or a template, with its figures shown the way the cards beside it show them: "181288 kWh"
+ * as 181.3 MWh, "163000 CNY" as money, "6.9%" as 6.9 %, and other whole numbers of four digits or more grouped. For
+ * display only: what was stored and checked stays as it was. Years (1900–2099) are left alone.
+ */
+export function prettyNumbers(text: string, locale: Locale, currency = "CNY"): string {
+  if (!text) return text;
+  return text.replace(FIGURE, (all, figure: string, energy?: string, cash?: string, share?: string) => {
+    const v = Number(figure.replace(/,/g, ""));
+    if (!Number.isFinite(v)) return all;
+    // below a thousand there is nothing to group, and kwh() would drop the decimals the text gave
+    if (energy) return Math.abs(v) < 1000 ? all : kwh(v, locale);
+    if (cash) return money(v, locale, currency);
+    if (share) {
+      const decimals = figure.split(".")[1]?.length ?? 0;
+      return pct(v / 100, locale, Math.min(decimals, 1));
+    }
+    if (figure.includes(",") || figure.includes(".") || figure.length < 4) return all;
+    if (figure.length === 4 && v >= 1900 && v < 2100) return all;
+    return num(v, locale);
+  });
+}
 
 export function dateTime(
   iso: string | null | undefined,

@@ -41,13 +41,19 @@ export interface EnergyReport {
   disclosures: string[];
 }
 
-/** Standard disclosures printed with every report. */
+/** First disclosure of a report on a simulated (demo) building. */
+export const SIMULATED_DISCLOSURE =
+  "All figures come from a simulated building and must not be used in a real report.";
+
+/** Standard disclosures printed with every report; `simulated` puts the simulated-building warning first. */
 export function reportDisclosures(
   locationFactor: EmissionFactor,
   residualFactor: EmissionFactor | undefined,
   measuredShare: number,
+  opts: { simulated?: boolean } = {},
 ): string[] {
   return [
+    ...(opts.simulated ? [SIMULATED_DISCLOSURE] : []),
     "Boundary: the office floors of this building under the property manager's operational control. Retail areas, car parks and tenants' own equipment beyond plug loads are outside the boundary.",
     `Scope 2 location-based: electricity × ${locationFactor.kgPerKwh} kgCO2e/kWh (${locationFactor.source}, ${locationFactor.year}, ${locationFactor.status === "verified" ? "verified" : "to be verified"}).`,
     residualFactor
@@ -68,6 +74,8 @@ export interface ReportInput {
   residualFactor?: EmissionFactor;
   from: number;
   to: number;
+  /** the building is simulated (a demo): the disclosures say so first */
+  simulated?: boolean;
 }
 
 export function buildReport(input: ReportInput): EnergyReport {
@@ -124,7 +132,14 @@ export function buildReport(input: ReportInput): EnergyReport {
   const dayTypes = { workday: 0, weekend: 0, holiday: 0 } as Record<DayType, number>;
   for (const [t, v] of byType) dayTypes[t] = v.days.size;
 
-  const disclosures = reportDisclosures(input.locationFactor, input.residualFactor, kwh ? measured / kwh : 0);
+  const disclosures = reportDisclosures(
+    input.locationFactor,
+    input.residualFactor,
+    kwh ? measured / kwh : 0,
+    {
+      simulated: input.simulated,
+    },
+  );
 
   return {
     period: {

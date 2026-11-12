@@ -20,7 +20,7 @@ import { Badge, Button, ErrorBox, Metric } from "@/components/ui";
 import type { TurnOption, TurnPlan } from "@/lib/api-shapes";
 import { useBackClose } from "@/lib/back";
 import { co2, kwh, money, num, pct } from "@/lib/format";
-import { fill, useI18n } from "@/lib/i18n";
+import { type Dict, fill, useI18n } from "@/lib/i18n";
 import { can, useBuilding, useIds, useMembership } from "@/lib/session";
 
 const COUNT_MS = 800;
@@ -90,10 +90,15 @@ export function CountUp({
   return <>{format(shown)}</>;
 }
 
-/** A change as a signed percentage of what it was. */
-function signed(share: number, locale: "en" | "zh") {
+/** A change as a signed percentage of what it was, or in `unit` (percentage points) for a change in a share. */
+function signed(share: number, locale: "en" | "zh", unit = "%") {
   const sign = share > 0 ? "+" : share < 0 ? "−" : "";
-  return `${sign}${num(Math.abs(share) * 100, locale, 1)} %`;
+  return `${sign}${num(Math.abs(share) * 100, locale, 1)} ${unit}`;
+}
+
+/** The line under an applied option; on the demo the simulated tower follows it, and no data will verify it. */
+export function inEffectLine(line: string, t: Dict, demo: boolean) {
+  return demo && line === t.split.inEffect ? t.split.inEffectSim : line;
 }
 
 /**
@@ -152,13 +157,27 @@ export function SplitPanel({
     label: string;
     format: (v: number) => string;
     tone?: "waste" | "saving";
+    /** a share, whose change is told in percentage points, not relative to what it was */
+    share?: boolean;
   }[] = [
     { key: "kwh", label: t.split.energy, format: (v) => kwh(v, locale) },
     { key: "cost", label: t.split.cost, format: (v) => money(v, locale, currency) },
     { key: "co2eKg", label: t.floors.scope2, format: (v) => co2(v, locale) },
     { key: "avoidableKwh", label: t.split.avoidable, format: (v) => kwh(v, locale), tone: "waste" },
-    { key: "avoidableShare", label: t.split.share, format: (v) => pct(v, locale, 1), tone: "waste" },
-    { key: "greenShare", label: t.floors.greenShare, format: (v) => pct(v, locale, 1), tone: "saving" },
+    {
+      key: "avoidableShare",
+      label: t.split.share,
+      format: (v) => pct(v, locale, 1),
+      tone: "waste",
+      share: true,
+    },
+    {
+      key: "greenShare",
+      label: t.floors.greenShare,
+      format: (v) => pct(v, locale, 1),
+      tone: "saving",
+      share: true,
+    },
   ];
   const saved = (m: TurnOption["after"]) => kwh(before.kwh - m.kwh, locale);
   const column = "min-w-0 space-y-2 sm:space-y-3";
@@ -215,7 +234,11 @@ export function SplitPanel({
                   tone={r.tone}
                   value={<CountUp value={now} from={was} format={r.format} />}
                   sub={
-                    was ? (
+                    r.share ? (
+                      <span className="num font-medium text-saving">
+                        <CountUp value={now - was} from={0} format={(v) => signed(v, locale, t.split.pp)} />
+                      </span>
+                    ) : was ? (
                       <span className="num font-medium text-saving">
                         <CountUp value={(now - was) / was} from={0} format={(v) => signed(v, locale)} />
                       </span>
@@ -273,7 +296,9 @@ export function BeforeAfter({
 }) {
   const { t } = useI18n();
   const { orgId, buildingId } = useIds();
-  const role = useMembership()?.role;
+  const membership = useMembership();
+  const role = membership?.role;
+  const demo = membership?.orgPlan === "demo";
   const turns = useTurns();
   const { apply, undo } = useTurnActions();
   const reviewer = can.reviewFindings(role);
@@ -363,7 +388,7 @@ export function BeforeAfter({
           {applied ? (
             <>
               <span className="text-sm">
-                {statusLine(turn.appliedMeasures ?? [], t)}{" "}
+                {inEffectLine(statusLine(turn.appliedMeasures ?? [], t), t, demo)}{" "}
                 {appliedOf(turn).n < appliedOf(turn).total
                   ? fill(t.assistant.appliedSome, appliedOf(turn))
                   : null}

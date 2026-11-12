@@ -13,8 +13,8 @@ import type { ComparedPriority } from "@/components/strategy-compare";
 import { toast } from "@/components/toast";
 import { Badge, Button, Card, ErrorBox } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
-import { dateTime, kwh, money } from "@/lib/format";
-import { fill, useI18n } from "@/lib/i18n";
+import { dateTime, kwh, type Locale, money, prettyNumbers } from "@/lib/format";
+import { type Dict, fill, useI18n } from "@/lib/i18n";
 import { parsePartialJson } from "@/lib/partial-json";
 import { can, useBuilding, useIds, useMembership } from "@/lib/session";
 
@@ -54,6 +54,17 @@ function briefOf(output: unknown, draft: string | null): Brief | null {
     ),
     watch: Array.isArray(o.watch) ? o.watch.filter((x): x is string => typeof x === "string") : [],
   };
+}
+
+/**
+ * The model is told to name strategies in words, but an id that slips into the text is shown by its name, and figures
+ * read like the cards beside them. For display only.
+ */
+function polish(text: string, t: Dict, locale: Locale, currency: string) {
+  let out = text;
+  for (const id of Object.keys(t.domain.strategies))
+    if (out.includes(id)) out = out.replace(new RegExp(`\\b${id}\\b`, "g"), strategyName(t, id));
+  return prettyNumbers(out, locale, currency);
 }
 
 interface OverviewProps {
@@ -203,6 +214,7 @@ function Overview({ onShow, compared, onCompare }: OverviewProps) {
   if (current?.status === "pending") watched.current.add(current.id);
   const streams = !!current && watched.current.has(current.id) && current.status !== "failed";
   const brief = useMemo(() => (current ? briefOf(current.output, current.draft) : null), [current]);
+  const currency = building?.currency ?? "CNY";
   const segments = useMemo(
     () =>
       brief
@@ -210,9 +222,9 @@ function Overview({ onShow, compared, onCompare }: OverviewProps) {
             { key: "headline", text: brief.headline },
             ...brief.priorities.map((p, i) => ({ key: `p-${i}`, text: str(p.why) })),
             ...brief.watch.map((w, i) => ({ key: `w-${i}`, text: w })),
-          ]
+          ].map((seg) => ({ ...seg, text: polish(seg.text, t, locale, currency) }))
         : [],
-    [brief],
+    [brief, t, locale, currency],
   );
   const total = segments.reduce((n, s) => n + s.text.length, 0);
   const done = current?.status === "done";
@@ -234,7 +246,6 @@ function Overview({ onShow, compared, onCompare }: OverviewProps) {
       {writing && caret === key ? <span className="fc-stream-caret" aria-hidden /> : null}
     </>
   );
-  const currency = building?.currency ?? "CNY";
   const base = `/o/${orgId}/b/${buildingId}`;
   const reading = (
     <div className="mt-4 space-y-2.5" aria-busy>
@@ -415,20 +426,26 @@ function Overview({ onShow, compared, onCompare }: OverviewProps) {
                 {[
                   current.requestedBy,
                   dateTime(current.completedAt, locale, building?.timezone ?? "Asia/Shanghai"),
+                  current.model
+                    ? fill(t.assistant.writtenBy, { model: current.model })
+                    : t.assistant.template,
                 ]
                   .filter(Boolean)
                   .join(" · ")}
               </span>
-              {asker ? (
-                <button
-                  type="button"
-                  disabled={request.isPending}
-                  onClick={() => request.mutate()}
-                  className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-accent disabled:opacity-50 sm:min-h-0"
-                >
-                  <RefreshCw className="size-3.5" aria-hidden /> {t.brief.again}
-                </button>
-              ) : null}
+              <span className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+                {current.outdated ? <span className="text-xs text-muted">{t.brief.outdated}</span> : null}
+                {asker ? (
+                  <button
+                    type="button"
+                    disabled={request.isPending}
+                    onClick={() => request.mutate()}
+                    className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-accent disabled:opacity-50 sm:min-h-0"
+                  >
+                    <RefreshCw className="size-3.5" aria-hidden /> {t.brief.again}
+                  </button>
+                ) : null}
+              </span>
             </div>
           ) : null}
         </div>

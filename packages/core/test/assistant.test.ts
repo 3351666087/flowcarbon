@@ -134,11 +134,11 @@ describe("the reply when no model writes one", () => {
     const reply = planReply(plan(), intent(), en);
     expect(reply.options.map((o) => o.title)).toEqual(["Weekends first", "Weekdays first", "Balanced"]);
     expect(reply.options[0]!.why).toBe(
-      "Weekend cooling only where requested on F1 and F2. Expected to save 400 kWh over 28 days.",
+      "Weekends: cool only floors that asked (F1 and F2). Expected to save 400 kWh over 28 days.",
     );
     const zhOption = planReply(plan(), intent(), zh).options[0]!;
     expect(zhOption.title).toBe("周末优先");
-    expect(zhOption.why).toBe("F1、F2：周末和节假日只给申请的楼层供冷。预计 28 天节省 400 kWh。");
+    expect(zhOption.why).toBe("F1、F2：周末节假日只给申请楼层供冷。预计 28 天节省 400 kWh。");
   });
 
   it("shortens a long list of floors", () => {
@@ -252,7 +252,7 @@ describe("a turn in another language", () => {
       },
       zh,
     );
-    expect(adopted).toMatchObject({ prompt: "采用周末优先", reply: { reply: "已从策略页采用：周末优先。" } });
+    expect(adopted).toMatchObject({ prompt: "采纳周末优先", reply: { reply: "已从策略页采纳：周末优先。" } });
     const used = turnIn(
       {
         ...typed,

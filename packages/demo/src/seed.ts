@@ -164,7 +164,7 @@ export async function seedDemoBuilding(
       .insert(schema.buildings)
       .values({
         orgId: org.id,
-        name: `${b.name} (simulated)`,
+        name: b.name,
         address: "Suzhou Industrial Park, Jiangsu (simulated building)",
         timezone: b.timezone,
         currency: b.currency,

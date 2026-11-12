@@ -61,6 +61,13 @@ export default function ForecastPage() {
         <Empty>{t.common.noData}</Empty>
       ) : (
         <>
+          {/* the column heads give day and month only, so the year is said once here */}
+          <p className="mb-3 px-1 text-sm text-muted">
+            {fill(t.forecast.span, {
+              n: days.length,
+              date: day(days[0]!, locale, { year: "numeric", month: "long", day: "numeric" }),
+            })}
+          </p>
           {/* phones: a strip of days, then the floors for the chosen day */}
           <div className="md:hidden">
             <div className="-mx-4 mb-4 grid grid-flow-col auto-cols-[minmax(3.4rem,1fr)] gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">

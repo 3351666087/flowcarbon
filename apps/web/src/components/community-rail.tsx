@@ -210,8 +210,9 @@ export function CommunityRail({
 
   const items = list.data?.items ?? [];
   const shown = everything ? items : items.slice(0, SHOWN);
-  // the latest option applied here that this building is not already sharing
-  const applied = turns.data?.items.findLast((x) => x.appliedOption);
+  // the latest option applied here that this building is not already sharing. Turns adopted from the strategies page
+  // are left out, as the assistant leaves them out of its chat: otherwise this would name an option the chat does not show
+  const applied = turns.data?.items.findLast((x) => x.appliedOption && x.intent?.source !== "board");
   const sharable =
     reviewer &&
     applied?.appliedOption &&

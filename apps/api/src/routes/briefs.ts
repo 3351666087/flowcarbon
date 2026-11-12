@@ -1,5 +1,5 @@
 import { schema, type Tx } from "@flowcarbon/db";
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, or } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { assertAiQuota } from "../ai-quota";
@@ -24,6 +24,8 @@ const briefOut = z.object({
   requestedBy: z.string().nullable(),
   createdAt: z.string(),
   completedAt: z.string().nullable(),
+  /** a measure of the building was created, implemented or cancelled after the brief was completed */
+  outdated: z.boolean(),
 });
 type BriefRow = typeof schema.aiBriefs.$inferSelect;
 const briefJson = (b: BriefRow, names: Map<string, string>) => ({
@@ -62,9 +64,33 @@ async function withMeasures(tx: Tx, output: BriefRow["output"]) {
   };
 }
 
+/** Whether the building's measures moved on after the brief was written, so its advice may no longer fit. */
+async function isOutdated(tx: Tx, row: BriefRow) {
+  // The worker reads the building when the job starts, so a measure adopted while the text was being written is not
+  // in it either: compare with when the brief was asked for, not when it finished.
+  const done = row.createdAt;
+  if (row.status !== "done" || !row.completedAt || !done) return false;
+  const [changed] = await tx
+    .select({ id: schema.measures.id })
+    .from(schema.measures)
+    .where(
+      and(
+        eq(schema.measures.buildingId, row.buildingId),
+        or(
+          gt(schema.measures.createdAt, done),
+          gt(schema.measures.implementedAt, done),
+          gt(schema.measures.cancelledAt, done),
+        ),
+      ),
+    )
+    .limit(1);
+  return Boolean(changed);
+}
+
 const shownBrief = async (tx: Tx, row: BriefRow) => ({
   ...briefJson(row, await userNames(tx, [row.requestedBy])),
   output: await withMeasures(tx, row.output),
+  outdated: await isOutdated(tx, row),
 });
 
 /** The AI assistant's look at a whole building: where to start, across all open findings. */

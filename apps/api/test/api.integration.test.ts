@@ -1522,7 +1522,7 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
           "Weekdays first",
           "Balanced",
         ]);
-        expect(en.reply.options[0].why).toMatch(/^Weekend cooling only where requested/);
+        expect(en.reply.options[0].why).toMatch(/^Weekends: cool only floors that asked/);
         expect((await read(turn.id, "zh")).reply.reply).toBe("周末是最容易下手的。");
       });
 
@@ -1887,7 +1887,7 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
           appliedOption: "weekdays",
           intent: { source: "board" },
         });
-        expect(turn.prompt).toBe("采用工作日优先");
+        expect(turn.prompt).toBe("采纳工作日优先");
         expect(turn.reply.options.map((o: { id: string }) => o.id)).toEqual(["weekdays"]);
         expect(new Set(turn.appliedMeasures.map((m: { status: string }) => m.status))).toEqual(
           new Set(["planned"]),

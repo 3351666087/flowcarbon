@@ -336,6 +336,9 @@ export function AuthFlow() {
             />
           </GroupField>
         </FieldGroup>
+        {!adding && methods.data?.signUp ? (
+          <p className="mt-3 px-1 text-sm text-muted">{t.auth.newHere}</p>
+        ) : null}
         {!adding && methods.data?.signUp && methods.data.demo ? (
           <p className="mt-3 px-1 text-sm text-muted">{t.auth.demoHint}</p>
         ) : null}
