@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.2.2 — 2026-11-12
+
+From a pre-test before Checkpoint 3: five AI reviewers (Claude) and GPT-6.1-sol went through every page on desktop and
+phone, each finding was checked against the code, and our teammates' user tests (five roles, from a student to a
+district committee) and their comments were added. What came out of it:
+
+- **First use.** The Floors page opens with how FlowCarbon works in three steps, with links, and says when the
+  building is a simulated demo. "Got it" hides it; "How it works" brings it back. Sign-in now says that a new email
+  address simply continues into sign-up.
+- **Appearance.** Text size (small, default, large) and an accent colour, beside light and dark, kept on the device.
+- **Tonight against the same night last week.** The floor list shows each floor's after-hours energy for the latest
+  night with data next to the same night a week earlier, with the change, and marks floors well above it.
+- **One baseline in the Strategies preview.** Before now counts what is already adopted, so the panel's saving and
+  range are the card's own instead of looking like a 76 % cut. Changes in a share are in percentage points.
+- **Numbers read the same everywhere.** AI text gets the app's formatting (181.3 MWh, CN¥, 6.9 %); whole yuan from
+  CN¥100 up; the avoidable share has one decimal on every page; units on report tables; "21 days with data" next to a
+  28-day range; the 7-day forecast adds up; the forecast shows its year.
+- **Honest labels.** AI text says which model wrote it. An AI overview older than the latest change to the measures
+  says so. Strategy ids no longer leak into it, and its dates are the building's. On a demo, adopting says it is in
+  effect in the simulation. Simulate assumes 80 % of savings, like every other page, and explains NPV, payback, the
+  ESCO share and the discount rate (now in %). Reports and CSVs from a demo say the figures are simulated.
+- **Digital twin.** A floor with no recent count starts from its typical count for the hour (labelled as an
+  assumption), not from nobody; it says how to seat people and which kind of measure is in effect.
+- **Smaller fixes.** A building's or organisation's bare address no longer 404s. Readable audit log, device kinds and
+  overtime fees; the member role picker fits; switching building from a detail page; consistent Chinese terms
+  (采纳 for adopting, 生效 for in effect) and punctuation; the Android page no longer shows an HTML page as a checksum.
+
 ## 0.2.1 — 2026-11-08
 
 - **Any OpenAI-compatible endpoint can write the AI text.** With `AI_PROVIDER=openai-compatible`, `AI_BASE_URL` and
