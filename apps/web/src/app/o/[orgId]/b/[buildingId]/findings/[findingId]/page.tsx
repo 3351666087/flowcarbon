@@ -202,6 +202,9 @@ export default function FindingPage() {
               {floorLabel} · {t.domain.ruleNames[f.ruleId] ?? f.ruleName}
             </h1>
             <Badge tone={f.kind === "waste" ? "waste" : "accent"}>{t.findings.kinds[f.kind]}</Badge>
+            <Badge tone={f.responder === "tenant" ? "accent" : "neutral"} title={t.findings.responderNote}>
+              {t.findings.responder[f.responder]}
+            </Badge>
             <TierBadge tier={f.tier} />
           </div>
           <p className="mt-1 text-sm text-muted">

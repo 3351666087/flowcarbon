@@ -1,9 +1,11 @@
 "use client";
 
+import { clsx } from "clsx";
 import { ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { tick } from "@/components/glass";
+import { IntroVideoLink } from "@/components/intro-video";
 import { useI18n } from "@/lib/i18n";
 import { PAGES, useIds, useMembership } from "@/lib/session";
 
@@ -62,7 +64,8 @@ export function FirstUseLink({ onClick }: { onClick: () => void }) {
 const linkClass = "fc-press inline-flex min-h-11 items-center gap-0.5 font-medium text-accent sm:min-h-0";
 
 /**
- * A short guided first use: what the product does, then where to look, what to ask and where to act.
+ * A short guided first use: what the product does, then where to look, what to ask and where to act. It sits
+ * compact (one line per step) under the page's status line; "More" opens a sentence on each step.
  * `onTower` and `onAssistant` scroll to those parts of the floors page; a step a role can't take is left out.
  */
 export function FirstUse({
@@ -81,6 +84,7 @@ export function FirstUse({
   const base = `/o/${orgId}/b/${buildingId}`;
   const strategies = !!role && !!PAGES.strategies?.includes(role);
   const twin = !!role && !!PAGES.twin?.includes(role);
+  const [more, setMore] = useState(false);
 
   const steps = [
     {
@@ -126,7 +130,7 @@ export function FirstUse({
   return (
     <section
       aria-labelledby="first-use-title"
-      className="fc-rise relative mb-6 rounded-2xl border border-border bg-surface p-4 sm:p-5"
+      className="fc-rise relative mb-4 rounded-2xl border border-border bg-surface px-4 py-3"
     >
       <button
         type="button"
@@ -136,41 +140,58 @@ export function FirstUse({
           tick();
           onDone();
         }}
-        className="fc-press absolute top-2 right-2 grid size-11 place-items-center rounded-full text-muted hover:text-text sm:size-9"
+        className="fc-press absolute top-1 right-1 grid size-11 place-items-center rounded-full text-muted hover:text-text sm:size-9"
       >
         <X className="size-4" aria-hidden />
       </button>
-      <h2 id="first-use-title" className="pr-10 text-base font-semibold tracking-tight">
-        {t.firstUse.title}
-      </h2>
-      <p className="mt-1 pr-10 text-sm text-muted">{t.firstUse.what}</p>
-      {membership?.orgPlan === "demo" ? (
-        <p className="mt-2 inline-block rounded-full bg-surface-2 px-2.5 py-0.5 text-xs text-muted">
-          {t.firstUse.demo}
-        </p>
-      ) : null}
-      <ol className="mt-4 grid gap-3 md:grid-cols-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 pr-10">
+        <h2 id="first-use-title" className="text-sm font-semibold tracking-tight">
+          {t.firstUse.title}
+        </h2>
+        <p className="text-xs text-muted">{t.firstUse.what}</p>
+        {membership?.orgPlan === "demo" ? (
+          <p className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">{t.firstUse.demo}</p>
+        ) : null}
+      </div>
+      {/* testers found the product hard to place at first: the film shows it in a minute */}
+      <IntroVideoLink className="mt-1 text-sm text-accent" />
+      {/* compact by default: each step is its title and where to go; "More" adds a line on each */}
+      <ol className={clsx("mt-2 text-sm", more ? "grid gap-2 md:grid-cols-3" : "flex flex-wrap gap-x-5")}>
         {steps.map((s, i) => (
-          <li key={s.title} className="flex gap-3 rounded-xl bg-surface-2 p-3">
-            <span className="num grid size-7 shrink-0 place-items-center rounded-full bg-accent-soft text-sm font-semibold text-accent">
+          <li
+            key={s.title}
+            className={clsx("flex gap-2", more ? "rounded-xl bg-surface-2 p-3" : "items-center")}
+          >
+            <span className="num grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
               {i + 1}
             </span>
-            <span className="min-w-0 text-sm">
-              <span className="block font-medium">{s.title}</span>
-              <span className="mt-0.5 block text-xs text-muted">{s.body}</span>
-              {s.action ? <span className="mt-1 block">{s.action}</span> : null}
+            <span className={clsx("min-w-0", more ? "block" : "flex flex-wrap items-center gap-x-2")}>
+              <span className={clsx("font-medium", more && "block")}>{s.title}</span>
+              {more ? <span className="mt-0.5 block text-xs text-muted">{s.body}</span> : null}
+              {s.action ? <span className={more ? "mt-1 block" : undefined}>{s.action}</span> : null}
             </span>
           </li>
         ))}
       </ol>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-1 flex justify-end gap-4">
+        <button
+          type="button"
+          aria-expanded={more}
+          onClick={() => {
+            tick();
+            setMore((m) => !m);
+          }}
+          className="fc-press inline-flex min-h-11 items-center text-xs font-medium text-muted hover:text-text sm:min-h-0"
+        >
+          {more ? t.firstUse.less : t.common.more}
+        </button>
         <button
           type="button"
           onClick={() => {
             tick();
             onDone();
           }}
-          className="fc-press fc-prominent inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold sm:min-h-9"
+          className="fc-press inline-flex min-h-11 items-center text-xs font-semibold text-accent sm:min-h-0"
         >
           {t.firstUse.gotIt}
         </button>

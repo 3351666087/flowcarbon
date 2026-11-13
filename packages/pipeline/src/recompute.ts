@@ -268,11 +268,17 @@ async function writeDailyRollups(
   intervals: readonly FloorInterval[],
 ): Promise<void> {
   const stats = floorDayStats(ctx.building, intervals);
-  const extra = new Map<string, { cost: number; measured: number; n: number }>();
+  const extra = new Map<
+    string,
+    { cost: number; measured: number; n: number; hvac: number; lighting: number; plug: number }
+  >();
   for (const iv of intervals) {
     const key = `${iv.floorId}|${localDate(ctx.building, iv.start)}`;
-    const e = extra.get(key) ?? { cost: 0, measured: 0, n: 0 };
+    const e = extra.get(key) ?? { cost: 0, measured: 0, n: 0, hvac: 0, lighting: 0, plug: 0 };
     const kwh = totalKwh(iv);
+    e.hvac += iv.kwh.hvac;
+    e.lighting += iv.kwh.lighting;
+    e.plug += iv.kwh.plug;
     e.cost += kwh * priceAt(ctx.building.tariff, iv.start, ctx.building.timezone);
     if (iv.tier === "measured") e.measured += kwh;
     e.n++;
@@ -289,6 +295,11 @@ async function writeDailyRollups(
       kwhTotal: s.totalKwh,
       kwhAfterHours: s.afterHoursKwh,
       kwhMeasured: e.measured,
+      kwhHvac: e.hvac,
+      kwhLighting: e.lighting,
+      kwhPlug: e.plug,
+      // derived from the same intervals as kwhTotal, so the three systems add up to it
+      systemsSplit: true,
       cost: Math.round(e.cost * 100) / 100,
       afterHoursPeak: s.afterHoursPeak,
       afterHoursHvacHours: s.afterHoursHvacHours,
@@ -306,6 +317,10 @@ async function writeDailyRollups(
           kwhTotal: sql`excluded.kwh_total`,
           kwhAfterHours: sql`excluded.kwh_after_hours`,
           kwhMeasured: sql`excluded.kwh_measured`,
+          kwhHvac: sql`excluded.kwh_hvac`,
+          kwhLighting: sql`excluded.kwh_lighting`,
+          kwhPlug: sql`excluded.kwh_plug`,
+          systemsSplit: sql`excluded.systems_split`,
           cost: sql`excluded.cost`,
           afterHoursPeak: sql`excluded.after_hours_peak`,
           afterHoursHvacHours: sql`excluded.after_hours_hvac_hours`,

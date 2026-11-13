@@ -26,6 +26,8 @@ export const PAGES: Record<string, Role[]> = {
   simulate: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
   requests: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "tenant_admin", "viewer"],
   report: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
+  /** the organisation's buildings side by side: building-wide figures, so staff only, as the report */
+  compare: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
   data: ["owner", "admin", "property_manager", "energy_analyst", "engineer", "viewer"],
   settings: ["owner", "admin"],
 };

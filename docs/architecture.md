@@ -36,6 +36,35 @@
    kept.
 4. **Forecasts** of after-hours headcount per floor are refreshed nightly from the last six weeks of roll-ups.
 5. **Reports and strategies** read roll-ups and findings only, so their cost does not grow with telemetry volume.
+6. **Buildings side by side** (`GET /orgs/:orgId/compare`, `packages/core/src/portfolio.ts`) reads the same
+   `floor_daily` roll-ups for each building, over one window ending at the organisation's latest whole day, plus the
+   measures' existing verification (`summariseMeasures`, shared with the measures list). It adds no storage.
+
+### Tenant-controlled vs building-controlled energy
+
+A property manager's question about a kWh is usually "do I call the tenant or engineering?". FlowCarbon answers it
+**by system, not by metered area** (`packages/core/src/responsibility.ts`). `floor_daily` stores each day's kWh per
+system (`kwh_hvac`, `kwh_lighting`, `kwh_plug`, migration 0013); the mapping is applied when reading, with the lease
+in force on that local day (`leasedOn`), so it can change without another migration. A day counts as split only
+when `systems_split` is true (its three systems add up to `kwh_total`; the pipeline always derives them from the same
+intervals, migration 0014 marks older days). The energy of any other day is reported as unsplit (`partyUnsplit`,
+`unsplitKwh`) and is neither party's: it is not guessed or spread in proportion.
+
+| System on a floor | Leased that day | Vacant that day | Why |
+| --- | --- | --- | --- |
+| Cooling (`hvac`, includes the floor's share of the central plant) | building | building | The plant and the BMS schedule are run by the property. |
+| Lighting | tenant | building | In-unit lighting is switched by the tenant. |
+| Plug loads | tenant | building | The tenant's own equipment. |
+
+Findings follow the same idea (`findingResponder`): the three cooling rules go to engineering;
+`lights_on_empty_night` goes to the tenant on a leased floor and to engineering on a vacant one.
+
+Limits, printed as a report disclosure after the boundary: there are **no common-area meters**. Lobbies, corridors,
+lifts and plant rooms are not metered separately and are not in the report, and ingestion only accepts devices
+assigned to a floor. Central-plant energy is already inside each floor's cooling (the simulator's `HVAC_KW` is the
+floor's share), so a separate plant meter would count it twice. A real common-area model would add a `served_area`
+attribute on meters, accept floorless common meters at ingest and roll them up separately. Some buildings let tenants
+run their own fan coils; a per-building override of the mapping is a possible follow-up.
 
 ## Plans, the assistant and the digital twin
 

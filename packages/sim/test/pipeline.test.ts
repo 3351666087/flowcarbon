@@ -73,6 +73,18 @@ describe("simulated tower, end to end", () => {
     ]);
   });
 
+  it("splits the simulated tower's energy between tenant and building control without losing any", () => {
+    const [tenant, bld] = report.byParty;
+    expect(tenant!.kwh + bld!.kwh).toBeCloseTo(report.totals.kwh, 0);
+    expect(tenant!.kwh).toBeGreaterThan(0);
+    expect(bld!.kwh).toBeGreaterThan(0);
+    expect(tenant!.avoidableKwh + bld!.avoidableKwh).toBeCloseTo(report.totals.avoidableKwh, 0);
+    const lightsKwh = report.byRule.find((r) => r.ruleId === "lights_on_empty_night")!.kwh;
+    // cooling findings go to engineering; only lights left on can be a tenant's
+    expect(tenant!.avoidableKwh).toBeLessThanOrEqual(lightsKwh + 0.1);
+    for (const f of report.byFloor) expect(f.tenantKwh + f.buildingKwh).toBeCloseTo(f.kwh, 0);
+  });
+
   it("supports an energy performance contract with a payback inside a 5-year term", () => {
     const est = estimateStrategies(findings, sb.floors, {
       observed: report.period.dayTypes,

@@ -17,11 +17,12 @@ import {
   setFindings,
   settleFindings,
   statusChange,
+  summariseMeasures,
   takeEffectIfSimulated,
   userOf,
 } from "../measures";
 import { buildingParams, errorResponses, uuid } from "../schemas";
-import { findingJson, findingOut } from "./analytics";
+import { findingJson, findingOut, leaseScope } from "./analytics";
 import { withBuildingContext } from "./helpers";
 
 const measureParams = buildingParams.extend({ measureId: uuid });
@@ -74,32 +75,7 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
         const footing = await measureFooting(tx, ctx);
         const items: MeasureJson[] = [];
         for (const m of rows) items.push(await measureJson(tx, ctx, m, footing));
-        // measured: in effect with complete days since; expected: planned, or in effect but not measured yet
-        const measured = items.filter(
-          (m) => m.status === "in_effect" && (m.verification.after?.days ?? 0) > 0,
-        );
-        const expected = items.filter(
-          (m) => m.status === "planned" || (m.status === "in_effect" && !m.verification.after?.days),
-        );
-        const sum = (list: MeasureJson[], key: "kwh" | "cost") =>
-          Math.round(list.reduce((s, m) => s + m.verification.weekly[key], 0) * 100) / 100;
-        const range = (key: "lowKwh" | "highKwh") =>
-          Math.round(expected.reduce((s, m) => s + (m.verification.expected?.[key] ?? 0), 0) * 100) / 100;
-        return {
-          items,
-          totals: {
-            planned: items.filter((m) => m.status === "planned").length,
-            inEffect: items.filter((m) => m.status === "in_effect").length,
-            measured: measured.length,
-            weeklyKwh: sum(measured, "kwh"),
-            weeklyCost: sum(measured, "cost"),
-            expectedWeeklyKwh: sum(expected, "kwh"),
-            expectedWeeklyCost: sum(expected, "cost"),
-            expectedWeeklyLowKwh: range("lowKwh"),
-            expectedWeeklyHighKwh: range("highKwh"),
-            expectedDays: footing.days,
-          },
-        };
+        return { items, totals: summariseMeasures(items, footing).totals };
       }),
   );
 
@@ -149,8 +125,8 @@ export const measureRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { db 
             : [];
         return {
           ...(await measureJson(tx, ctx, m)),
-          linked: linked.map((f) => findingJson(f, m)),
-          recurring: recurring.map((f) => findingJson(f)),
+          linked: linked.map((f) => findingJson(f, leaseScope(ctx), m)),
+          recurring: recurring.map((f) => findingJson(f, leaseScope(ctx))),
         };
       }),
   );

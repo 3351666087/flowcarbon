@@ -36,6 +36,8 @@ export default function SetupPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const me = useMe();
+  // a further building of an organisation that has one: the same form, not "your first building"
+  const buildings = useBuildings(orgId);
   const membership = me.data?.memberships.find((m) => m.orgId === orgId);
   const [name, setName] = useState("");
   const [city, setCity] = useState<(typeof CITIES)[number]["key"]>("suzhou");
@@ -115,7 +117,10 @@ export default function SetupPage() {
   return (
     <AuthStage shake={refusals} account={<AccountMenu variant="avatar" />}>
       <form onSubmit={create}>
-        <StepHeader title={t.setup.title} subtitle={t.setup.sub} />
+        <StepHeader
+          title={buildings.data?.length ? t.setup.titleMore : t.setup.title}
+          subtitle={t.setup.sub}
+        />
         <FieldGroup>
           <GroupField label={t.setup.name}>
             <input

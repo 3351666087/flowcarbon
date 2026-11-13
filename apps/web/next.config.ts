@@ -54,6 +54,11 @@ const config: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
         ],
       },
+      {
+        // the intro film (about 6 MB) is not content-hashed: a day's cache, then revalidated by its ETag
+        source: "/intro/:file*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
     ];
   },
 };

@@ -9165,6 +9165,8 @@ export interface paths {
                                 peakPeople: number;
                                 /** @enum {string} */
                                 tier: "measured" | "estimated";
+                                /** @enum {string} */
+                                responder: "tenant" | "engineering";
                                 evidence: {
                                     summary: string;
                                     facts: {
@@ -9350,6 +9352,8 @@ export interface paths {
                             peakPeople: number;
                             /** @enum {string} */
                             tier: "measured" | "estimated";
+                            /** @enum {string} */
+                            responder: "tenant" | "engineering";
                             evidence: {
                                 summary: string;
                                 facts: {
@@ -9645,6 +9649,8 @@ export interface paths {
                             peakPeople: number;
                             /** @enum {string} */
                             tier: "measured" | "estimated";
+                            /** @enum {string} */
+                            responder: "tenant" | "engineering";
                             evidence: {
                                 summary: string;
                                 facts: {
@@ -10126,6 +10132,12 @@ export interface paths {
                             kwhTotal: number;
                             kwhAfterHours: number;
                             kwhMeasured: number;
+                            systemsSplit: boolean;
+                            kwhHvac: number | null;
+                            kwhLighting: number | null;
+                            kwhPlug: number | null;
+                            kwhTenant: number | null;
+                            kwhBuilding: number | null;
                             cost: number;
                             afterHoursPeak: number;
                             afterHoursHvacHours: number;
@@ -11428,7 +11440,22 @@ export interface paths {
                                 kwh: number;
                                 afterHoursKwh: number;
                                 avoidableKwh: number;
+                                tenantKwh: number;
+                                buildingKwh: number;
+                                unsplitKwh: number;
                             }[];
+                            byParty: {
+                                /** @enum {string} */
+                                party: "tenant" | "building";
+                                kwh: number;
+                                share: number;
+                                avoidableKwh: number;
+                            }[];
+                            partyUnsplit: {
+                                kwh: number;
+                                share: number;
+                                floorDays: number;
+                            };
                             byDayType: {
                                 /** @enum {string} */
                                 dayType: "workday" | "weekend" | "holiday";
@@ -12341,6 +12368,8 @@ export interface paths {
                                 peakPeople: number;
                                 /** @enum {string} */
                                 tier: "measured" | "estimated";
+                                /** @enum {string} */
+                                responder: "tenant" | "engineering";
                                 evidence: {
                                     summary: string;
                                     facts: {
@@ -12381,6 +12410,8 @@ export interface paths {
                                 peakPeople: number;
                                 /** @enum {string} */
                                 tier: "measured" | "estimated";
+                                /** @enum {string} */
+                                responder: "tenant" | "engineering";
                                 evidence: {
                                     summary: string;
                                     facts: {
@@ -12949,6 +12980,211 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/{orgId}/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Buildings of the organisation side by side over the same recent window */
+        get: {
+            parameters: {
+                query?: {
+                    days?: number;
+                };
+                header?: never;
+                path: {
+                    orgId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            window: {
+                                days: number;
+                                from: string;
+                                to: string;
+                                previousFrom: string;
+                                previousTo: string;
+                                minDays: number;
+                                minCoverage: number;
+                            };
+                            simulated: boolean;
+                            truncated: boolean;
+                            buildings: {
+                                /** Format: uuid */
+                                id: string;
+                                name: string;
+                                currency: string;
+                                timezone: string;
+                                floors: number;
+                                areaM2: number;
+                                lastDataDay: string | null;
+                                current: {
+                                    days: number;
+                                    kwh: number;
+                                    afterHoursKwh: number;
+                                    avoidableKwh: number;
+                                    cost: number;
+                                    measuredShare: number;
+                                    kwhPerM2Day: number | null;
+                                    afterHoursShare: number | null;
+                                    avoidableShare: number | null;
+                                    afterHoursPerDay: number | null;
+                                };
+                                previous: {
+                                    days: number;
+                                    kwh: number;
+                                    afterHoursKwh: number;
+                                    avoidableKwh: number;
+                                    cost: number;
+                                    measuredShare: number;
+                                    kwhPerM2Day: number | null;
+                                    afterHoursShare: number | null;
+                                    avoidableShare: number | null;
+                                    afterHoursPerDay: number | null;
+                                };
+                                change: {
+                                    kwhPerM2DayPct: number | null;
+                                    afterHoursPerDayPct: number | null;
+                                    afterHoursSharePp: number | null;
+                                    avoidableSharePp: number | null;
+                                };
+                                measures: {
+                                    inEffect: number;
+                                    measured: number;
+                                    measuredWeeklyKwh: number;
+                                    measuredToDateKwh: number;
+                                    expectedInEffect: number;
+                                    expectedWeeklyKwh: number;
+                                    expectedLowKwh: number;
+                                    expectedHighKwh: number;
+                                    expectedDays: number;
+                                };
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            type: string;
+                            title: string;
+                            status: number;
+                            detail: string;
+                            code: string;
+                            details?: unknown;
+                            requestId: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

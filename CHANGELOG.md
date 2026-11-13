@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.2.3 — 2026-11-13
+
+From our testers (12–13 Nov) and the leader's notes, alongside the two larger features below:
+
+- **Floors says first whether anything needs doing.** One line at the top: "Action needed: n floors are cooled or lit
+  with nobody there" with a button to the worst floor, "Nothing needs adjusting right now", or, when readings are more
+  than two hours old, "No live data: last data {date}". The subtitle and the first-use steps are shorter.
+- **The tower names the floor.** The selected or hovered floor shows its label and tenant on the model, on phones too.
+- **Estimated wasted cost up front.** The Floors figures lead with the avoidable cost in CN¥, with its kWh and share.
+- **Monthly report in one click.** "Last month" and "This month so far" set the report period.
+
+- **Who to call.** Reports and the floor list split energy into tenant-controlled (lighting and plug loads on leased
+  floors) and building-controlled (cooling, including each floor's share of the central plant, and vacant floors);
+  every finding says whether to call the tenant or engineering. The split is by system, not by metered area:
+  lobbies, corridors and lifts are not metered yet, and the report says so in a new disclosure after the boundary.
+  It uses the lease in force on each day, not today's. The report, its CSV (`party` rows and two floor columns), the
+  daily figures (`kwhHvac`, `kwhLighting`, `kwhPlug`, `kwhTenant`, `kwhBuilding`) and every finding (`responder`)
+  carry it. Migration `0013_floor_daily_systems` stores each day's kWh per system in `floor_daily` and backfills it
+  from the stored intervals. This does not add retail or shopping-centre support: the boundary is still the office
+  floors. Reports frozen before 0.2.3 have no tenant/building split.
+  Migration `0014_floor_daily_systems_split` adds `systems_split`: a day counts as split only when its per-system kWh
+  add up to its total. It re-derives days whose intervals are still stored (repairing days a worker older than 0013
+  wrote with zeros) and leaves any other day unsplit. Energy on unsplit days is not given to either party or spread
+  proportionally: the report shows it as "Not split by system" (`partyUnsplit`, `byFloor[].unsplitKwh`, an
+  `unsplit` CSV row and column, and a disclosure saying how much and on how many floor-days), party shares are of all
+  the energy, and the daily figures return `systemsSplit: false` with null per-system and party figures.
+
+- **Deleting an organisation deletes all of its telemetry.** It used to leave the floor intervals, daily roll-ups and
+  cooling and lighting events behind (tables without a foreign key to the organisation); they could not be read by
+  anyone, but they were not deleted. A test now fails if a table with an `org_id` and no foreign key is not cleared.
+  Rows already left behind by earlier deletions are not removed by this release.
+
+- **A one-minute intro film.** The first-use card and the sign-in page have "Watch the 1-minute intro", which opens
+  a light player: 720p H.264 (about 6.6 MB landscape, 5.1 MB upright for phones held upright, with a poster frame),
+  English captions burned in, never started with sound (muted, or waiting on its poster when reduced motion is
+  preferred). It is fetched only when opened, and adds about 12 MB to the web image.
+
+- **Buildings side by side.** A new Buildings page (楼宇对比; in the nav, from the chart button beside the building
+  switcher, and at `/go/compare`) shows every building of the organisation over the same window (7, 28 or 90 days,
+  ending at the organisation's latest whole day) against the window before: kWh per m² a day of the floor area
+  entered for its floors, after-hours share, avoidable share, the change in after-hours kWh a day (sorted so the
+  biggest drop comes first), and what measures in effect save, measured where the data since shows it and expected,
+  with its range, otherwise. Every figure is per day with data and says how many days it has; a change is shown only
+  when both windows have data on at least half their days, never as 0 % or a drop when it is missing. Cost stays in
+  each building's own currency and is not summed or ranked. A one-building organisation sees the building against its
+  own previous window and is told that adding a building enables comparison. Staff only, like the report
+  (`GET /orgs/:orgId/compare`, `report:read`; a key limited to one building sees that building); a demo says every
+  figure is simulated. The measures list and the comparison share one sum (`summariseMeasures`), so they cannot drift.
+  Not included: a second demo building, since the simulator has one tower profile and a copy would differ only by
+  noise; and a "similar buildings" benchmark, since the community data holds per-strategy outcomes, not per-building
+  intensity or after-hours figures.
+
 ## 0.2.2 — 2026-11-12
 
 From a pre-test before Checkpoint 3: five AI reviewers (Claude) and GPT-6.1-sol went through every page on desktop and

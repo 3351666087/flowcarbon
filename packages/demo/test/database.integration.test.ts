@@ -3,6 +3,9 @@
  * Set TEST_DATABASE_URL to a superuser/owner URL (any database on the server); each run creates and drops
  * its own database. The application role `flowcarbon_app` must exist (infra/postgres/init).
  */
+
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   buildFloorIntervals,
   buildReport,
@@ -157,6 +160,122 @@ describe.skipIf(!adminUrl)("database integration", () => {
     expect(actual.scope2.greenShare).toBeCloseTo(green / actual.scope2.kwh, 4);
     expect(actual.scope2.residualFactor?.kgPerKwh).toBe(0.6096);
     expect(actual.scope2.marketBasedKg).toBeCloseTo((actual.scope2.kwh - green) * 0.6096, 0);
+    // tenant vs building control: the pipeline (daily roll-ups + leases by date) agrees with the in-memory engine
+    for (const i of [0, 1]) {
+      expect(actual.byParty[i]!.party).toBe(expected.byParty[i]!.party);
+      expect(actual.byParty[i]!.kwh).toBeCloseTo(expected.byParty[i]!.kwh, 0);
+      expect(actual.byParty[i]!.avoidableKwh).toBeCloseTo(expected.byParty[i]!.avoidableKwh, 0);
+    }
+  });
+
+  it("stores each day's energy per system, adding up to the day's total", async () => {
+    const rows = await ctxA((tx) => tx.select().from(schema.floorDaily));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.kwhHvac + r.kwhLighting + r.kwhPlug).toBeCloseTo(r.kwhTotal, 6);
+    // the pipeline derives every day it writes from intervals, so every day is split
+    expect(rows.every((r) => r.systemsSplit)).toBe(true);
+    // cooling runs on every whole working day; on weekends and the October holiday the BMS keeps it off,
+    // so a day with no cooling energy is real, not a gap
+    const workdays = rows.filter((r) => r.dayType === "workday" && r.intervals === 96);
+    expect(workdays.length).toBeGreaterThan(0);
+    expect(workdays.every((r) => r.kwhHvac > 0)).toBe(true);
+    expect(rows.some((r) => r.dayType !== "workday" && r.kwhHvac === 0 && r.kwhTotal > 0)).toBe(true);
+    expect(rows.some((r) => r.kwhLighting > 0)).toBe(true);
+  });
+
+  it("backfills the per-system split of days stored before migration 0013", async () => {
+    const before = await ctxA((tx) => tx.select().from(schema.floorDaily));
+    // as a database migrated from 0012 would hold them: the new columns at their default
+    await owner.db.execute(sql`update floor_daily set kwh_hvac = 0, kwh_lighting = 0, kwh_plug = 0`);
+    const migration = readFileSync(
+      fileURLToPath(new URL("../../db/drizzle/0013_floor_daily_systems.sql", import.meta.url)),
+      "utf8",
+    );
+    const backfill = migration.split("--> statement-breakpoint").find((st) => st.includes("UPDATE"))!;
+    await owner.db.execute(sql.raw(backfill));
+    const after = new Map(
+      (await ctxA((tx) => tx.select().from(schema.floorDaily))).map((r) => [`${r.floorId}|${r.day}`, r]),
+    );
+    for (const b of before) {
+      const a = after.get(`${b.floorId}|${b.day}`)!;
+      expect(a.kwhHvac).toBeCloseTo(b.kwhHvac, 6);
+      expect(a.kwhLighting).toBeCloseTo(b.kwhLighting, 6);
+      expect(a.kwhPlug).toBeCloseTo(b.kwhPlug, 6);
+    }
+  });
+
+  it("migration 0014 repairs days it can derive and leaves the rest unsplit, which the report shows", async () => {
+    const migration = readFileSync(
+      fileURLToPath(new URL("../../db/drizzle/0014_floor_daily_systems_split.sql", import.meta.url)),
+      "utf8",
+    );
+    const backfill = migration.split("--> statement-breakpoint").filter((st) => st.includes("UPDATE"));
+    expect(backfill).toHaveLength(2);
+    const report = (tx: Tx) =>
+      loadBuildingContext(tx, seeded.orgId, seeded.buildingId).then((ctx) =>
+        buildingReport(tx, ctx, START, "2026-10-13"),
+      );
+    const split = await ctxA(report);
+    expect(split.partyUnsplit).toEqual({ kwh: 0, share: 0, floorDays: 0 });
+    expect(split.disclosures.some((d) => d.includes("unsplit"))).toBe(false);
+
+    const ROLLBACK = new Error("rollback");
+    await expect(
+      owner.db.transaction(async (tx) => {
+        const days = await tx
+          .select()
+          .from(schema.floorDaily)
+          .where(eq(schema.floorDaily.buildingId, seeded.buildingId))
+          .orderBy(schema.floorDaily.day, schema.floorDaily.floorId);
+        const [a, b] = [days[40]!, days[41]!];
+        expect(a.kwhTotal).toBeGreaterThan(0);
+        expect(b.kwhTotal).toBeGreaterThan(0);
+        // as written by a version before 0013 while 0013 was being applied, and as stored before 0014
+        await tx.execute(sql`update floor_daily set systems_split = false`);
+        await tx.execute(
+          sql`update floor_daily set kwh_hvac = 0, kwh_lighting = 0, kwh_plug = 0 where floor_id in (${a.floorId}, ${b.floorId}) and day in (${a.day}, ${b.day})`,
+        );
+        // b's intervals are gone: its split cannot be derived any more
+        await tx.execute(
+          sql`delete from floor_intervals where floor_id = ${b.floorId} and start_at >= (${b.day}::date::timestamp at time zone 'Asia/Shanghai') and start_at < ((${b.day}::date + 1)::timestamp at time zone 'Asia/Shanghai')`,
+        );
+        for (const st of backfill) await tx.execute(sql.raw(st));
+
+        const after = new Map(
+          (
+            await tx
+              .select()
+              .from(schema.floorDaily)
+              .where(eq(schema.floorDaily.buildingId, seeded.buildingId))
+          ).map((r) => [`${r.floorId}|${r.day}`, r]),
+        );
+        for (const d of days) {
+          const r = after.get(`${d.floorId}|${d.day}`)!;
+          if (d === b) continue;
+          // every other day, a included, is derived again from its intervals and marked split
+          expect(r.systemsSplit).toBe(true);
+          expect(r.kwhHvac).toBeCloseTo(d.kwhHvac, 6);
+          expect(r.kwhLighting).toBeCloseTo(d.kwhLighting, 6);
+          expect(r.kwhPlug).toBeCloseTo(d.kwhPlug, 6);
+        }
+        const rb = after.get(`${b.floorId}|${b.day}`)!;
+        expect(rb).toMatchObject({ systemsSplit: false, kwhHvac: 0, kwhLighting: 0, kwhPlug: 0 });
+        expect(rb.kwhTotal).toBe(b.kwhTotal);
+
+        // the report keeps b's energy in the total and says it is neither party's
+        const r = await report(tx);
+        expect(r.totals.kwh).toBeCloseTo(split.totals.kwh, 1);
+        expect(r.partyUnsplit.kwh).toBeCloseTo(b.kwhTotal, 1);
+        expect(r.partyUnsplit.floorDays).toBe(1);
+        expect(r.byParty[0]!.kwh + r.byParty[1]!.kwh + r.partyUnsplit.kwh).toBeCloseTo(r.totals.kwh, 0);
+        expect(r.byParty[0]!.share + r.byParty[1]!.share + r.partyUnsplit.share).toBeCloseTo(1, 9);
+        const floor = r.byFloor.find((f) => f.floorId === b.floorId)!;
+        expect(floor.tenantKwh + floor.buildingKwh + floor.unsplitKwh).toBeCloseTo(floor.kwh, 0);
+        expect(floor.unsplitKwh).toBeCloseTo(b.kwhTotal, 1);
+        expect(r.disclosures.find((d) => d.includes("unsplit"))).toContain("on 1 floor-day)");
+        throw ROLLBACK;
+      }),
+    ).rejects.toBe(ROLLBACK);
   });
 
   it("is idempotent when days are processed again", async () => {
@@ -357,11 +476,38 @@ describe.skipIf(!adminUrl)("database integration", () => {
 
   it("deletes an organisation with all of its telemetry", async () => {
     const devices = await ctxA((tx) => tx.select({ id: schema.devices.id }).from(schema.devices));
+    // every table with an org_id but no foreign key to it, raw and derived: nothing may outlive the organisation
+    const unconstrained = [
+      "energy_readings",
+      "door_counts",
+      "hvac_events",
+      "lighting_events",
+      "floor_intervals",
+      "floor_daily",
+    ];
+    const counts = async () =>
+      Object.fromEntries(
+        await Promise.all(
+          unconstrained.map(async (t) => {
+            const [r] = await owner.db.execute<{ n: number }>(
+              sql`select count(*)::int as n from ${sql.identifier(t)} where org_id = ${seeded.orgId}`,
+            );
+            return [t, r!.n] as const;
+          }),
+        ),
+      );
+    const before = await counts();
+    for (const t of unconstrained) expect(before[t], t).toBeGreaterThan(0);
     await deleteOrganization(app.db, seeded.orgId);
-    const left = await owner.db.execute<{ n: number }>(
-      sql`select (select count(*) from energy_readings where org_id = ${seeded.orgId})::int + (select count(*) from door_counts where org_id = ${seeded.orgId})::int as n`,
-    );
-    expect(left[0]!.n).toBe(0);
+    expect(await counts()).toEqual(Object.fromEntries(unconstrained.map((t) => [t, 0])));
+    // and the list above is complete: no other table has an org_id without a foreign key
+    const loose = await owner.db.execute<{ t: string }>(sql`
+      select c.table_name as t from information_schema.columns c
+      where c.table_schema = 'public' and c.column_name = 'org_id'
+        and not exists (select 1 from pg_constraint k
+          where k.conrelid = ('public.' || quote_ident(c.table_name))::regclass and k.contype = 'f')
+      order by 1`);
+    expect(loose.map((r) => r.t).sort()).toEqual([...unconstrained].sort());
     expect(devices.length).toBeGreaterThan(0);
     expect(await ctxA((tx) => tx.select().from(schema.buildings))).toEqual([]);
   });

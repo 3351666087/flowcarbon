@@ -541,3 +541,65 @@ export async function activityOf(tx: Tx, findingId: string, measureId: string | 
     data: (r.data as Record<string, unknown> | null) ?? null,
   }));
 }
+
+/** Totals of a building's measures: what the measures page heads with, and the in-effect split the comparison shows. */
+export function summariseMeasures(items: MeasureJson[], footing: Pick<MeasureFooting, "days">) {
+  const round2 = (x: number) => Math.round(x * 100) / 100;
+  const inEffect = items.filter((m) => m.status === "in_effect");
+  // measured: in effect with complete days since; expected: planned, or in effect but not measured yet
+  const measured = inEffect.filter((m) => (m.verification.after?.days ?? 0) > 0);
+  const notYet = inEffect.filter((m) => !m.verification.after?.days);
+  const expected = items.filter((m) => m.status === "planned" || notYet.includes(m));
+  const sum = (list: MeasureJson[], key: "kwh" | "cost") =>
+    round2(list.reduce((s, m) => s + m.verification.weekly[key], 0));
+  const range = (list: MeasureJson[], key: "lowKwh" | "highKwh") =>
+    round2(list.reduce((s, m) => s + (m.verification.expected?.[key] ?? 0), 0));
+  return {
+    totals: {
+      planned: items.filter((m) => m.status === "planned").length,
+      inEffect: inEffect.length,
+      measured: measured.length,
+      weeklyKwh: sum(measured, "kwh"),
+      weeklyCost: sum(measured, "cost"),
+      expectedWeeklyKwh: sum(expected, "kwh"),
+      expectedWeeklyCost: sum(expected, "cost"),
+      expectedWeeklyLowKwh: range(expected, "lowKwh"),
+      expectedWeeklyHighKwh: range(expected, "highKwh"),
+      expectedDays: footing.days,
+    },
+    /** measures in effect only: planned ones have saved nothing yet */
+    inEffect: {
+      inEffect: inEffect.length,
+      measured: measured.length,
+      measuredWeeklyKwh: sum(measured, "kwh"),
+      /** the fall in covered avoidable energy per day, times the covered days since the change */
+      measuredToDateKwh: round2(
+        measured.reduce((s, m) => {
+          const after = m.verification.after!;
+          return s + Math.max(0, m.verification.before.perDayKwh - after.perDayKwh) * after.days;
+        }, 0),
+      ),
+      expectedInEffect: notYet.length,
+      expectedWeeklyKwh: sum(notYet, "kwh"),
+      expectedLowKwh: range(notYet, "lowKwh"),
+      expectedHighKwh: range(notYet, "highKwh"),
+      expectedDays: footing.days,
+    },
+  };
+}
+
+/** A building's measures (newest 200), verified and summed as the measures page does. */
+export async function buildingMeasureTotals(tx: Tx, ctx: BuildingContext) {
+  const rows = await tx
+    .select()
+    .from(schema.measures)
+    .where(eq(schema.measures.buildingId, ctx.building.id))
+    .orderBy(desc(schema.measures.createdAt))
+    .limit(200);
+  // the plan's footing is the costly part: a building without measures has nothing to expect
+  if (!rows.length) return summariseMeasures([], { days: 0 });
+  const footing = await measureFooting(tx, ctx);
+  const items: MeasureJson[] = [];
+  for (const m of rows) items.push(await measureJson(tx, ctx, m, footing));
+  return summariseMeasures(items, footing);
+}

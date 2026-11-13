@@ -6,10 +6,16 @@ import {
   DEFAULT_ANNUAL_DAYS,
   DEFAULT_CAPEX,
   type EnergyReport,
+  emptyPartyTotals,
   estimateStrategies,
   type Finding,
   type FloorDayStats,
+  findingParty,
   forecastFloors,
+  leasedOn,
+  localParts,
+  partyRows,
+  partyUnsplitRow,
   RULES,
   type RuleId,
   reportDisclosures,
@@ -17,6 +23,7 @@ import {
   type StrategyEstimate,
   scope2,
   selectFactor,
+  splitByParty,
 } from "@flowcarbon/core";
 import { schema, type Tx } from "@flowcarbon/db";
 import { and, desc, eq, gte, lt, lte, sql } from "drizzle-orm";
@@ -212,7 +219,20 @@ export async function buildingReport(
   });
 
   const labels = new Map(ctx.floors.map((f) => [f.id, f.label]));
-  const byFloor = new Map<string, { kwh: number; afterHoursKwh: number; avoidableKwh: number }>();
+  const parties = emptyPartyTotals();
+  const byFloor = new Map<
+    string,
+    {
+      kwh: number;
+      afterHoursKwh: number;
+      avoidableKwh: number;
+      tenantKwh: number;
+      buildingKwh: number;
+      unsplitKwh: number;
+    }
+  >();
+  let unsplit = 0;
+  let unsplitDays = 0;
   const byType = new Map<DayType, { days: Set<string>; kwh: number; avoidableKwh: number }>(
     DAY_TYPES.map((t) => [t, { days: new Set(), kwh: 0, avoidableKwh: 0 }]),
   );
@@ -227,8 +247,31 @@ export async function buildingReport(
     cost += r.cost;
     measured += r.kwhMeasured;
     avoidable += r.avoidableKwh;
-    const f = byFloor.get(r.floorId) ?? { kwh: 0, afterHoursKwh: 0, avoidableKwh: 0 };
+    // who controls it, by system and the lease in force that day (not today's); a day whose split by system
+    // is not known is counted as unsplit rather than guessed
+    const split = r.systemsSplit
+      ? splitByParty(
+          { hvac: r.kwhHvac, lighting: r.kwhLighting, plug: r.kwhPlug },
+          leasedOn(ctx.leases, r.floorId, r.day),
+        )
+      : { tenant: 0, building: 0 };
+    const rowUnsplit = r.systemsSplit ? 0 : r.kwhTotal;
+    parties.tenant.kwh += split.tenant;
+    parties.building.kwh += split.building;
+    unsplit += rowUnsplit;
+    if (!r.systemsSplit && r.kwhTotal > 0) unsplitDays++;
+    const f = byFloor.get(r.floorId) ?? {
+      kwh: 0,
+      afterHoursKwh: 0,
+      avoidableKwh: 0,
+      tenantKwh: 0,
+      buildingKwh: 0,
+      unsplitKwh: 0,
+    };
     f.kwh += r.kwhTotal;
+    f.tenantKwh += split.tenant;
+    f.buildingKwh += split.building;
+    f.unsplitKwh += rowUnsplit;
     f.afterHoursKwh += r.kwhAfterHours;
     f.avoidableKwh += r.avoidableKwh;
     byFloor.set(r.floorId, f);
@@ -253,7 +296,28 @@ export async function buildingReport(
       ),
     )
     .groupBy(schema.findings.ruleId);
+  // avoidable energy per party, counted like byRule (by the finding's start) so the two add up the same
+  const findingRows = await tx
+    .select({
+      floorId: schema.findings.floorId,
+      ruleId: schema.findings.ruleId,
+      startAt: schema.findings.startAt,
+      avoidableKwh: schema.findings.avoidableKwh,
+    })
+    .from(schema.findings)
+    .where(
+      and(
+        eq(schema.findings.buildingId, ctx.building.id),
+        gte(schema.findings.startAt, new Date(from)),
+        lt(schema.findings.startAt, new Date(to)),
+      ),
+    );
+  for (const f of findingRows) {
+    const day = localParts(f.startAt.getTime(), ctx.building.timezone).dateKey;
+    parties[findingParty(f.ruleId, leasedOn(ctx.leases, f.floorId, day))].avoidableKwh += f.avoidableKwh;
+  }
   const avoidableCost = ruleRows.reduce((s, r) => s + r.cost, 0);
+  const partyUnsplit = partyUnsplitRow(parties, unsplit, unsplitDays);
   const dayTypes: Record<DayType, number> = { workday: 0, weekend: 0, holiday: 0 };
   for (const [t, v] of byType) dayTypes[t] = v.days.size;
 
@@ -277,8 +341,13 @@ export async function buildingReport(
         kwh: round(v.kwh, 1),
         afterHoursKwh: round(v.afterHoursKwh, 1),
         avoidableKwh: round(v.avoidableKwh, 1),
+        tenantKwh: round(v.tenantKwh, 1),
+        buildingKwh: round(v.buildingKwh, 1),
+        unsplitKwh: round(v.unsplitKwh, 1),
       }))
       .sort((a, b) => b.avoidableKwh - a.avoidableKwh),
+    byParty: partyRows(parties, unsplit),
+    partyUnsplit,
     byDayType: [...byType].map(([dayType, v]) => ({
       dayType,
       days: v.days.size,
@@ -295,7 +364,9 @@ export async function buildingReport(
         kwh: round(r.kwh, 1),
       };
     }),
-    disclosures: reportDisclosures(locationFactor, residualFactor, kwh ? measured / kwh : 0),
+    disclosures: reportDisclosures(locationFactor, residualFactor, kwh ? measured / kwh : 0, {
+      unsplit: partyUnsplit,
+    }),
   };
 }
 

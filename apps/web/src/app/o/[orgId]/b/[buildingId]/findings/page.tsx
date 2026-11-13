@@ -164,8 +164,14 @@ function Findings() {
                           {floorLabel.get(f.floorId) ?? "–"}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[15px] font-medium">
+                          <span className="flex flex-wrap items-center gap-1.5 text-[15px] font-medium">
                             {t.domain.ruleNames[f.ruleId] ?? f.ruleName}
+                            <Badge
+                              tone={f.responder === "tenant" ? "accent" : "neutral"}
+                              title={t.findings.responderNote}
+                            >
+                              {t.findings.responder[f.responder]}
+                            </Badge>
                           </span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
                             {dateTime(f.startAt, locale, tz, {
@@ -229,7 +235,15 @@ function Findings() {
                   <td className="font-medium">{floorLabel.get(f.floorId) ?? "–"}</td>
                   <td>
                     <div>{t.domain.ruleNames[f.ruleId] ?? f.ruleName}</div>
-                    <div className="text-xs text-muted">{t.findings.kinds[f.kind]}</div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                      {t.findings.kinds[f.kind]}
+                      <Badge
+                        tone={f.responder === "tenant" ? "accent" : "neutral"}
+                        title={t.findings.responderNote}
+                      >
+                        {t.findings.responder[f.responder]}
+                      </Badge>
+                    </div>
                   </td>
                   <td className="num whitespace-nowrap">
                     <div className="font-medium text-waste">{kwh(f.avoidableKwh, locale)}</div>

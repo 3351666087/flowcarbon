@@ -40,6 +40,7 @@ interface Palette {
   waste: string;
   slab: string;
   edge: string;
+  text: string;
   dark: boolean;
 }
 
@@ -52,6 +53,7 @@ function readPalette(): Palette {
     waste: v("--waste", "#f2a33a"),
     slab: v("--surface", "#151a22"),
     edge: v("--border", "#283039"),
+    text: v("--text", "#e7e9ec"),
     dark,
   };
 }
@@ -77,6 +79,8 @@ export function liveFloors(floors: readonly { occupancy: number; wasteNow: boole
  * it is the building as it is now: each floor glows with its people and turns amber while it wastes, and tapping a
  * floor (or turning the mouse wheel over the tower) calls `onPick` with its index; `picked` lifts that floor.
  * `reserveBottom` (px) keeps the tower clear of something laid over the bottom of the scene, such as a floor card.
+ * `names` (bottom to top, like `live`) label a floor on the tower itself while it is picked or under the pointer, for
+ * instance "F7 · Tenant": beside the tower where there is room, above the floor where there is not (a phone).
  * With `interactive` off it only shows: taps and the wheel pass through, so a page scrolling over it scrolls.
  */
 export function TowerScene({
@@ -86,9 +90,11 @@ export function TowerScene({
   picked = null,
   reserveBottom = 0,
   interactive = true,
+  names,
 }: {
   className?: string;
   live?: readonly LiveFloor[];
+  names?: readonly string[];
   onPick?: (index: number) => void;
   picked?: number | null;
   reserveBottom?: number;
@@ -105,6 +111,8 @@ export function TowerScene({
   reserveRef.current = reserveBottom;
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
+  const namesRef = useRef(names);
+  namesRef.current = names;
   // with reduced motion nothing runs, so a change has to ask for its one frame
   const stillRef = useRef<(() => void) | null>(null);
   const count = live?.length || FLOORS;
@@ -119,6 +127,7 @@ export function TowerScene({
     let height = 0;
     let dpr = 1;
     let place = { x: 0.5, y: 0.5, scale: 1 };
+    let fontFamily = "system-ui, sans-serif";
     const floors: Floor[] = Array.from({ length: count }, (_, i) => ({
       occ: 0.15 + ((i * 37) % 11) / 14,
       target: Math.random(),
@@ -132,6 +141,8 @@ export function TowerScene({
     let reserve = reserveRef.current;
     // the floor the wheel has reached on the sign-in stage, where there is nothing to pick
     let storyFocus: number | null = null;
+    // the floor under a mouse or pen, labelled like a picked one (touch has no hover: a tap picks)
+    let hovered: number | null = null;
     let wheel = 0;
     let wasteFloor = -1;
     let nextWasteAt = 2600;
@@ -151,6 +162,7 @@ export function TowerScene({
       const num = (name: string, fallback: number) =>
         Number.parseFloat(css.getPropertyValue(name)) || fallback;
       place = { x: num("--tower-x", 0.5), y: num("--tower-y", 0.5), scale: num("--tower-scale", 1) };
+      fontFamily = css.fontFamily || fontFamily;
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -173,6 +185,80 @@ export function TowerScene({
       return { x: cx, y, left: a, right: a, b, thick };
     };
     const focused = () => (pickRef.current ? pickedRef.current : storyFocus);
+
+    // the floor at a point in the canvas, within the tower's width and nearest in height; -1 off the tower
+    const floorAt = (px: number, py: number) => {
+      let best = -1;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < count; i++) {
+        const g = geometry(i);
+        if (Math.abs(px - g.x) > Math.max(g.left, g.right)) continue;
+        const distance = Math.abs(py - (g.y + g.b * 0.5));
+        if (distance < bestDistance) {
+          best = i;
+          bestDistance = distance;
+        }
+      }
+      return best;
+    };
+
+    // a floor's name in a pill: beside the tower with a short leader where there is room, else above the floor
+    const drawLabel = (i: number, strong: boolean) => {
+      const text = namesRef.current?.[i];
+      if (!text) return;
+      const g = geometry(i);
+      const y0 = g.y - (focused() === i ? Math.min(8, g.b * 0.3) : 0);
+      const wasting = floors[i]!.waste > 0.02;
+      ctx.font = `${strong ? 600 : 500} 12px ${fontFamily}`;
+      const pad = 10;
+      const h = 24;
+      const most = Math.max(40, Math.min(240, width - 16) - pad * 2);
+      let shown = text;
+      if (ctx.measureText(shown).width > most) {
+        while (shown.length > 1 && ctx.measureText(`${shown}…`).width > most) shown = shown.slice(0, -1);
+        shown = `${shown.trimEnd()}…`;
+      }
+      const w = ctx.measureText(shown).width + pad * 2;
+      const gap = 12;
+      const rightRoom = width - (g.x + g.right) - 8;
+      const leftRoom = g.x - g.left - 8;
+      let x: number;
+      let y = y0 - h / 2;
+      let lead: readonly [number, number, number] | null = null;
+      if (rightRoom >= w + gap) {
+        x = g.x + g.right + gap;
+        lead = [g.x + g.right + 2, x, y0];
+      } else if (leftRoom >= w + gap) {
+        x = g.x - g.left - gap - w;
+        lead = [g.x - g.left - 2, x + w, y0];
+      } else {
+        x = Math.max(8, Math.min(width - w - 8, g.x - w / 2));
+        y = y0 - g.b - h - 6;
+      }
+      y = Math.max(4, Math.min(height - h - 4, y));
+      const tone = wasting ? palette.waste : palette.accent;
+      ctx.globalAlpha = strong ? 1 : 0.85;
+      if (lead) {
+        ctx.strokeStyle = tone;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(lead[0], lead[2]);
+        ctx.lineTo(lead[1], y + h / 2);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, h / 2);
+      ctx.fillStyle = palette.dark ? "rgb(21 26 34 / 0.94)" : "rgb(255 255 255 / 0.95)";
+      ctx.fill();
+      ctx.strokeStyle = tone;
+      ctx.lineWidth = strong ? 1.5 : 1;
+      ctx.stroke();
+      ctx.fillStyle = palette.text;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "left";
+      ctx.fillText(shown, x + pad, y + h / 2 + 0.5);
+      ctx.globalAlpha = 1;
+    };
 
     const draw = (now: number) => {
       const t = reduced ? 1e6 : now - t0;
@@ -282,6 +368,13 @@ export function TowerScene({
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+
+      // which floor is which, on the tower itself: the one under the pointer, and the picked one over it
+      if (namesRef.current && pickRef.current) {
+        const pickedNow = pickedRef.current;
+        if (hovered !== null && hovered !== pickedNow) drawLabel(hovered, false);
+        if (pickedNow !== null && pickedNow >= 0 && pickedNow < count) drawLabel(pickedNow, true);
+      }
     };
 
     // the one frame reduced motion gets: no easing, the floors just are as they are
@@ -411,19 +504,7 @@ export function TowerScene({
       const pick = pickRef.current;
       if (pick) {
         // the floor at the height of the finger, within the tower's width
-        const px = e.clientX - r.left;
-        const py = e.clientY - r.top;
-        let best = -1;
-        let bestDistance = Number.POSITIVE_INFINITY;
-        for (let i = 0; i < count; i++) {
-          const g = geometry(i);
-          if (Math.abs(px - g.x) > Math.max(g.left, g.right)) continue;
-          const distance = Math.abs(py - (g.y + g.b * 0.5));
-          if (distance < bestDistance) {
-            best = i;
-            bestDistance = distance;
-          }
-        }
+        const best = floorAt(e.clientX - r.left, e.clientY - r.top);
         if (best >= 0) {
           floors[best]!.pulseAt = now;
           pick(best);
@@ -453,6 +534,19 @@ export function TowerScene({
       else storyFocus = next;
       if (reduced) still();
     };
+    const setHovered = (next: number | null) => {
+      if (next === hovered) return;
+      hovered = next;
+      canvas.style.cursor = next === null ? "" : "pointer";
+      if (reduced) still();
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === "touch" || !interactiveRef.current || !pickRef.current) return;
+      const r = canvas.getBoundingClientRect();
+      const i = floorAt(e.clientX - r.left, e.clientY - r.top);
+      setHovered(i >= 0 ? i : null);
+    };
+    const onPointerLeave = () => setHovered(null);
     const onVisibility = () => (document.hidden ? stop() : start());
     const onTheme = () => {
       palette = readPalette();
@@ -476,6 +570,8 @@ export function TowerScene({
     scheme.addEventListener("change", onTheme);
     window.addEventListener("pointerdown", onPointerDown, { passive: true });
     canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("pointermove", onPointerMove, { passive: true });
+    canvas.addEventListener("pointerleave", onPointerLeave, { passive: true });
     document.addEventListener("visibilitychange", onVisibility);
     resize();
     start();
@@ -488,6 +584,8 @@ export function TowerScene({
       scheme.removeEventListener("change", onTheme);
       window.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerleave", onPointerLeave);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [count]);
@@ -495,7 +593,7 @@ export function TowerScene({
   // biome-ignore lint/correctness/useExhaustiveDependencies: these are what the still frame shows
   useEffect(() => {
     stillRef.current?.();
-  }, [live, picked]);
+  }, [live, picked, names]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden />;
 }

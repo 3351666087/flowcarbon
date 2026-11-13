@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   doublePrecision,
   index,
@@ -184,6 +185,17 @@ export const floorDaily = pgTable(
     kwhTotal: doublePrecision("kwh_total").notNull(),
     kwhAfterHours: doublePrecision("kwh_after_hours").notNull(),
     kwhMeasured: doublePrecision("kwh_measured").notNull(),
+    /** the day's kWh per system; neutral facts, so the tenant/building mapping can change without a migration */
+    kwhHvac: doublePrecision("kwh_hvac").notNull().default(0),
+    kwhLighting: doublePrecision("kwh_lighting").notNull().default(0),
+    kwhPlug: doublePrecision("kwh_plug").notNull().default(0),
+    /**
+     * True when kwh_hvac + kwh_lighting + kwh_plug were derived from the day's intervals and add up to
+     * kwh_total. False (the default) for a day whose split could not be derived, such as one written by a
+     * version before 0013 with its intervals since removed: reports count such a day's energy as unsplit,
+     * never as the tenant's or the building's.
+     */
+    systemsSplit: boolean("systems_split").notNull().default(false),
     cost: numeric("cost", { precision: 14, scale: 2, mode: "number" }).notNull(),
     afterHoursPeak: integer("after_hours_peak").notNull(),
     afterHoursHvacHours: doublePrecision("after_hours_hvac_hours").notNull(),

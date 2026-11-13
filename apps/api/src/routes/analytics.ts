@@ -3,6 +3,10 @@ import {
   type DayType,
   DEFAULT_RULE_PARAMS,
   evaluateEpc,
+  findingResponder,
+  type LeaseSpan,
+  leasedOn,
+  localParts,
   MEASURE_STRATEGY_IDS,
   RULE_PARAM_KEYS,
   RULE_PARAM_RATIONALE,
@@ -11,6 +15,7 @@ import {
   reportDisclosures,
   SCHEDULE_LABELS,
   STRATEGIES,
+  splitByParty,
   strategiesFor,
   zonedTime,
 } from "@flowcarbon/core";
@@ -80,8 +85,28 @@ const reportOut = z.object({
       kwh: z.number(),
       afterHoursKwh: z.number(),
       avoidableKwh: z.number(),
+      /** lighting and plug loads while leased; by system, not by metered area */
+      tenantKwh: z.number(),
+      /** cooling (with the floor's share of the central plant), and everything while vacant */
+      buildingKwh: z.number(),
+      /** energy on days whose split by system is not known: assigned to neither party */
+      unsplitKwh: z.number(),
     }),
   ),
+  /**
+   * who controls the energy, by system not by metered area: always tenant then building. Shares are of all
+   * the energy, so with partyUnsplit they add up to 1.
+   */
+  byParty: z.array(
+    z.object({
+      party: z.enum(["tenant", "building"]),
+      kwh: z.number(),
+      share: z.number(),
+      avoidableKwh: z.number(),
+    }),
+  ),
+  /** energy on floor-days whose split by system is not known: reported here, not given to either party */
+  partyUnsplit: z.object({ kwh: z.number(), share: z.number(), floorDays: z.number() }),
   byDayType: z.array(z.object({ dayType, days: z.number(), kwh: z.number(), avoidableKwh: z.number() })),
   byRule: z.array(
     z.object({
@@ -108,6 +133,8 @@ export const findingOut = z.object({
   avoidableCo2eKg: z.number(),
   peakPeople: z.number(),
   tier: z.enum(["measured", "estimated"]),
+  /** who to call: the tenant (lights left on in a leased unit) or engineering (the BMS schedule, vacant floors) */
+  responder: z.enum(["tenant", "engineering"]),
   evidence: z.object({ summary: z.string(), facts: z.record(z.string(), z.union([z.string(), z.number()])) }),
   params: z.record(z.string(), z.unknown()),
   status: z.enum(["open", "acknowledged", "fixed", "dismissed"]),
@@ -179,7 +206,36 @@ const epcOut = z.object({
 
 type FindingRow = typeof schema.findings.$inferSelect;
 type MeasureRef = { id: string; strategyId: string; status: "planned" | "in_effect" | "cancelled" };
-export const findingJson = (f: FindingRow, measures?: Map<string, MeasureRef> | MeasureRef | null) => ({
+/** What deciding who to call about a finding needs: the building's time zone and its leases by date. */
+export type LeaseScope = { timezone: string; leases: readonly LeaseSpan[] };
+export const leaseScope = (ctx: {
+  building: { timezone: string };
+  leases: readonly LeaseSpan[];
+}): LeaseScope => ({
+  timezone: ctx.building.timezone,
+  leases: ctx.leases,
+});
+/** The leases of one building, for handlers that do not load the full building context. */
+export async function loadLeaseScope(
+  tx: Tx,
+  building: { id: string; timezone: string },
+): Promise<LeaseScope> {
+  const leases = await tx
+    .select({
+      floorId: schema.leases.floorId,
+      startsOn: schema.leases.startsOn,
+      endsOn: schema.leases.endsOn,
+    })
+    .from(schema.leases)
+    .innerJoin(schema.floors, eq(schema.floors.id, schema.leases.floorId))
+    .where(eq(schema.floors.buildingId, building.id));
+  return { timezone: building.timezone, leases: leases.map((l) => ({ ...l, endsOn: l.endsOn ?? null })) };
+}
+export const findingJson = (
+  f: FindingRow,
+  scope: LeaseScope,
+  measures?: Map<string, MeasureRef> | MeasureRef | null,
+) => ({
   id: f.id,
   floorId: f.floorId,
   ruleId: f.ruleId,
@@ -193,6 +249,10 @@ export const findingJson = (f: FindingRow, measures?: Map<string, MeasureRef> | 
   avoidableCo2eKg: f.avoidableCo2eKg,
   peakPeople: f.peakPeople,
   tier: f.tier,
+  responder: findingResponder(
+    f.ruleId,
+    leasedOn(scope.leases, f.floorId, localParts(f.startAt.getTime(), scope.timezone).dateKey),
+  ),
   evidence: f.evidence,
   params: f.params,
   status: f.status,
@@ -400,7 +460,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           const page = rows.slice(0, q.limit).map((r) => r.f);
           const refs = await measureRefs(tx, page);
           return {
-            items: page.map((f) => findingJson(f, refs)),
+            items: page.map((f) => findingJson(f, leaseScope(ctx), refs)),
             nextCursor: rows.length > q.limit ? encodeCursor([offset + q.limit]) : null,
           };
         }
@@ -423,7 +483,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         const refs = await measureRefs(tx, page);
         const lastRow = page[page.length - 1];
         return {
-          items: page.map((f) => findingJson(f, refs)),
+          items: page.map((f) => findingJson(f, leaseScope(ctx), refs)),
           nextCursor:
             rows.length > q.limit && lastRow
               ? encodeCursor([lastRow.startAt.toISOString(), lastRow.id])
@@ -534,7 +594,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         const defaults = DEFAULT_RULE_PARAMS as unknown as Record<string, number | string>;
         const names = await userNames(tx, [f.statusBy]);
         return {
-          ...findingJson(f, m ?? null),
+          ...findingJson(f, leaseScope(ctx), m ?? null),
           explanations: ex.map(explanationJson),
           measureDetail: m ? await measureJson(tx, ctx, m) : null,
           options: {
@@ -626,7 +686,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
           entityId: before.id,
           data: { from: before.status, to: req.body.status, note: req.body.note },
         });
-        return findingJson(f!, (await measureRefs(tx, [f!])) ?? null);
+        return findingJson(f!, await loadLeaseScope(tx, b), (await measureRefs(tx, [f!])) ?? null);
       }),
   );
 
@@ -710,6 +770,15 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
               kwhTotal: z.number(),
               kwhAfterHours: z.number(),
               kwhMeasured: z.number(),
+              /** false when the day's split by system is not known: the per-system and party figures are null */
+              systemsSplit: z.boolean(),
+              kwhHvac: z.number().nullable(),
+              kwhLighting: z.number().nullable(),
+              kwhPlug: z.number().nullable(),
+              /** lighting and plug if the floor was leased that day; by system, not by metered area */
+              kwhTenant: z.number().nullable(),
+              /** cooling, or everything on a day the floor was vacant */
+              kwhBuilding: z.number().nullable(),
               cost: z.number(),
               afterHoursPeak: z.number(),
               afterHoursHvacHours: z.number(),
@@ -741,18 +810,32 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
             ),
           )
           .orderBy(schema.floorDaily.day);
-        return rows.map((r) => ({
-          floorId: r.floorId,
-          day: r.day,
-          dayType: r.dayType,
-          kwhTotal: r.kwhTotal,
-          kwhAfterHours: r.kwhAfterHours,
-          kwhMeasured: r.kwhMeasured,
-          cost: r.cost,
-          afterHoursPeak: r.afterHoursPeak,
-          afterHoursHvacHours: r.afterHoursHvacHours,
-          avoidableKwh: r.avoidableKwh,
-        }));
+        return rows.map((r) => {
+          const split = r.systemsSplit
+            ? splitByParty(
+                { hvac: r.kwhHvac, lighting: r.kwhLighting, plug: r.kwhPlug },
+                leasedOn(ctx.leases, r.floorId, r.day),
+              )
+            : null;
+          return {
+            floorId: r.floorId,
+            day: r.day,
+            dayType: r.dayType,
+            kwhTotal: r.kwhTotal,
+            kwhAfterHours: r.kwhAfterHours,
+            kwhMeasured: r.kwhMeasured,
+            systemsSplit: r.systemsSplit,
+            kwhHvac: split ? r.kwhHvac : null,
+            kwhLighting: split ? r.kwhLighting : null,
+            kwhPlug: split ? r.kwhPlug : null,
+            kwhTenant: split ? split.tenant : null,
+            kwhBuilding: split ? split.building : null,
+            cost: r.cost,
+            afterHoursPeak: r.afterHoursPeak,
+            afterHoursHvacHours: r.afterHoursHvacHours,
+            avoidableKwh: r.avoidableKwh,
+          };
+        });
       }),
   );
 
@@ -1109,9 +1192,7 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         r.scope2.locationFactor,
         r.scope2.residualFactor,
         r.totals.measuredShare,
-        {
-          simulated: true,
-        },
+        { simulated: true, unsplit: r.partyUnsplit },
       ),
     };
   };
@@ -1161,7 +1242,18 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
         const r = report.report;
         const esc = (v: unknown) => `"${String(v).replaceAll('"', '""')}"`;
         const lines = [
-          ["section", "item", "kwh", "after_hours_kwh", "avoidable_kwh", "cost", "co2e_kg"].join(","),
+          [
+            "section",
+            "item",
+            "kwh",
+            "after_hours_kwh",
+            "avoidable_kwh",
+            "cost",
+            "co2e_kg",
+            "tenant_controlled_kwh",
+            "building_controlled_kwh",
+            "unsplit_kwh",
+          ].join(","),
           [
             "total",
             esc(report.name),
@@ -1170,15 +1262,41 @@ export const analyticsRoutes: FastifyPluginAsyncZod<RouteDeps> = async (app, { d
             r.totals.avoidableKwh,
             r.totals.cost,
             r.scope2.locationBasedKg,
+            r.byParty[0]?.kwh ?? "",
+            r.byParty[1]?.kwh ?? "",
+            r.partyUnsplit.kwh,
           ].join(","),
-          ...r.byFloor.map((f) =>
-            ["floor", esc(f.label), f.kwh, f.afterHoursKwh, f.avoidableKwh, "", ""].join(","),
+          // by system, not by metered area (see the responsibility disclosure)
+          ...r.byParty.map((p) =>
+            ["party", `${p.party}_controlled`, p.kwh, "", p.avoidableKwh, "", "", "", "", ""].join(","),
           ),
-          ...r.byDayType.map((d) => ["day_type", d.dayType, d.kwh, "", d.avoidableKwh, "", ""].join(",")),
-          ...r.byRule.map((x) => ["rule", esc(x.name), "", "", x.kwh, "", ""].join(",")),
-          ["scope2", "location_based", r.scope2.kwh, "", "", "", r.scope2.locationBasedKg].join(","),
-          ["scope2", "market_based", r.scope2.kwh, "", "", "", r.scope2.marketBasedKg].join(","),
-          ...r.disclosures.map((d) => ["disclosure", esc(d), "", "", "", "", ""].join(",")),
+          // days whose split by system is not known: neither party's
+          ...(r.partyUnsplit.kwh > 0
+            ? [["party", "unsplit", r.partyUnsplit.kwh, "", "", "", "", "", "", ""].join(",")]
+            : []),
+          ...r.byFloor.map((f) =>
+            [
+              "floor",
+              esc(f.label),
+              f.kwh,
+              f.afterHoursKwh,
+              f.avoidableKwh,
+              "",
+              "",
+              f.tenantKwh,
+              f.buildingKwh,
+              f.unsplitKwh,
+            ].join(","),
+          ),
+          ...r.byDayType.map((d) =>
+            ["day_type", d.dayType, d.kwh, "", d.avoidableKwh, "", "", "", "", ""].join(","),
+          ),
+          ...r.byRule.map((x) => ["rule", esc(x.name), "", "", x.kwh, "", "", "", "", ""].join(",")),
+          ["scope2", "location_based", r.scope2.kwh, "", "", "", r.scope2.locationBasedKg, "", "", ""].join(
+            ",",
+          ),
+          ["scope2", "market_based", r.scope2.kwh, "", "", "", r.scope2.marketBasedKg, "", "", ""].join(","),
+          ...r.disclosures.map((d) => ["disclosure", esc(d), "", "", "", "", "", "", "", ""].join(",")),
         ];
         return reply
           .header(

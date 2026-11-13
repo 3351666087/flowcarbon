@@ -32,6 +32,7 @@ import {
   useRemember,
 } from "./auth-stage";
 import { tick } from "./glass";
+import { IntroVideoLink } from "./intro-video";
 import { Mark } from "./mark";
 import { OtpInput } from "./otp-input";
 import { PasswordRules } from "./password-rules";
@@ -342,6 +343,7 @@ export function AuthFlow() {
         {!adding && methods.data?.signUp && methods.data.demo ? (
           <p className="mt-3 px-1 text-sm text-muted">{t.auth.demoHint}</p>
         ) : null}
+        {!adding ? <IntroVideoLink className="mt-2 px-1 text-sm text-accent" /> : null}
         {alert}
         <Primary busy={busy}>{t.auth.continue}</Primary>
         <Link

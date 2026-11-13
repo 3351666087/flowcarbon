@@ -7,6 +7,7 @@ import {
   Box,
   Building2,
   CalendarClock,
+  ChartBarBig,
   ChevronDown,
   Cpu,
   FileText,
@@ -36,6 +37,7 @@ const NAV = [
   { key: "simulate", icon: BarChart3 },
   { key: "requests", icon: CalendarClock },
   { key: "report", icon: FileText },
+  { key: "compare", icon: Building2 },
   { key: "data", icon: Cpu },
   { key: "settings", icon: Settings },
 ] as const;
@@ -196,6 +198,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               ) : (
                 <span className="truncate font-medium">{buildingLabel(building?.name)}</span>
               )}
+              {role && PAGES.compare?.includes(role) ? (
+                <Link
+                  href={`${base}/compare`}
+                  aria-label={t.compare.open}
+                  title={t.compare.open}
+                  className={clsx(
+                    "fc-press -my-1 grid size-7 shrink-0 place-items-center rounded-full",
+                    current === "compare" ? "text-accent" : "text-muted hover:text-text",
+                  )}
+                >
+                  <ChartBarBig className="size-4" aria-hidden />
+                </Link>
+              ) : null}
               {membership.orgPlan === "demo" ? (
                 <span
                   title={t.simulated}

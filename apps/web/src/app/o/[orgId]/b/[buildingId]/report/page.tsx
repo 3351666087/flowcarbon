@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { clsx } from "clsx";
 import { Download, Lock } from "lucide-react";
 import { useState } from "react";
 import {
@@ -16,7 +17,7 @@ import {
   Table,
 } from "@/components/ui";
 import { api, unwrap } from "@/lib/api";
-import { addDays, co2, dateTime, kwh, money, num, pct } from "@/lib/format";
+import { addDays, co2, dateTime, kwh, money, num, pct, todayIn } from "@/lib/format";
 import { fill, useI18n } from "@/lib/i18n";
 import { can, useBuilding, useIds, useMembership } from "@/lib/session";
 
@@ -67,6 +68,38 @@ export default function ReportPage() {
   if (report.isPending) return <Loading page />;
   if (report.error || !r) return <ErrorBox error={report.error} onRetry={() => report.refetch()} />;
   const csvHref = `/api/v1/orgs/${orgId}/buildings/${buildingId}/report?format=csv&from=${periodFrom}&to=${periodTo}`;
+  // one-click months, in the building's own calendar; "so far" stops at yesterday, the last whole day
+  const today = todayIn(building!.timezone);
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const lastMonthStart = `${addDays(monthStart, -1).slice(0, 7)}-01`;
+  const monthName = (key: string) =>
+    new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-GB", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${key}T00:00:00Z`));
+  const months = [
+    {
+      id: "last",
+      label: t.report.lastMonth,
+      from: lastMonthStart,
+      to: monthStart,
+      period: monthName(lastMonthStart),
+    },
+    // on the first of the month there is no whole day of it yet
+    ...(today > monthStart
+      ? [
+          {
+            id: "this",
+            label: t.report.thisMonth,
+            from: monthStart,
+            to: today,
+            period: `${monthName(monthStart)}${fill(t.common.paren, { text: t.report.thisMonthNote })}`,
+          },
+        ]
+      : []),
+  ];
+  const month = months.find((m) => m.from === periodFrom && m.to === periodTo);
   const verified = (status: string) => (status === "verified" ? t.report.verified : t.report.toVerify);
   const factor = (f: { kgPerKwh: number; source: string; year: number; region: string; status: string }) => (
     <span className="text-xs text-muted">
@@ -81,6 +114,7 @@ export default function ReportPage() {
   const notes = [
     ...(membership?.orgPlan === "demo" ? [t.report.notes.simulated] : []),
     t.report.notes.boundary,
+    t.report.notes.responsibility,
     fill(t.report.notes.location, {
       factor: locationFactor.kgPerKwh,
       source: locationFactor.source,
@@ -118,6 +152,31 @@ export default function ReportPage() {
       />
 
       <Card className="mb-6">
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-border pb-4">
+          <span className="mr-1 text-sm font-medium">{t.report.quick}</span>
+          {months.map((m) => (
+            <Button
+              key={m.id}
+              variant={month?.id === m.id ? "primary" : "secondary"}
+              aria-pressed={month?.id === m.id}
+              title={m.period}
+              onClick={() => {
+                setDraft({ from: m.from, to: m.to });
+                setRange({ from: m.from, to: m.to });
+              }}
+            >
+              {m.label}
+            </Button>
+          ))}
+          {month ? (
+            <a
+              href={csvHref}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-medium text-accent hover:bg-surface-2 sm:h-9 sm:min-h-0"
+            >
+              <Download className="size-4" aria-hidden /> {fill(t.report.monthCsv, { period: month.period })}
+            </a>
+          ) : null}
+        </div>
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
@@ -188,6 +247,40 @@ export default function ReportPage() {
         <p className="-mt-3 text-sm text-muted lg:col-span-2">{t.report.scope2Plain}</p>
       </div>
 
+      {/* who to call: assigned by system, not by metered area (see notes.responsibility) */}
+      {r.byParty?.length ? (
+        <Card title={t.report.byParty} className="mb-6">
+          <div
+            className={clsx(
+              "grid grid-cols-1 gap-3",
+              r.partyUnsplit.kwh > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2",
+            )}
+          >
+            {r.byParty.map((p) => (
+              <Metric
+                key={p.party}
+                label={t.report.party[p.party]}
+                value={kwh(p.kwh, locale)}
+                sub={`${fill(t.report.ofTotal, { share: pct(p.share, locale) })} · ${t.report.avoidable} ${kwh(p.avoidableKwh, locale)}`}
+                tone={p.party === "tenant" ? "accent" : undefined}
+              />
+            ))}
+            {/* days whose split by system is not known: shown, never folded into either party */}
+            {r.partyUnsplit.kwh > 0 ? (
+              <Metric
+                label={t.report.unsplit}
+                value={kwh(r.partyUnsplit.kwh, locale)}
+                sub={fill(t.report.unsplitSub, {
+                  share: pct(r.partyUnsplit.share, locale),
+                  n: r.partyUnsplit.floorDays,
+                })}
+              />
+            ) : null}
+          </div>
+          <p className="mt-3 text-sm text-muted">{t.report.byPartyNote}</p>
+        </Card>
+      ) : null}
+
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title={t.report.byFloor}>
           <Table
@@ -196,6 +289,7 @@ export default function ReportPage() {
               fill(t.report.withUnit, { label: t.report.energy }),
               fill(t.report.withUnit, { label: t.report.afterHours }),
               fill(t.report.withUnit, { label: t.report.avoidable }),
+              fill(t.report.withUnit, { label: t.report.tenantCol }),
             ]}
           >
             {r.byFloor.map((f) => (
@@ -204,6 +298,17 @@ export default function ReportPage() {
                 <td className="num">{num(f.kwh, locale)}</td>
                 <td className="num">{num(f.afterHoursKwh, locale)}</td>
                 <td className="num text-waste">{num(f.avoidableKwh, locale)}</td>
+                <td className="num" title={t.floors.partyNote}>
+                  {num(f.tenantKwh, locale)}
+                  <span className="ml-1 text-xs text-muted">
+                    {f.kwh > 0 ? pct(f.tenantKwh / f.kwh, locale) : ""}
+                  </span>
+                  {f.unsplitKwh > 0 ? (
+                    <div className="text-xs text-muted">
+                      {fill(t.report.unsplitFloor, { kwh: kwh(f.unsplitKwh, locale) })}
+                    </div>
+                  ) : null}
+                </td>
               </tr>
             ))}
           </Table>

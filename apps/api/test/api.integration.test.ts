@@ -371,6 +371,243 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
     });
   });
 
+  describe("comparing buildings", () => {
+    type Row = {
+      id: string;
+      name: string;
+      areaM2: number;
+      current: { days: number; kwh: number; kwhPerM2Day: number | null; afterHoursShare: number | null };
+      previous: { days: number };
+      change: Record<string, number | null>;
+      measures: Record<string, number>;
+    };
+    const compare = (email: string, q = "") => as(email, { url: `${org()}/compare${q}` });
+    const cancel = (id: string) => async () => {
+      await as(manager, {
+        method: "PATCH",
+        url: `${bld()}/measures/${id}`,
+        payload: { status: "cancelled" },
+      });
+    };
+
+    it("shows a one-building organisation against its own previous window, as the report and measures add up", async () => {
+      // a measure in effect: in a demo it takes effect at once and waits for data, so its saving is expected
+      const f = (await as(manager, { url: `${bld()}/findings?status=open&limit=200` }))
+        .json()
+        .items.find(
+          (x: { ruleId: string; dayType: string }) =>
+            x.ruleId === "hvac_empty_floor" && x.dayType === "workday",
+        );
+      const measure = (
+        await as(manager, {
+          method: "POST",
+          url: `${bld()}/findings/${f.id}/measure`,
+          payload: { strategyId: "occupancy_gated_workday", source: "manual", similar: true },
+        })
+      ).json().measure;
+      onTestFinished(cancel(measure.id));
+
+      const res = await compare(manager);
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      const listed = (await as(manager, { url: `${org()}/buildings` })).json();
+      expect(body.buildings).toHaveLength(listed.length);
+      expect(body.simulated).toBe(true);
+      // the seeded 28 days end on 2026-10-12, which is the organisation's last whole day
+      expect(body.window).toMatchObject({
+        days: 28,
+        from: "2026-09-15",
+        to: "2026-10-13",
+        previousFrom: "2026-08-18",
+        previousTo: "2026-09-15",
+        minDays: 14,
+      });
+      const tower: Row = body.buildings.find((b: Row) => b.id === seeded.buildingId);
+      const report = (await as(manager, { url: `${bld()}/report?from=2026-09-15&to=2026-10-13` })).json();
+      expect(tower.current.kwh).toBe(report.totals.kwh);
+      expect(tower.current.days).toBe(28);
+      const floors = (await as(manager, { url: `${bld()}/floors` })).json() as { areaM2: number }[];
+      const area = floors.reduce((s, x) => s + x.areaM2, 0);
+      expect(tower.areaM2).toBeCloseTo(area, 1);
+      expect(tower.current.kwhPerM2Day).toBeCloseTo(report.totals.kwh / area / 28, 4);
+      // nothing before the seeded days: no change rather than a 100 % drop
+      expect(tower.previous.days).toBe(0);
+      expect(Object.values(tower.change).every((v) => v === null)).toBe(true);
+
+      const m = (await as(manager, { url: `${bld()}/measures` })).json();
+      type Item = {
+        status: string;
+        verification: { after: { days: number } | null; weekly: { kwh: number } };
+      };
+      const inEffect = (m.items as Item[]).filter((x) => x.status === "in_effect");
+      const waiting = inEffect.filter((x) => !x.verification.after?.days);
+      const measured = inEffect.filter((x) => (x.verification.after?.days ?? 0) > 0);
+      const sum = (l: Item[]) => Math.round(l.reduce((s, x) => s + x.verification.weekly.kwh, 0) * 100) / 100;
+      expect(tower.measures).toMatchObject({
+        inEffect: m.totals.inEffect,
+        measured: m.totals.measured,
+        measuredWeeklyKwh: m.totals.weeklyKwh,
+        expectedInEffect: waiting.length,
+        expectedWeeklyKwh: sum(waiting),
+      });
+      expect(tower.measures.measuredWeeklyKwh).toBe(sum(measured));
+      expect(tower.measures.expectedInEffect).toBeGreaterThan(0);
+      expect(tower.measures.expectedWeeklyKwh).toBeGreaterThan(0);
+      // planned measures are not "in effect"
+      expect(tower.measures.expectedWeeklyKwh).toBeLessThanOrEqual(m.totals.expectedWeeklyKwh);
+    });
+
+    it("compares buildings per m² and per day with data over the same window", async () => {
+      const made: string[] = [];
+      onTestFinished(async () => {
+        for (const id of made) {
+          await inOrg((tx) => tx.delete(schema.floorDaily).where(eq(schema.floorDaily.buildingId, id)));
+          await as(ownerEmail, {
+            method: "PATCH",
+            url: `${org()}/buildings/${id}`,
+            payload: { archived: true },
+          });
+        }
+      });
+      const building = async (name: string, floors: number) => {
+        const b = (
+          await as(ownerEmail, {
+            method: "POST",
+            url: `${org()}/buildings`,
+            payload: {
+              name,
+              timezone: "Asia/Shanghai",
+              gridRegion: "CN-East",
+              tariff: { kind: "flat", rate: 0.85 },
+            },
+          })
+        ).json();
+        made.push(b.id);
+        const ids: string[] = [];
+        for (let level = 1; level <= floors; level++)
+          ids.push(
+            (
+              await as(ownerEmail, {
+                method: "POST",
+                url: `${org()}/buildings/${b.id}/floors`,
+                payload: { label: `F${level}`, level, areaM2: 1000, ratedHvacKw: 84, ratedLightingKw: 10.8 },
+              })
+            ).json().id,
+          );
+        return { id: b.id as string, floors: ids };
+      };
+      const fill = async (
+        b: { id: string; floors: string[] },
+        from: string,
+        days: number,
+        kwh: number,
+        after: number,
+        avoidable: number,
+      ) => {
+        const rows: (typeof schema.floorDaily.$inferInsert)[] = [];
+        for (let i = 0; i < days; i++)
+          for (const floorId of b.floors)
+            rows.push({
+              orgId: seeded.orgId,
+              buildingId: b.id,
+              floorId,
+              day: addDays(from, i),
+              dayType: "workday" as const,
+              kwhTotal: kwh,
+              kwhAfterHours: after,
+              kwhMeasured: kwh,
+              cost: 0,
+              afterHoursPeak: 0,
+              afterHoursHvacHours: 0,
+              avoidableKwh: avoidable,
+              intervals: 96,
+            });
+        await inOrg((tx) => tx.insert(schema.floorDaily).values(rows));
+      };
+      // B: 2 000 m², after hours down from 50 to 30 kWh per floor-day
+      const b = await building("Compare B", 2);
+      await fill(b, "2026-08-18", 28, 100, 50, 20);
+      await fill(b, "2026-09-15", 28, 100, 30, 10);
+      // C: data on only 10 of the current 28 days
+      const c = await building("Compare C", 1);
+      await fill(c, "2026-08-18", 28, 100, 50, 20);
+      await fill(c, "2026-10-03", 10, 100, 30, 10);
+      // D: no data at all
+      const d = await building("Compare D", 1);
+
+      const body = (await compare(manager)).json();
+      expect(body.window).toMatchObject({ from: "2026-09-15", to: "2026-10-13" });
+      const row = (id: string): Row => body.buildings.find((x: Row) => x.id === id);
+      expect(body.buildings.map((x: Row) => x.id)).toEqual(
+        expect.arrayContaining([seeded.buildingId, b.id, c.id, d.id]),
+      );
+
+      expect(row(b.id).areaM2).toBe(2000);
+      expect(row(b.id).current).toMatchObject({ days: 28, kwh: 5600, kwhPerM2Day: 0.1 });
+      expect(row(b.id).current.afterHoursShare).toBeCloseTo(0.3, 6);
+      expect(row(b.id).change).toEqual({
+        kwhPerM2DayPct: 0,
+        afterHoursPerDayPct: -40,
+        afterHoursSharePp: -20,
+        avoidableSharePp: -10,
+      });
+      expect(row(b.id).measures).toMatchObject({ inEffect: 0, measuredWeeklyKwh: 0, expectedWeeklyKwh: 0 });
+
+      expect(row(c.id).current.days).toBe(10);
+      expect(row(c.id).previous.days).toBe(28);
+      // per day with data, not extrapolated: 100 kWh a day on 1 000 m²
+      expect(row(c.id).current.kwhPerM2Day).toBe(0.1);
+      expect(Object.values(row(c.id).change).every((v) => v === null)).toBe(true);
+
+      expect(row(d.id)).toMatchObject({ lastDataDay: null, areaM2: 1000 });
+      expect(row(d.id).current).toMatchObject({ days: 0, kwh: 0, kwhPerM2Day: null, afterHoursShare: null });
+      expect(Object.values(row(d.id).change).every((v) => v === null)).toBe(true);
+
+      // a shorter window ends on the same day. B's after-hours level fell on 2026-09-15, before both 7-day
+      // windows (09-29..10-05 and 10-06..10-12), so week on week there is no change: 0, not null
+      const week = (await compare(manager, "?days=7")).json();
+      expect(week.window).toMatchObject({ days: 7, from: "2026-10-06", to: "2026-10-13", minDays: 4 });
+      const bWeek = week.buildings.find((x: Row) => x.id === b.id);
+      expect(bWeek.current).toMatchObject({ days: 7, afterHoursPerDay: 60 });
+      expect(bWeek.previous).toMatchObject({ days: 7, afterHoursPerDay: 60 });
+      expect(bWeek.change.afterHoursPerDayPct).toBe(0);
+      expect((await compare(manager, "?days=3")).statusCode).toBe(400);
+
+      // a key restricted to Tower A sees only Tower A
+      const created = await as(ownerEmail, {
+        method: "POST",
+        url: `${org()}/api-keys`,
+        payload: { name: "Compare reader", scopes: ["read"], buildingId: seeded.buildingId },
+      });
+      expect(created.statusCode).toBe(201);
+      const { key, id } = created.json();
+      onTestFinished(async () => {
+        await as(ownerEmail, { method: "DELETE", url: `${org()}/api-keys/${id}` });
+      });
+      const viaKey = await app.inject({
+        url: `${org()}/compare`,
+        headers: { authorization: `Bearer ${key}` },
+      });
+      expect(viaKey.statusCode).toBe(200);
+      expect(viaKey.json().buildings.map((x: Row) => x.id)).toEqual([seeded.buildingId]);
+    });
+
+    it("is for staff, and only for members of the organisation", async () => {
+      expect((await compare(tenant)).statusCode).toBe(403);
+      const other = (
+        await as(analyst, {
+          method: "POST",
+          url: `${API_PREFIX}/orgs`,
+          payload: { name: "Compare elsewhere" },
+        })
+      ).json();
+      // not a member: answered as if the organisation did not exist
+      expect((await as(manager, { url: `${API_PREFIX}/orgs/${other.id}/compare` })).statusCode).toBe(404);
+      const own = (await as(analyst, { url: `${API_PREFIX}/orgs/${other.id}/compare` })).json();
+      expect(own).toMatchObject({ simulated: false, buildings: [] });
+    });
+  });
+
   describe("input that cannot be stored", () => {
     it("refuses a NUL in a text field as invalid, not with a server error", async () => {
       const res = await as(manager, {
@@ -837,6 +1074,71 @@ describe.skipIf(!adminUrl)("HTTP API", () => {
       const csv = await as(analyst, { url: `${bld()}/report?from=2026-09-15&to=2026-10-13&format=csv` });
       expect(csv.headers["content-type"]).toContain("text/csv");
       expect(csv.body).toContain("scope2,location_based");
+    });
+
+    it("splits the report, the daily figures and the findings between the tenant and engineering", async () => {
+      const r = (await as(analyst, { url: `${bld()}/report?from=2026-09-15&to=2026-10-13` })).json();
+      const [tenantP, buildingP] = r.byParty as {
+        party: string;
+        kwh: number;
+        share: number;
+        avoidableKwh: number;
+      }[];
+      expect(r.byParty.map((p: { party: string }) => p.party)).toEqual(["tenant", "building"]);
+      expect(tenantP!.kwh).toBeGreaterThan(0);
+      expect(buildingP!.kwh).toBeGreaterThan(0);
+      expect(Math.abs(tenantP!.kwh + buildingP!.kwh - r.totals.kwh)).toBeLessThanOrEqual(0.2);
+      expect(tenantP!.share + buildingP!.share).toBeCloseTo(1, 6);
+      const floorTenant = r.byFloor.reduce((s: number, f: { tenantKwh: number }) => s + f.tenantKwh, 0);
+      expect(Math.abs(floorTenant - tenantP!.kwh)).toBeLessThanOrEqual(0.1 * r.byFloor.length);
+      for (const f of r.byFloor)
+        expect(Math.abs(f.tenantKwh + f.buildingKwh - f.kwh)).toBeLessThanOrEqual(0.2);
+      // avoidable energy per party is counted like byRule; only lights left on can be the tenant's
+      const ruleKwh = r.byRule.reduce((s: number, x: { kwh: number }) => s + x.kwh, 0);
+      expect(Math.abs(tenantP!.avoidableKwh + buildingP!.avoidableKwh - ruleKwh)).toBeLessThanOrEqual(0.2);
+      const lights = r.byRule.find((x: { ruleId: string }) => x.ruleId === "lights_on_empty_night");
+      expect(tenantP!.avoidableKwh).toBeLessThanOrEqual((lights?.kwh ?? 0) + 0.1);
+      expect(r.disclosures.some((d: string) => d.includes("by system, not by metered area"))).toBe(true);
+      const boundary = r.disclosures.findIndex((d: string) => d.startsWith("Boundary:"));
+      expect(r.disclosures[boundary + 1]).toMatch(/^Tenant-controlled vs building-controlled/);
+
+      const csv = await as(analyst, { url: `${bld()}/report?from=2026-09-15&to=2026-10-13&format=csv` });
+      expect(csv.body).toContain("party,tenant_controlled");
+      expect(csv.body).toContain("party,building_controlled");
+
+      // the per-system facts behind it are stored and add up to each day's total
+      const daily = (await as(manager, { url: `${bld()}/daily?from=2026-09-15&to=2026-10-13` })).json();
+      expect(daily.length).toBeGreaterThan(0);
+      for (const d of daily) {
+        expect(d.kwhHvac + d.kwhLighting + d.kwhPlug).toBeCloseTo(d.kwhTotal, 3);
+        expect(d.kwhTenant + d.kwhBuilding).toBeCloseTo(d.kwhTotal, 3);
+      }
+      expect(daily.some((d: { kwhTenant: number }) => d.kwhTenant > 0)).toBe(true);
+
+      // findings: lights left on a leased floor go to the tenant, cooling always to engineering
+      const leased = new Set(
+        (await as(manager, { url: `${bld()}/overview` }))
+          .json()
+          .floors.filter((f: { tenantId: string | null }) => f.tenantId)
+          .map((f: { floorId: string }) => f.floorId),
+      );
+      const items = (await as(manager, { url: `${bld()}/findings?limit=200` })).json().items as {
+        id: string;
+        floorId: string;
+        ruleId: string;
+        responder: string;
+      }[];
+      expect(items.length).toBeGreaterThan(0);
+      for (const f of items) {
+        if (f.ruleId === "lights_on_empty_night")
+          expect(f.responder).toBe(leased.has(f.floorId) ? "tenant" : "engineering");
+        else expect(f.responder).toBe("engineering");
+      }
+      const lightsLeased = items.find((f) => f.ruleId === "lights_on_empty_night" && leased.has(f.floorId));
+      if (lightsLeased) {
+        const one = (await as(manager, { url: `${bld()}/findings/${lightsLeased.id}` })).json();
+        expect(one.responder).toBe("tenant");
+      }
     });
 
     it("estimates strategies and evaluates an EPC", async () => {

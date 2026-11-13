@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
-import { ChevronRight, Lightbulb, Snowflake, Users } from "lucide-react";
+import { ChevronRight, CircleAlert, CircleCheck, Lightbulb, Snowflake, Users, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { Assistant, glide, type ShareTarget, type SplitView } from "@/components/assistant";
@@ -19,11 +19,15 @@ import { co2, dateTime, kwh, money, pct } from "@/lib/format";
 import { fill, useI18n } from "@/lib/i18n";
 import { PAGES, useBuilding, useIds, useMembership, useTenants } from "@/lib/session";
 
+/** how recent the newest floor reading has to be for the page to speak of "now" */
+const LIVE_MS = 2 * 60 * 60 * 1000;
+
 export default function FloorsPage() {
   const { t, locale } = useI18n();
   const { orgId, buildingId } = useIds();
   const { building } = useBuilding();
-  const role = useMembership()?.role;
+  const membership = useMembership();
+  const role = membership?.role;
   const tenants = useTenants();
   const [picked, setPicked] = useState<number | null>(null);
   // an option on show, which splits the top of the page in two; back to where it stood on the page once it closes
@@ -70,21 +74,90 @@ export default function FloorsPage() {
   const bottomUp = [...o.floors].reverse();
   const live = liveFloors(bottomUp);
   const inBuilding = o.floors.reduce((n, f) => n + f.occupancy, 0);
-  // a floor with no reading is a floor nobody knows about, not an empty one
-  const reading = o.floors.some((f) => f.at);
   const days = l?.days ?? 28;
-  const wasting = o.floors.filter((f) => f.wasteNow).length;
   const chosen = picked === null ? null : bottomUp[picked];
   const pick = (index: number) => {
     tick();
     setPicked((p) => (p === index ? null : index));
   };
+  // each floor on the tower is named as the card names it: its label and who is on it
+  const names = bottomUp.map(
+    (f) => `${f.label} · ${f.tenantId ? (tenantName.get(f.tenantId) ?? "–") : t.common.vacant}`,
+  );
+
+  // the one line on top: whether anything needs adjusting now. "Now" only holds while readings are recent; a
+  // building whose latest reading is older is shown as having no live data, not as fine.
+  const latestAt = o.floors.reduce<string | null>((m, f) => (f.at && (!m || f.at > m) ? f.at : m), null);
+  const fresh = latestAt !== null && Date.now() - Date.parse(latestAt) < LIVE_MS;
+  const wastingNow = fresh ? o.floors.filter((f) => f.wasteNow) : [];
+  // the worst of them: the most avoidable energy over the window, then the most open findings
+  const worst = wastingNow.reduce<(typeof o.floors)[number] | null>(
+    (w, f) =>
+      !w ||
+      f.avoidableKwh28d > w.avoidableKwh28d ||
+      (f.avoidableKwh28d === w.avoidableKwh28d && f.openFindings > w.openFindings)
+        ? f
+        : w,
+    null,
+  );
+  const showData = !!role && !!PAGES.data?.includes(role);
+  const status: {
+    tone: "waste" | "saving" | "muted";
+    text: string;
+    sub?: string;
+    action?: { label: string; onClick?: () => void; href?: string };
+  } = !asOf
+    ? {
+        tone: "muted",
+        text: t.floors.noData,
+        action: showData ? { label: t.floors.toData, href: `/o/${orgId}/b/${buildingId}/data` } : undefined,
+      }
+    : !fresh
+      ? {
+          tone: "muted",
+          text: fill(t.floors.statusStale, {
+            date: latestAt
+              ? dateTime(latestAt, locale, tz, { dateStyle: "medium", timeStyle: "short" })
+              : asOf,
+          }),
+          action: showData ? { label: t.floors.toData, href: `/o/${orgId}/b/${buildingId}/data` } : undefined,
+        }
+      : worst
+        ? {
+            tone: "waste",
+            text: fill(t.floors.statusAction, { n: wastingNow.length }),
+            action: split
+              ? undefined
+              : {
+                  label: fill(t.floors.showFloor, { floor: worst.label }),
+                  onClick: () => {
+                    tick();
+                    setPicked(bottomUp.findIndex((f) => f.floorId === worst.floorId));
+                    hero.current?.scrollIntoView({ behavior: glide(), block: "nearest" });
+                  },
+                },
+          }
+        : {
+            tone: "saving",
+            text: t.floors.statusOk,
+            sub: t.floors.statusOkSub,
+            action:
+              role === "tenant_admin"
+                ? undefined
+                : {
+                    label: t.firstUse.step2Link,
+                    onClick: () => {
+                      tick();
+                      assistant.current?.scrollIntoView({ behavior: glide(), block: "start" });
+                    },
+                  },
+          };
+  const StatusIcon = status.tone === "waste" ? CircleAlert : status.tone === "saving" ? CircleCheck : WifiOff;
 
   return (
     <>
       <PageHeader
         title={t.floors.title}
-        subtitle={fill(t.floors.subtitle, { days })}
         actions={
           <span className="flex flex-wrap items-center gap-x-3">
             {guide.shown ? null : <FirstUseLink onClick={guide.show} />}
@@ -96,6 +169,61 @@ export default function FloorsPage() {
           </span>
         }
       />
+
+      <section
+        aria-live="polite"
+        className={clsx(
+          "mb-4 rounded-2xl border p-3 sm:px-4",
+          status.tone === "waste" && "border-waste/40 bg-waste-soft",
+          status.tone === "saving" && "border-border bg-saving-soft",
+          status.tone === "muted" && "border-border bg-surface-2",
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <StatusIcon
+            className={clsx(
+              "size-5 shrink-0",
+              status.tone === "waste" && "text-waste",
+              status.tone === "saving" && "text-saving",
+              status.tone === "muted" && "text-muted",
+            )}
+            aria-hidden
+          />
+          <p className="min-w-0 flex-1 text-[15px] font-semibold tracking-tight">
+            {status.text}
+            {membership?.orgPlan === "demo" ? (
+              <span className="ml-2 inline-block rounded-full bg-surface px-2 py-0.5 align-middle text-xs font-normal text-muted">
+                {t.simulated}
+              </span>
+            ) : null}
+          </p>
+          {status.action?.href ? (
+            <Link
+              href={status.action.href}
+              className="fc-press fc-prominent inline-flex min-h-11 items-center gap-0.5 rounded-full px-4 text-sm font-semibold sm:min-h-9"
+            >
+              {status.action.label} <ChevronRight className="size-4" aria-hidden />
+            </Link>
+          ) : status.action ? (
+            <button
+              type="button"
+              onClick={status.action.onClick}
+              className="fc-press fc-prominent inline-flex min-h-11 items-center gap-0.5 rounded-full px-4 text-sm font-semibold sm:min-h-9"
+            >
+              {status.action.label} <ChevronRight className="size-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+        {/* what the page is, for whoever wants it; the status line above is what matters at a glance */}
+        <details className="group mt-1 pl-8 text-xs text-muted">
+          <summary className="fc-press inline-flex min-h-11 cursor-pointer list-none items-center gap-0.5 font-medium sm:min-h-0 [&::-webkit-details-marker]:hidden">
+            {status.sub ? `${status.sub} ` : ""}
+            {t.common.more}
+            <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+          </summary>
+          <p className="mt-1 max-w-3xl">{fill(t.floors.subtitle, { days })}</p>
+        </details>
+      </section>
 
       {guide.shown ? (
         <FirstUse
@@ -138,6 +266,7 @@ export default function FloorsPage() {
             picked={picked}
             onPick={pick}
             reserveBottom={chosen && narrow ? 88 : 0}
+            names={names}
           />
           <div className="pointer-events-none absolute top-4 left-4">
             <div className="text-xs text-muted">
@@ -146,7 +275,8 @@ export default function FloorsPage() {
                 ? ` · ${dateTime(o.floors[0].at, locale, tz, { dateStyle: undefined, timeStyle: "short" })}`
                 : ""}
             </div>
-            {reading ? (
+            {/* a floor with no recent reading is a floor nobody knows about now, not an empty one */}
+            {fresh ? (
               <div className="num mt-0.5 text-3xl font-semibold tracking-tight">
                 {inBuilding} <span className="text-sm font-normal text-muted">{t.floors.inBuilding}</span>
               </div>
@@ -155,11 +285,6 @@ export default function FloorsPage() {
                 {asOf ? fill(t.floors.noReadingUntil, { date: asOf }) : t.floors.noReading}
               </div>
             )}
-            {wasting ? (
-              <div className="mt-1 text-xs font-medium text-waste">
-                {wasting} {t.floors.wastingFloors}
-              </div>
-            ) : null}
           </div>
           {chosen ? (
             <div className="fc-glass fc-glass-strong fc-rise absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-2xl p-3 sm:right-auto sm:w-[360px]">
@@ -215,32 +340,19 @@ export default function FloorsPage() {
         </div>
       ) : null}
 
-      {!asOf ? (
-        <div className="mb-6 rounded-2xl bg-surface-2 p-4 text-sm">
-          <p>{t.floors.noData}</p>
-          {role && PAGES.data?.includes(role) ? (
-            <Link
-              href={`/o/${orgId}/b/${buildingId}/data`}
-              className="mt-1 inline-flex min-h-11 items-center gap-0.5 font-medium text-accent sm:min-h-0"
-            >
-              {t.floors.toData} <ChevronRight className="size-4" aria-hidden />
-            </Link>
-          ) : null}
-        </div>
-      ) : null}
-
       {!split && l ? (
         <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {/* the money first: what the energy nobody needed cost over the window, priced at the building's tariff */}
+          <Metric
+            label={fill(t.floors.wastedCost, { days })}
+            value={money(l.avoidableCost, locale, building!.currency)}
+            tone="waste"
+            sub={`${kwh(l.avoidableKwh, locale)} · ${fill(t.floors.ofUse, { share: pct(l.avoidableShare, locale, 1) })}`}
+          />
           <Metric
             label={fill(t.floors.energy28, { days })}
             value={kwh(l.kwh, locale)}
             sub={money(l.cost, locale, building!.currency)}
-          />
-          <Metric
-            label={fill(t.floors.avoidable28, { days })}
-            value={kwh(l.avoidableKwh, locale)}
-            tone="waste"
-            sub={`${money(l.avoidableCost, locale, building!.currency)} · ${pct(l.avoidableShare, locale, 1)}`}
           />
           <Metric label={t.floors.scope2} value={co2(l.co2eKg, locale)} />
           <Metric

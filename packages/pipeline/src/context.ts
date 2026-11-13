@@ -1,4 +1,10 @@
-import type { BuildingProfile, EmissionFactor, FloorProfile, TenantProfile } from "@flowcarbon/core";
+import type {
+  BuildingProfile,
+  EmissionFactor,
+  FloorProfile,
+  LeaseSpan,
+  TenantProfile,
+} from "@flowcarbon/core";
 import { localParts, selectFactor } from "@flowcarbon/core";
 import { schema, type Tx } from "@flowcarbon/db";
 import { and, eq, isNull, or } from "drizzle-orm";
@@ -12,6 +18,8 @@ export interface BuildingContext {
   tenants: TenantProfile[];
   /** floor id → tenant id currently leasing it */
   floorTenant: Map<string, string>;
+  /** every lease of the building, so a past window uses the lease in force on each day, not today's */
+  leases: (LeaseSpan & { tenantId: string })[];
   factors: EmissionFactor[];
 }
 
@@ -89,6 +97,12 @@ export async function loadBuildingContext(
     })),
     tenants: tenants.map((t) => ({ id: t.id, name: t.name, overtimeRatePerHour: t.overtimeRatePerHour })),
     floorTenant,
+    leases: leases.map((l) => ({
+      floorId: l.floorId,
+      tenantId: l.tenantId,
+      startsOn: l.startsOn,
+      endsOn: l.endsOn ?? null,
+    })),
     factors: factors.map((f) => ({
       id: f.id,
       region: f.region,

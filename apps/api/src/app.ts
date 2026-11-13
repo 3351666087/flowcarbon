@@ -25,6 +25,7 @@ import { avatarRoutes } from "./routes/avatars";
 import { briefRoutes } from "./routes/briefs";
 import { buildingRoutes } from "./routes/buildings";
 import { communityRoutes } from "./routes/community";
+import { compareRoutes } from "./routes/compare";
 import { importRoutes } from "./routes/imports";
 import { measureRoutes } from "./routes/measures";
 import { opsRoutes } from "./routes/ops";
@@ -168,6 +169,7 @@ export async function buildApp({ db, config, jobs, mailer, logger }: AppDeps) {
       await api.register(telemetryRoutes, deps);
       await api.register(analyticsRoutes, deps);
       await api.register(measureRoutes, deps);
+      await api.register(compareRoutes, deps);
       await api.register(briefRoutes, deps);
       await api.register(assistantRoutes, deps);
       await api.register(communityRoutes, deps);

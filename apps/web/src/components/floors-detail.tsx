@@ -66,6 +66,32 @@ export function FloorsDetail({
     d.avoidable += r.avoidableKwh;
     byDay.set(r.day, d);
   }
+  // who controls each floor's energy over the same days (by system, not by metered area)
+  // a day whose split by system is not known counts as neither party's, and the line says how much that is
+  const party = new Map<string, { tenant: number; building: number; unsplit: number }>();
+  for (const r of daily.data ?? []) {
+    const p = party.get(r.floorId) ?? { tenant: 0, building: 0, unsplit: 0 };
+    if (r.systemsSplit) {
+      p.tenant += r.kwhTenant ?? 0;
+      p.building += r.kwhBuilding ?? 0;
+    } else p.unsplit += r.kwhTotal;
+    party.set(r.floorId, p);
+  }
+  const partyDays = byDay.size;
+  const partyLine = (floorId: string) => {
+    const p = party.get(floorId);
+    const total = p ? p.tenant + p.building + p.unsplit : 0;
+    if (!p || total <= 0) return null;
+    const share = (v: number) => pct(v / total, locale);
+    const unsplit = p.unsplit > 0 ? fill(t.floors.partyUnsplit, { share: share(p.unsplit) }) : null;
+    if (p.tenant + p.building <= 0) return unsplit;
+    // "Building 100 %" only when all of it really is the building's
+    const split =
+      p.tenant > 0 || p.unsplit > 0
+        ? fill(t.floors.partySplit, { tenant: share(p.tenant), building: share(p.building), days: partyDays })
+        : fill(t.floors.partyVacant, { days: partyDays });
+    return unsplit ? `${split} · ${unsplit}` : split;
+  };
   const nights = daily.data ? compareNights(daily.data, asOf, todayIn(tz)) : null;
   const floorById = new Map(o.floors.map((f) => [f.floorId, f]));
   // a floor's night is often a few kWh: one decimal below ten, so a small change does not read as nothing
@@ -108,6 +134,11 @@ export function FloorsDetail({
                       {f.at ? dateTime(f.at, locale, tz, { dateStyle: undefined, timeStyle: "short" }) : "–"}
                     </div>
                   )}
+                  {partyLine(f.floorId) ? (
+                    <div className="truncate text-xs text-muted" title={t.floors.partyNote}>
+                      {partyLine(f.floorId)}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="hidden items-center gap-1.5 text-sm sm:flex" title={t.common.people}>
                   <Users className="size-4 text-muted" aria-hidden />
